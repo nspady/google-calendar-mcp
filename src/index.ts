@@ -6,6 +6,8 @@ import { OAuth2Client } from 'google-auth-library';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { z } from "zod";
+import { AuthServer } from './auth-server.js';
+import { TokenManager } from './token-manager.js';
 
 interface CalendarListEntry {
   id?: string | null;
@@ -96,6 +98,8 @@ async function initializeOAuth2Client() {
 }
 
 let oauth2Client: OAuth2Client;
+let tokenManager: TokenManager;
+let authServer: AuthServer;
 
 // Helper function to get secure token path
 function getSecureTokenPath(): string {
@@ -324,6 +328,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+  
+  // Check authentication before processing any request
+  if (!await tokenManager.validateTokens()) {
+    const port = authServer ? 3000 : null;
+    const authMessage = port 
+      ? `Authentication required. Please visit http://localhost:${port} to authenticate with Google Calendar. If this port is unavailable, the server will try ports 3001-3004.`
+      : 'Authentication required. Please run "npm run auth" to authenticate with Google Calendar.';
+    throw new Error(authMessage);
+  }
+
   const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
   try {
@@ -430,11 +444,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         throw new Error(`Unknown tool: ${name}`);
     }
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      throw new Error(
-        `Invalid arguments: ${error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ')}`
-      );
-    }
+    console.error('Error processing request:', error);
     throw error;
   }
 });
@@ -450,34 +460,46 @@ function getKeysFilePath(): string {
 
 // Start the server
 async function main() {
-  oauth2Client = await initializeOAuth2Client();
-  const maxRetries = 3;
-  let retryCount = 0;
-  
-  while (retryCount < maxRetries) {
-    const isAuthenticated = await loadSavedTokens();
-    if (isAuthenticated) {
-      break;
-    }
-    
-    console.error(`Authentication attempt ${retryCount + 1} failed, ${maxRetries - retryCount - 1} retries remaining`);
-    retryCount++;
-    
-    if (retryCount === maxRetries) {
-      console.error("All three authentication attempts failed");
-      process.exit(1);
-    }
-    
-    // Wait before retrying
-    await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
-  }
+  try {
+    oauth2Client = await initializeOAuth2Client();
+    tokenManager = new TokenManager(oauth2Client);
+    authServer = new AuthServer(oauth2Client);
 
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error("Google Calendar MCP Server running on stdio");
+    // Start auth server if needed
+    if (!await tokenManager.loadSavedTokens()) {
+      console.log('No valid tokens found, starting auth server...');
+      const success = await authServer.start();
+      if (!success) {
+        console.error('Failed to start auth server');
+        process.exit(1);
+      }
+    }
+
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    console.error("Google Calendar MCP Server running on stdio");
+
+    // Handle cleanup
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
+  } catch (error) {
+    console.error("Server startup failed:", error);
+    process.exit(1);
+  }
+}
+
+async function cleanup() {
+  console.log('Cleaning up...');
+  if (authServer) {
+    await authServer.stop();
+  }
+  if (tokenManager) {
+    tokenManager.clearTokens();
+  }
+  process.exit(0);
 }
 
 main().catch((error) => {
-  console.error("Fatal error in main():", error);
+  console.error("Fatal error:", error);
   process.exit(1);
 });

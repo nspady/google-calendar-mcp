@@ -67,22 +67,44 @@ google-calendar-mcp/
 
 ## Authentication
 
-Before using the server, you need to authenticate with Google Calendar and complete the OAuth flow:
+The server supports both automatic and manual authentication flows:
 
-1. Place your Google OAuth credentials in a file named `gcp-oauth.keys.json` in the root directory of the project. This can be found in the Google Cloud Console under "Credentials".
-
-2. Start the authentication server:
+### Automatic Authentication (Recommended)
+1. Place your Google OAuth credentials in a file named `gcp-oauth.keys.json` in the root directory of the project.
+2. Start the MCP server:
    ```bash
-   npm run auth
+   npm start
    ```
+3. If no valid authentication tokens are found, the server will automatically:
+   - Start an authentication server (on ports 3000-3004)
+   - Open a browser window for the OAuth flow
+   - Save the tokens securely once authenticated
+   - Shut down the auth server
+   - Continue normal MCP server operation
 
-3. The OAuth flow will open a browser window to complete the OAuth flow.
-4. Follow the Google OAuth flow to grant access to your calendars
-   - You will be warned that the app is not verified by Google. This is okay, just click "Continue".
-   - Grant access to view and edit your calendars
-5. Once complete, you can close the browser window.
+The server automatically manages token refresh and re-authentication when needed:
+- Tokens are automatically refreshed before expiration
+- If refresh fails, clear error messages guide you through re-authentication
+- Token files are stored securely with restricted permissions
 
-The authentication tokens will be securely saved in `.gcp-saved-tokens.json` in the project root directory with restricted permissions (600).
+### Manual Authentication
+For advanced users or troubleshooting, you can manually run the authentication flow:
+```bash
+npm run auth
+```
+
+This will:
+1. Start the authentication server
+2. Open a browser window for the OAuth flow
+3. Save the tokens and exit
+
+### Security Notes
+- OAuth credentials are stored in `gcp-oauth.keys.json`
+- Authentication tokens are stored in `.gcp-saved-tokens.json` with 600 permissions
+- Tokens are automatically refreshed in the background
+- Token integrity is validated before each API call
+- The auth server automatically shuts down after successful authentication
+- Never commit OAuth credentials or token files to version control
 
 ## Usage
 
