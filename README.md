@@ -1,5 +1,6 @@
 # Google Calendar MCP Server
 
+[![smithery badge](https://smithery.ai/badge/google-calendar-mcp)](https://smithery.ai/server/google-calendar-mcp)
 This is a Model Context Protocol (MCP) server that provides integration with Google Calendar. It allows LLMs to read, create, and manage calendar events through a standardized interface.
 
 ## Features
@@ -47,6 +48,15 @@ google-calendar-mcp/
 
 ## Installation
 
+### Installing via Smithery
+
+To install Google Calendar for Claude Desktop automatically via [Smithery](https://smithery.ai/server/google-calendar-mcp):
+
+```bash
+npx -y @smithery/cli install google-calendar-mcp --client claude
+```
+
+### Manual Installation
 1. Clone the repository
 2. Install dependencies:
    ```bash

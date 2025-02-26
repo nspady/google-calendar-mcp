@@ -1,0 +1,17 @@
+# Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
+
+startCommand:
+  type: stdio
+  configSchema:
+    # JSON Schema defining the configuration options for the MCP.
+    type: object
+    required:
+      - gcpOauthKeys
+    properties:
+      gcpOauthKeys:
+        type: string
+        description: Path to the Google OAuth credentials file.
+  commandFunction:
+    # A function that produces the CLI command to start the MCP on stdio.
+    |-
+    (config) => ({ command: 'node', args: ['build/index.js'], env: {}, volume: { '/app/gcp-oauth.keys.json': config.gcpOauthKeys } })
