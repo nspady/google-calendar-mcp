@@ -1,6 +1,7 @@
 import { OAuth2Client, Credentials } from 'google-auth-library';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 
 export class TokenManager {
   private oauth2Client: OAuth2Client;
@@ -16,10 +17,8 @@ export class TokenManager {
   }
 
   private getSecureTokenPath(): string {
-    return path.join(
-      path.dirname(new URL(import.meta.url).pathname),
-      '../.gcp-saved-tokens.json'
-    );
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    return path.join(__dirname, '../.gcp-saved-tokens.json');
   }
 
   private calculateJitter(retryCount: number): number {

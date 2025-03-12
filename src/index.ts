@@ -5,6 +5,7 @@ import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { z } from "zod";
 import { AuthServer } from './auth-server.js';
 import { TokenManager } from './token-manager.js';
@@ -103,10 +104,8 @@ let authServer: AuthServer;
 
 // Helper function to get secure token path
 function getSecureTokenPath(): string {
-  return path.join(
-    path.dirname(new URL(import.meta.url).pathname),
-    '../.gcp-saved-tokens.json'
-  );
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  return path.join(__dirname, '../.gcp-saved-tokens.json');
 }
 
 // Helper function to load and refresh tokens
@@ -450,10 +449,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 function getKeysFilePath(): string {
-  const relativePath = path.join(
-    path.dirname(new URL(import.meta.url).pathname),
-    '../gcp-oauth.keys.json'
-  );
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const relativePath = path.join(__dirname, '../gcp-oauth.keys.json');
   const absolutePath = path.resolve(relativePath);
   return absolutePath;
 }
