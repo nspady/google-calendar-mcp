@@ -21,6 +21,7 @@ interface CalendarEvent {
   end?: { dateTime?: string | null; date?: string | null; };
   location?: string | null;
   attendees?: CalendarEventAttendee[] | null;
+  colorId?: string | null;
 }
 
 interface CalendarEventAttendee {
@@ -45,6 +46,7 @@ const CreateEventArgumentsSchema = z.object({
     email: z.string()
   })).optional(),
   location: z.string().optional(),
+  colorId: z.string().optional(),
 });
 
 const UpdateEventArgumentsSchema = z.object({
@@ -58,6 +60,7 @@ const UpdateEventArgumentsSchema = z.object({
     email: z.string()
   })).optional(),
   location: z.string().optional(),
+  colorId: z.string().optional(),
 });
 
 const DeleteEventArgumentsSchema = z.object({
@@ -205,6 +208,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
+        name: "list-colors",
+        description: "List available color IDs for calendar events",
+        inputSchema: {
+          type: "object",
+          properties: {},
+          required: [],
+        },
+      },
+      {
         name: "create-event",
         description: "Create a new calendar event",
         inputSchema: {
@@ -247,7 +259,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 },
                 required: ["email"]
               }
-            }
+            },
+            colorId: {
+              type: "string",
+              description: "Color ID for the event",
+            },
           },
           required: ["calendarId", "summary", "start", "end"],
         },
@@ -285,6 +301,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             location: {
               type: "string",
               description: "New location of the event",
+            },
+            colorId: {
+              type: "string",
+              description: "New color ID for the event",
             },
             attendees: {
               type: "array",
@@ -374,8 +394,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     `${a.email || 'no-email'} (${a.responseStatus || 'unknown'})`).join(', ')}`
                 : '';
               const locationInfo = event.location ? `\nLocation: ${event.location}` : '';
-              return `${event.summary || 'Untitled'} (${event.id || 'no-id'})${locationInfo}\nStart: ${event.start?.dateTime || event.start?.date || 'unspecified'}\nEnd: ${event.end?.dateTime || event.end?.date || 'unspecified'}${attendeeList}\n`;
+              const colorInfo = event.colorId ? `\nColor ID: ${event.colorId}` : '';
+              return `${event.summary || 'Untitled'} (${event.id || 'no-id'})${locationInfo}\nStart: ${event.start?.dateTime || event.start?.date || 'unspecified'}\nEnd: ${event.end?.dateTime || event.end?.date || 'unspecified'}${attendeeList}${colorInfo}\n`;
             }).join('\n')
+          }]
+        };
+      }
+
+      case "list-colors": {
+        const response = await calendar.colors.get();
+        const colors = response.data.event || {};
+        
+        const colorList = Object.entries(colors)
+          .map(([id, colorInfo]: [string, any]) => 
+            `Color ID: ${id} - ${colorInfo.background} (background) / ${colorInfo.foreground} (foreground)`
+          ).join('\n');
+          
+        return {
+          content: [{
+            type: "text",
+            text: `Available event colors:\n${colorList}`
           }]
         };
       }
@@ -391,6 +429,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             end: { dateTime: validArgs.end },
             attendees: validArgs.attendees,
             location: validArgs.location,
+            colorId: validArgs.colorId,
           },
         }).then(response => response.data);
         
@@ -414,6 +453,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             end: validArgs.end ? { dateTime: validArgs.end } : undefined,
             attendees: validArgs.attendees,
             location: validArgs.location,
+            colorId: validArgs.colorId,
           },
         }).then(response => response.data);
         

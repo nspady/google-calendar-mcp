@@ -10,6 +10,7 @@ This is a Model Context Protocol (MCP) server that provides integration with Goo
 - Update existing events
 - Delete events
 - Process events from screenshots and images
+- Color-code different events for better visual organization
 
 ## Requirements
 
@@ -57,6 +58,7 @@ google-calendar-mcp/
    npm run build
    ```
 4. Download your Google OAuth credentials from the Google Cloud Console (under "Credentials") and rename the file to `gcp-oauth.keys.json` and place it in the root directory of the project.
+   - Alternatively, copy the provided template file: `cp gcp-oauth.keys.example.json gcp-oauth.keys.json` and populate it with your credentials from the Google Cloud Console.
 
 ## Available Scripts
 
@@ -99,7 +101,7 @@ This will:
 3. Save the tokens and exit
 
 ### Security Notes
-- OAuth credentials are stored in `gcp-oauth.keys.json`
+- OAuth credentials are stored in `gcp-oauth.keys.json` (you can use the included `gcp-oauth.keys.example.json` template as a starting point)
 - Authentication tokens are stored in `.gcp-saved-tokens.json` with 600 permissions
 - Tokens are automatically refreshed in the background
 - Token integrity is validated before each API call
@@ -114,6 +116,7 @@ The server exposes the following tools:
    - `create-event`: Create a new calendar event
    - `update-event`: Update an existing calendar event
    - `delete-event`: Delete a calendar event
+   - `list-colors`: List available colors for events and calendars
 
 ## Using with Claude Desktop
 
@@ -165,7 +168,7 @@ Common issues and solutions:
    - Apps that are in testing mode, rather than production, will need to go through the OAuth flow again after a week.
 
 3. OAuth Token Errors
-   - Ensure your `gcp-oauth.keys.json` is correctly formatted
+   - Ensure your `gcp-oauth.keys.json` is correctly formatted (check against the structure in `gcp-oauth.keys.example.json`)
    - Try deleting `.gcp-saved-tokens.json` and re-authenticating
    
 4. TypeScript Build Errors
