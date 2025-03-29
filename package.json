@@ -1,10 +1,10 @@
 {
-  "name": "google-calendar-mcp",
+  "name": "@gm-solucoes-tech/google-calendar-mcp",
   "version": "1.0.1",
   "description": "Google Calendar MCP Server",
   "type": "module",
   "bin": {
-    "google-calendar-mcp": "./build/index.js"
+    "@gm-solucoes-tech/google-calendar-mcp": "./build/index.js"
   },
   "author": {
     "name": "Guilherme Camargo",
