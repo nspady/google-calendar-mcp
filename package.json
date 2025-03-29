@@ -6,13 +6,20 @@
   "bin": {
     "google-calendar-mcp": "./build/index.js"
   },
+  "author": {
+    "name": "Guilherme Camargo",
+    "email": "guilhermecamargo57@hotmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/camargoguilherme/google-calendar-mcp.git"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && node scripts/build.js",
     "start": "node build/index.js",
-    "auth": "node build/auth-server.js",
-    "dev": "ts-node --esm src/index.ts",
-    "postinstall": "scripts/build.js"
+    "dev": "ts-node src/index.ts",
+    "postinstall": "node scripts/build.js"
   },
   "dependencies": {
     "@google-cloud/local-auth": "^3.0.1",
@@ -27,6 +34,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.10.4",
+    "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   }
 }

@@ -1,5 +1,7 @@
 node_modules/
 build/
 *.log
+.env
 gcp-oauth.keys.json
 .gcp-saved-tokens.json
+gcp-service-account.json

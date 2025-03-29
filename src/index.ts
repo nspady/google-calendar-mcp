@@ -1,14 +1,13 @@
+// index.ts
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { google } from 'googleapis';
-import { OAuth2Client } from 'google-auth-library';
+import { JWT } from 'google-auth-library';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { z } from "zod";
-import { AuthServer } from './auth-server.js';
-import { TokenManager } from './token-manager.js';
 
 interface CalendarListEntry {
   id?: string | null;
@@ -90,7 +89,40 @@ const DeleteEventArgumentsSchema = z.object({
   eventId: z.string(),
 });
 
-// Create server instance
+// Utiliza variáveis de ambiente para caminho e conteúdo da chave
+const defaultKeyPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '../gcp-service-account.json');
+const keyPathFromEnv = process.env.GCP_KEY_PATH || defaultKeyPath;
+const keyJsonFromEnv = process.env.GCP_SERVICE_ACCOUNT_JSON;
+
+async function writeKeyFileIfNeeded(): Promise<void> {
+  try {
+    await fs.access(keyPathFromEnv);
+  } catch {
+    if (keyJsonFromEnv) {
+      await fs.writeFile(keyPathFromEnv, keyJsonFromEnv, { mode: 0o600 });
+      console.log(`gcp-service-account.json criado em ${keyPathFromEnv}`);
+    } else {
+      throw new Error('GCP_SERVICE_ACCOUNT_JSON não definido e o arquivo de chave não existe');
+    }
+  }
+}
+
+async function initializeServiceAccountClient() {
+  await writeKeyFileIfNeeded();
+  const keyFile = await fs.readFile(keyPathFromEnv, 'utf-8');
+  const key = JSON.parse(keyFile);
+  const scopes = ['https://www.googleapis.com/auth/calendar'];
+
+  const client = new JWT({
+    email: key.client_email,
+    key: key.private_key,
+    scopes,
+  });
+
+  await client.authorize();
+  return client;
+}
+
 const server = new Server(
   {
     name: "google-calendar",
@@ -103,127 +135,38 @@ const server = new Server(
   }
 );
 
-// Initialize OAuth2 client
-async function initializeOAuth2Client() {
-  try {
-    const keysContent = await fs.readFile(getKeysFilePath(), 'utf-8');
-    const keys = JSON.parse(keysContent);
-    
-    const { client_id, client_secret, redirect_uris } = keys.installed;
-    
-    return new OAuth2Client({
-      clientId: client_id,
-      clientSecret: client_secret,
-      redirectUri: redirect_uris[0]
-    });
-  } catch (error) {
-    console.error("Error loading OAuth keys:", error);
-    throw error;
-  }
-}
-
-let oauth2Client: OAuth2Client;
-let tokenManager: TokenManager;
-let authServer: AuthServer;
-
-// Helper function to get secure token path
-function getSecureTokenPath(): string {
-  const __dirname = path.dirname(fileURLToPath(import.meta.url));
-  return path.join(__dirname, '../.gcp-saved-tokens.json');
-}
-
-// Helper function to load and refresh tokens
-async function loadSavedTokens(): Promise<boolean> {
-  try {
-    const tokenPath = getSecureTokenPath();
-    
-    if (!await fs.access(tokenPath).then(() => true).catch(() => false)) {
-      console.error('No token file found');
-      return false;
-    }
-
-    const tokens = JSON.parse(await fs.readFile(tokenPath, 'utf-8'));
-    
-    if (!tokens || typeof tokens !== 'object') {
-      console.error('Invalid token format');
-      return false;
-    }
-
-    oauth2Client.setCredentials(tokens);
-    
-    const expiryDate = tokens.expiry_date;
-    const isExpired = expiryDate ? Date.now() >= (expiryDate - 5 * 60 * 1000) : true;
-
-    if (isExpired && tokens.refresh_token) {
-      try {
-        const response = await oauth2Client.refreshAccessToken();
-        const newTokens = response.credentials;
-        
-        if (!newTokens.access_token) {
-          throw new Error('Received invalid tokens during refresh');
-        }
-
-        await fs.writeFile(tokenPath, JSON.stringify(newTokens, null, 2), { mode: 0o600 });
-        oauth2Client.setCredentials(newTokens);
-      } catch (refreshError) {
-        console.error('Error refreshing auth token:', refreshError);
-        return false;
-      }
-    }
-
-    oauth2Client.on('tokens', async (newTokens) => {
-      try {
-        const currentTokens = JSON.parse(await fs.readFile(tokenPath, 'utf-8'));
-        const updatedTokens = {
-          ...currentTokens,
-          ...newTokens,
-          refresh_token: newTokens.refresh_token || currentTokens.refresh_token
-        };
-        await fs.writeFile(tokenPath, JSON.stringify(updatedTokens, null, 2), { mode: 0o600 });
-      } catch (error) {
-        console.error('Error saving updated tokens:', error);
-      }
-    });
-
-    return true;
-  } catch (error) {
-    console.error('Error loading tokens:', error);
-    return false;
-  }
-}
-
-
 const reminders_input_property = {
-    type: "object",
-    description: "Reminder settings for the event",
-    properties: {
-      useDefault: {
-        type: "boolean",
-        description: "Whether to use the default reminders",
-      },
-      overrides: {
-        type: "array",
-        description: "Custom reminders (uses popup notifications by default unless email is specified)",
-        items: {
-          type: "object",
-          properties: {
-            method: {
-              type: "string",
-              enum: ["email", "popup"],
-              description: "Reminder method (defaults to popup unless email is specified)",
-              default: "popup"
-            },
-            minutes: {
-              type: "number",
-              description: "Minutes before the event to trigger the reminder",
-            }
-          },
-          required: ["minutes"]
-        }
-      }
+  type: "object",
+  description: "Reminder settings for the event",
+  properties: {
+    useDefault: {
+      type: "boolean",
+      description: "Whether to use the default reminders",
     },
-    required: ["useDefault"]
+    overrides: {
+      type: "array",
+      description: "Custom reminders (uses popup notifications by default unless email is specified)",
+      items: {
+        type: "object",
+        properties: {
+          method: {
+            type: "string",
+            enum: ["email", "popup"],
+            description: "Reminder method (defaults to popup unless email is specified)",
+            default: "popup"
+          },
+          minutes: {
+            type: "number",
+            description: "Minutes before the event to trigger the reminder",
+          }
+        },
+        required: ["minutes"]
+      }
+    }
+  },
+  required: ["useDefault"]
 }
+
 
 // List available tools
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -406,17 +349,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
-  
-  // Check authentication before processing any request
-  if (!await tokenManager.validateTokens()) {
-    const port = authServer ? 3000 : null;
-    const authMessage = port 
-      ? `Authentication required. Please visit http://localhost:${port} to authenticate with Google Calendar. If this port is unavailable, the server will try ports 3001-3004.`
-      : 'Authentication required. Please run "npm run auth" to authenticate with Google Calendar.';
-    throw new Error(authMessage);
-  }
-
-  const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+  const auth = await initializeServiceAccountClient();
+  const calendar = google.calendar({ version: 'v3', auth });
 
   try {
     switch (name) {
@@ -426,7 +360,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return {
           content: [{
             type: "text",
-            text: calendars.map((cal: CalendarListEntry) => 
+            text: calendars.map((cal: CalendarListEntry) =>
               `${cal.summary || 'Untitled'} (${cal.id || 'no-id'})`).join('\n')
           }]
         };
@@ -441,21 +375,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           singleEvents: true,
           orderBy: 'startTime',
         });
-        
+
         const events = response.data.items || [];
         return {
           content: [{
             type: "text",
             text: events.map((event) => {
-              const attendeeList = event.attendees 
-                ? `\nAttendees: ${event.attendees.map((a) => 
-                    `${a.email || 'no-email'} (${a.responseStatus || 'unknown'})`).join(', ')}`
+              const attendeeList = event.attendees
+                ? `\nAttendees: ${event.attendees.map((a) =>
+                  `${a.email || 'no-email'} (${a.responseStatus || 'unknown'})`).join(', ')}`
                 : '';
               const locationInfo = event.location ? `\nLocation: ${event.location}` : '';
               const colorInfo = event.colorId ? `\nColor ID: ${event.colorId}` : '';
-              const reminderInfo = event.reminders ? 
-                `\nReminders: ${event.reminders.useDefault ? 'Using default' : 
-                  (event.reminders.overrides || []).map(r => 
+              const reminderInfo = event.reminders ?
+                `\nReminders: ${event.reminders.useDefault ? 'Using default' :
+                  (event.reminders.overrides || []).map(r =>
                     `${r.method} ${r.minutes} minutes before`).join(', ') || 'None'}` : '';
               return `${event.summary || 'Untitled'} (${event.id || 'no-id'})${locationInfo}\nStart: ${event.start?.dateTime || event.start?.date || 'unspecified'}\nEnd: ${event.end?.dateTime || event.end?.date || 'unspecified'}${attendeeList}${colorInfo}${reminderInfo}\n`;
             }).join('\n')
@@ -466,12 +400,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "list-colors": {
         const response = await calendar.colors.get();
         const colors = response.data.event || {};
-        
+
         const colorList = Object.entries(colors)
-          .map(([id, colorInfo]: [string, any]) => 
+          .map(([id, colorInfo]: [string, any]) =>
             `Color ID: ${id} - ${colorInfo.background} (background) / ${colorInfo.foreground} (foreground)`
           ).join('\n');
-          
+
         return {
           content: [{
             type: "text",
@@ -495,7 +429,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             reminders: validArgs.reminders,
           },
         }).then(response => response.data);
-        
+
         return {
           content: [{
             type: "text",
@@ -520,7 +454,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             reminders: validArgs.reminders,
           },
         }).then(response => response.data);
-        
+
         return {
           content: [{
             type: "text",
@@ -535,7 +469,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           calendarId: validArgs.calendarId,
           eventId: validArgs.eventId,
         });
-        
+
         return {
           content: [{
             type: "text",
@@ -553,52 +487,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
-function getKeysFilePath(): string {
-  const __dirname = path.dirname(fileURLToPath(import.meta.url));
-  const relativePath = path.join(__dirname, '../gcp-oauth.keys.json');
-  const absolutePath = path.resolve(relativePath);
-  return absolutePath;
-}
-
-// Start the server
 async function main() {
   try {
-    oauth2Client = await initializeOAuth2Client();
-    tokenManager = new TokenManager(oauth2Client);
-    authServer = new AuthServer(oauth2Client);
-
-    // Start auth server if needed
-    if (!await tokenManager.loadSavedTokens()) {
-      console.log('No valid tokens found, starting auth server...');
-      const success = await authServer.start();
-      if (!success) {
-        console.error('Failed to start auth server');
-        process.exit(1);
-      }
-    }
-
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error("Google Calendar MCP Server running on stdio");
-
-    // Handle cleanup
-    process.on('SIGINT', cleanup);
-    process.on('SIGTERM', cleanup);
+    console.error("Google Calendar MCP Server running with service account");
   } catch (error) {
     console.error("Server startup failed:", error);
     process.exit(1);
   }
-}
-
-async function cleanup() {
-  console.log('Cleaning up...');
-  if (authServer) {
-    await authServer.stop();
-  }
-  if (tokenManager) {
-    tokenManager.clearTokens();
-  }
-  process.exit(0);
 }
 
 main().catch((error) => {

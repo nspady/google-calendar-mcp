@@ -1,2 +1,4 @@
+.env
 .gcp-saved-tokens.json
 gcp-oauth.keys.json
+gcp-service-account.json
