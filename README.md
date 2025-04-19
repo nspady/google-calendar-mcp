@@ -1,7 +1,7 @@
 # Google Calendar MCP Server
 
 This is a Model Context Protocol (MCP) server that provides integration with Google Calendar. It allows LLMs to read, create, update and search for calendar events through a standardized interface.
- 
+
 ## Example Usage
 
 Along with the normal capabilities you would expect for a calendar integration you can also do really dynamic, multi-step processes like:
@@ -12,7 +12,7 @@ Along with the normal capabilities you would expect for a calendar integration y
    ```
    Supported image formats: PNG, JPEG, GIF
    Images can contain event details like date, time, location, and description
-   
+
 2. Calendar analysis:
    ```
    What events do I have coming up this week that aren't part of my usual routine?
@@ -127,6 +127,93 @@ Tests mock external dependencies (Google API, filesystem) to ensure isolated tes
 - The server runs locally and requires OAuth authentication.
 - OAuth credentials (`gcp-oauth.keys.json`) and saved tokens (`.gcp-saved-tokens.json`) should **never** be committed to version control. Ensure they are added to your `.gitignore` file.
 - For production use, consider getting your OAuth application verified by Google.
+
+## BaseToolHandler
+
+The `BaseToolHandler` class provides a foundation for all tool handlers in this project. It encapsulates common functionality such as:
+
+- **Error Handling:**  A centralized `handleGoogleApiError` method to gracefully handle errors returned by the Google Calendar API, specifically addressing authentication issues.
+- **Authentication:** Receives an OAuth2Client instance for authenticated API calls.
+- **Abstraction:**  Defines the `runTool` abstract method that all handlers must implement to execute their specific logic.
+
+By extending `BaseToolHandler`, each tool handler benefits from consistent error handling and a standardized structure, promoting code reusability and maintainability.  This approach ensures that all handlers adhere to a common pattern for interacting with the Google Calendar API and managing authentication.
+
+### How ListEventsHandler Uses BaseToolHandler
+
+The `ListEventsHandler` extends the `BaseToolHandler` to inherit its common functionalities. Specifically, this inheritance promotes code reuse and maintainability, as common functionalities are centralized in the `BaseToolHandler` class.
+
+Here is an exmple from `ListEventsHandler`
+
+```typescript
+export class ListEventsHandler extends BaseToolHandler {
+    async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
+        const validArgs = ListEventsArgumentsSchema.parse(args);
+        const events = await this.listEvents(oauth2Client, validArgs);
+        return {
+            content: [{
+                type: "text",
+                text: this.formatEventList(events),
+            }],
+        };
+    }
+
+    private async listEvents(
+        client: OAuth2Client,
+        args: z.infer<typeof ListEventsArgumentsSchema>
+    ): Promise<calendar_v3.Schema$Event[]> {
+        try {
+            const calendar = google.calendar({ version: 'v3', auth: client });
+            const response = await calendar.events.list({
+                calendarId: args.calendarId,
+                timeMin: args.timeMin,
+                timeMax: args.timeMax,
+                singleEvents: true,
+                orderBy: 'startTime',
+            });
+            return response.data.items || [];
+        } catch (error) {
+            this.handleGoogleApiError(error);
+            throw error;
+        }
+    }
+
+    /**
+     * Formats a list of events into a user-friendly string.
+     */
+    private formatEventList(events: calendar_v3.Schema$Event[]): string {
+        return events
+            .map((event) => {
+                const attendeeList = event.attendees
+                    ? `\nAttendees: ${event.attendees
+                        .map((a) => `${a.email || "no-email"} (${a.responseStatus || "unknown"})`)
+                        .join(", ")}`
+                    : "";
+                const locationInfo = event.location ? `\nLocation: ${event.location}` : "";
+                const colorInfo = event.colorId ? `\nColor ID: ${event.colorId}` : "";
+                const reminderInfo = event.reminders
+                    ? `\nReminders: ${event.reminders.useDefault ? 'Using default' :
+                        (event.reminders.overrides || []).map((r: any) => `${r.method} ${r.minutes} minutes before`).join(', ') || 'None'}`
+                    : "";
+                return `${event.summary || "Untitled"} (${event.id || "no-id"})${locationInfo}\nStart: ${event.start?.dateTime || event.start?.date || "unspecified"}\nEnd: ${event.end?.dateTime || event.end?.date || "unspecified"}${attendeeList}${colorInfo}${reminderInfo}\n`;
+            })
+            .join("\n");
+    }
+}
+```
+
+Finally, add tool name which is from `ToolDefinitions` and `ListEventsHandler` new instance object in `handlerMap` from `callTool.ts`, it will be automatic map invoke function correctly.
+
+```typescript
+const handlerMap: Record<string, BaseToolHandler> = {
+    "list-calendars": new ListCalendarsHandler(),
+    "list-events": new ListEventsHandler(),
+    "search-events": new SearchEventsHandler(),
+    "list-colors": new ListColorsHandler(),
+    "create-event": new CreateEventHandler(),
+    "update-event": new UpdateEventHandler(),
+    "delete-event": new DeleteEventHandler(),
+};
+```
 
 ## Usage with Claude Desktop
 

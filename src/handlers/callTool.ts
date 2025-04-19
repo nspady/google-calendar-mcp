@@ -1,68 +1,18 @@
 import { CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from 'google-auth-library';
-import { calendar_v3 } from 'googleapis';
-import {
-    ListEventsArgumentsSchema,
-    SearchEventsArgumentsSchema,
-    CreateEventArgumentsSchema,
-    UpdateEventArgumentsSchema,
-    DeleteEventArgumentsSchema,
-} from '../schemas/validators.js';
-import {
-    listCalendars,
-    listEvents,
-    searchEvents,
-    listColors,
-    createEvent,
-    updateEvent,
-    deleteEvent
-} from '../services/googleCalendar.js';
-
-/**
- * Formats a list of calendars into a user-friendly string.
- */
-function formatCalendarList(calendars: calendar_v3.Schema$CalendarListEntry[]): string {
-    return calendars
-        .map((cal) => `${cal.summary || "Untitled"} (${cal.id || "no-id"})`)
-        .join("\n");
-}
-
-/**
- * Formats a list of events into a user-friendly string.
- */
-function formatEventList(events: calendar_v3.Schema$Event[]): string {
-    return events
-        .map((event) => {
-            const attendeeList = event.attendees
-                ? `\nAttendees: ${event.attendees
-                    .map((a) => `${a.email || "no-email"} (${a.responseStatus || "unknown"})`)
-                    .join(", ")}`
-                : "";
-            const locationInfo = event.location ? `\nLocation: ${event.location}` : "";
-            const colorInfo = event.colorId ? `\nColor ID: ${event.colorId}` : "";
-            const reminderInfo = event.reminders
-                ? `\nReminders: ${event.reminders.useDefault ? 'Using default' :
-                    (event.reminders.overrides || []).map((r: any) => `${r.method} ${r.minutes} minutes before`).join(', ') || 'None'}`
-                : "";
-            return `${event.summary || "Untitled"} (${event.id || "no-id"})${locationInfo}\nStart: ${event.start?.dateTime || event.start?.date || "unspecified"}\nEnd: ${event.end?.dateTime || event.end?.date || "unspecified"}${attendeeList}${colorInfo}${reminderInfo}\n`;
-        })
-        .join("\n");
-}
-
-/**
- * Formats the color information into a user-friendly string.
- */
-function formatColorList(colors: calendar_v3.Schema$Colors): string {
-    const eventColors = colors.event || {};
-    return Object.entries(eventColors)
-        .map(([id, colorInfo]) => `Color ID: ${id} - ${colorInfo.background} (background) / ${colorInfo.foreground} (foreground)`)
-        .join("\n");
-}
+import { BaseToolHandler } from "./core/BaseToolHandler.js";
+import { ListCalendarsHandler } from "./core/ListCalendarsHandler.js";
+import { ListEventsHandler } from "./core/ListEventsHandler.js";
+import { SearchEventsHandler } from "./core/SearchEventsHandler.js";
+import { ListColorsHandler } from "./core/ListColorsHandler.js";
+import { CreateEventHandler } from "./core/CreateEventHandler.js";
+import { UpdateEventHandler } from "./core/UpdateEventHandler.js";
+import { DeleteEventHandler } from "./core/DeleteEventHandler.js";
 
 /**
  * Handles incoming tool calls, validates arguments, calls the appropriate service,
  * and formats the response.
- * 
+ *
  * @param request The CallToolRequest containing tool name and arguments.
  * @param oauth2Client The authenticated OAuth2 client instance.
  * @returns A Promise resolving to the CallToolResponse.
@@ -71,88 +21,29 @@ export async function handleCallTool(request: typeof CallToolRequestSchema._type
     const { name, arguments: args } = request.params;
 
     try {
-        switch (name) {
-            case "list-calendars": {
-                const calendars = await listCalendars(oauth2Client);
-                return {
-                    content: [{
-                        type: "text",
-                        text: formatCalendarList(calendars),
-                    }],
-                };
-            }
-
-            case "list-events": {
-                const validArgs = ListEventsArgumentsSchema.parse(args);
-                const events = await listEvents(oauth2Client, validArgs);
-                return {
-                    content: [{
-                        type: "text",
-                        text: formatEventList(events),
-                    }],
-                };
-            }
-
-            case "search-events": {
-                const validArgs = SearchEventsArgumentsSchema.parse(args);
-                const events = await searchEvents(oauth2Client, validArgs);
-                return {
-                    content: [{
-                        type: "text",
-                        text: formatEventList(events), // Same formatting as list-events
-                    }],
-                };
-            }
-
-            case "list-colors": {
-                const colors = await listColors(oauth2Client);
-                return {
-                    content: [{
-                        type: "text",
-                        text: `Available event colors:\n${formatColorList(colors)}`,
-                    }],
-                };
-            }
-
-            case "create-event": {
-                const validArgs = CreateEventArgumentsSchema.parse(args);
-                const event = await createEvent(oauth2Client, validArgs);
-                return {
-                    content: [{
-                        type: "text",
-                        text: `Event created: ${event.summary} (${event.id})`,
-                    }],
-                };
-            }
-
-            case "update-event": {
-                const validArgs = UpdateEventArgumentsSchema.parse(args);
-                const event = await updateEvent(oauth2Client, validArgs);
-                return {
-                    content: [{
-                        type: "text",
-                        text: `Event updated: ${event.summary} (${event.id})`,
-                    }],
-                };
-            }
-
-            case "delete-event": {
-                const validArgs = DeleteEventArgumentsSchema.parse(args);
-                await deleteEvent(oauth2Client, validArgs);
-                return {
-                    content: [{
-                        type: "text",
-                        text: `Event deleted successfully`,
-                    }],
-                };
-            }
-
-            default:
-                throw new Error(`Unknown tool: ${name}`);
-        }
+        const handler = getHandler(name);
+        return await handler.runTool(args, oauth2Client);
     } catch (error: unknown) {
         console.error(`Error executing tool '${name}':`, error);
         // Re-throw the error to be handled by the main server logic or error handler
         throw error;
     }
-} 
+}
+
+const handlerMap: Record<string, BaseToolHandler> = {
+    "list-calendars": new ListCalendarsHandler(),
+    "list-events": new ListEventsHandler(),
+    "search-events": new SearchEventsHandler(),
+    "list-colors": new ListColorsHandler(),
+    "create-event": new CreateEventHandler(),
+    "update-event": new UpdateEventHandler(),
+    "delete-event": new DeleteEventHandler(),
+};
+
+function getHandler(toolName: string): BaseToolHandler {
+    const handler = handlerMap[toolName];
+    if (!handler) {
+        throw new Error(`Unknown tool: ${toolName}`);
+    }
+    return handler;
+}
