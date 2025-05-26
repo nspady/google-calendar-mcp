@@ -1,5 +1,29 @@
 import { initializeOAuth2Client } from './auth/client.js';
 import { AuthServer } from './auth/server.js';
+import { setCredentialsPath } from './auth/utils.js';
+
+// Parse CLI arguments for credentials
+function parseAuthServerArgs(): { credentialsPath: string | undefined } {
+  const args = process.argv.slice(2);
+  let credentialsPath: string | undefined;
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    
+    // Check for credentials file option
+    if (arg === '--credentials-file') {
+      if (i + 1 < args.length && !args[i + 1].startsWith('--')) {
+        credentialsPath = args[i + 1];
+        i++; // Skip the next argument as it's the value
+      } else {
+        console.error(`Option ${arg} requires a value`);
+        process.exit(1);
+      }
+    }
+  }
+
+  return { credentialsPath };
+}
 
 // Main function to run the authentication server
 async function runAuthServer() {
@@ -55,6 +79,12 @@ async function runAuthServer() {
 
 // Run the auth server if this file is executed directly
 if (import.meta.url.endsWith('auth-server.js')) {
+  // Parse CLI arguments and set credentials path if provided
+  const { credentialsPath } = parseAuthServerArgs();
+  if (credentialsPath) {
+    setCredentialsPath(credentialsPath);
+  }
+  
   runAuthServer().catch((error: unknown) => {
     process.stderr.write(`Unhandled error: ${error instanceof Error ? error.message : 'Unknown error'}\n`);
     process.exit(1);

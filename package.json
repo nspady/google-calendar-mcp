@@ -1,17 +1,41 @@
 {
-  "name": "google-calendar-mcp",
-  "version": "1.1.0",
-  "description": "Google Calendar MCP Server",
+  "name": "@nspady/google-calendar-mcp",
+  "version": "1.2.0-beta.0",
+  "description": "Google Calendar MCP Server for Claude Desktop - Integrate with Google Calendar API",
   "type": "module",
   "bin": {
     "google-calendar-mcp": "./build/index.js"
   },
+  "files": [
+    "build/",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "google-calendar",
+    "calendar",
+    "ai",
+    "llm",
+    "integration"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nspady/google-calendar-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nspady/google-calendar-mcp/issues"
+  },
+  "homepage": "https://github.com/nspady/google-calendar-mcp#readme",
+  "author": "nspady",
+  "license": "MIT",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && node scripts/build.js",
     "start": "node build/index.js",
     "auth": "node build/auth-server.js",
-    "postinstall": "scripts/build.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage"
