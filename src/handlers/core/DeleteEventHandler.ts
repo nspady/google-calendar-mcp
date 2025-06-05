@@ -25,6 +25,7 @@ export class DeleteEventHandler extends BaseToolHandler {
             await calendar.events.delete({
                 calendarId: args.calendarId,
                 eventId: args.eventId,
+                sendUpdates: args.sendUpdates,
             });
         } catch (error) {
             throw this.handleGoogleApiError(error);

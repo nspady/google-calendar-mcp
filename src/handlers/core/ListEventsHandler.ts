@@ -1,9 +1,7 @@
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { ListEventsArgumentsSchema } from "../../schemas/validators.js";
 import { OAuth2Client } from "google-auth-library";
 import { BaseToolHandler } from "./BaseToolHandler.js";
-import { google, calendar_v3 } from 'googleapis';
-import { z } from 'zod';
+import { calendar_v3 } from 'googleapis';
 import { formatEventList } from "../utils.js";
 import { BatchRequestHandler } from "./BatchRequestHandler.js";
 
@@ -12,13 +10,19 @@ interface ExtendedEvent extends calendar_v3.Schema$Event {
   calendarId: string;
 }
 
-type ListEventsArgs = z.infer<typeof ListEventsArgumentsSchema>;
+interface ListEventsArgs {
+  calendarId: string | string[];
+  timeMin?: string;
+  timeMax?: string;
+}
 
 export class ListEventsHandler extends BaseToolHandler {
-    async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
-        const validArgs = ListEventsArgumentsSchema.parse(args);
+    async runTool(args: ListEventsArgs, oauth2Client: OAuth2Client): Promise<CallToolResult> {
+        // MCP SDK has already validated the arguments against the tool schema
+        const validArgs = args;
         
         // Normalize calendarId to always be an array for consistent processing
+        // The Zod schema transform has already handled JSON string parsing if needed
         const calendarIds = Array.isArray(validArgs.calendarId) 
             ? validArgs.calendarId 
             : [validArgs.calendarId];
@@ -90,7 +94,7 @@ export class ListEventsHandler extends BaseToolHandler {
         const { events, errors } = this.processBatchResponses(responses, calendarIds);
         
         if (errors.length > 0) {
-            console.warn("Some calendars had errors:", errors.map(e => `${e.calendarId}: ${e.error}`));
+            process.stderr.write(`Some calendars had errors: ${errors.map(e => `${e.calendarId}: ${e.error}`).join(', ')}\n`);
         }
         
         return this.sortEventsByStartTime(events);

@@ -36,6 +36,10 @@
           - name: Install dependencies
             run: npm ci
 
-          # Runs the test script defined in package.json
-          - name: Run tests
+          # Runs the unit test script defined in package.json (includes console statement detection)
+          - name: Run unit tests
+            run: npm run dev test
+
+          # Build the project to ensure it compiles correctly
+          - name: Build project
             run: npm run build

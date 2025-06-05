@@ -29,7 +29,7 @@ export class UpdateEventHandler extends BaseToolHandler {
             // Detect event type and validate scope usage
             const eventType = await helpers.detectEventType(args.eventId, args.calendarId);
             
-            if (args.modificationScope !== 'all' && eventType !== 'recurring') {
+            if (args.modificationScope && args.modificationScope !== 'all' && eventType !== 'recurring') {
                 throw new RecurringEventError(
                     'Scope other than "all" only applies to recurring events',
                     RECURRING_EVENT_ERRORS.NON_RECURRING_SCOPE
@@ -37,11 +37,12 @@ export class UpdateEventHandler extends BaseToolHandler {
             }
             
             switch (args.modificationScope) {
-                case 'single':
+                case 'thisEventOnly':
                     return this.updateSingleInstance(helpers, args);
                 case 'all':
+                case undefined:
                     return this.updateAllInstances(helpers, args);
-                case 'future':
+                case 'thisAndFollowing':
                     return this.updateFutureInstances(helpers, args);
                 default:
                     throw new RecurringEventError(

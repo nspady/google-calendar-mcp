@@ -1,0 +1,131 @@
+services:
+  # Main stdio-based MCP server (default)
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: google-calendar-mcp
+    
+    # Volume mounts for OAuth credentials and token storage
+    volumes:
+      # OAuth credentials file (must exist before running)
+      - ./gcp-oauth.keys.json:/usr/src/app/gcp-oauth.keys.json:ro
+      - ./.gcp-saved-tokens.json:/usr/src/app/.gcp-saved-tokens.json:rw
+    
+    # Environment configuration
+    environment:
+      NODE_ENV: production
+      TRANSPORT: stdio
+      DEBUG: ${DEBUG:-false}
+    
+    # Stdio mode requires interactive terminal
+    stdin_open: true
+    tty: true
+    
+    # Resource limits for production stability
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+        reservations:
+          memory: 128M
+          cpus: "0.25"
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    read_only: false  # Required for token file writes
+    
+    # Health check not applicable for stdio mode
+    labels:
+      - "com.docker.compose.project=google-calendar-mcp"
+      - "com.docker.compose.service=stdio"
+
+  # Optional HTTP service (use with --profile http)
+  server-http:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: google-calendar-mcp-http
+    
+    # Port mapping for HTTP mode
+    ports:
+      - "${HTTP_PORT:-3000}:3000"
+    
+    # Volume mounts
+    volumes:
+      - ./gcp-oauth.keys.json:/usr/src/app/gcp-oauth.keys.json:ro
+      - ./.gcp-saved-tokens.json:/usr/src/app/.gcp-saved-tokens.json
+    
+    # Environment configuration for HTTP mode
+    environment:
+      NODE_ENV: production
+      TRANSPORT: http
+      PORT: 3000
+      HOST: 0.0.0.0
+      DEBUG: ${DEBUG:-false}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-*}
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+          cpus: "0.5"
+    
+    # Health check for HTTP mode
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    
+    # Networks
+    networks:
+      - mcp-network
+    
+    # Profile for optional HTTP service
+    profiles:
+      - http
+    
+    # Labels for organization
+    labels:
+      - "com.docker.compose.project=google-calendar-mcp"
+      - "com.docker.compose.service=http"
+      - "traefik.enable=true"
+      - "traefik.http.routers.mcp.rule=Host(`${MCP_HOST:-localhost}`)"
+
+# Network configuration
+networks:
+  mcp-network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: mcp-bridge
+    labels:
+      - "com.docker.compose.project=google-calendar-mcp"
+      - "com.docker.compose.network=mcp-network"
+
+# Volume configuration (if needed for persistent data)
+volumes:
+  # Example: if you want to persist logs
+  mcp-logs:
+    driver: local
+    labels:
+      - "com.docker.compose.project=google-calendar-mcp"
+      - "com.docker.compose.volume=logs" 

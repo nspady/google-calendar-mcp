@@ -11,6 +11,29 @@ function getProjectRoot(): string {
   return path.resolve(projectRoot); // Ensure absolute path
 }
 
+// Get the current account mode (normal or test)
+export function getAccountMode(): 'normal' | 'test' {
+  // If set explicitly via environment variable use that instead
+  const explicitMode = process.env.GOOGLE_ACCOUNT_MODE?.toLowerCase();
+  if (explicitMode === 'test' || explicitMode === 'normal') {
+    return explicitMode;
+  }
+  
+  // Auto-detect test environment
+  if (isRunningInTestEnvironment()) {
+    return 'test';
+  }
+  
+  // Default to normal for regular app usage
+  return 'normal';
+}
+
+// Helper to detect if we're running in a test environment
+function isRunningInTestEnvironment(): boolean {
+  // Simple and reliable: just check NODE_ENV
+  return process.env.NODE_ENV === 'test';
+}
+
 // Returns the absolute path for the saved token file.
 // Uses XDG Base Directory spec with fallback to home directory and legacy project root
 export function getSecureTokenPath(): string {
@@ -48,6 +71,11 @@ export function getKeysFilePath(): string {
   const projectRoot = getProjectRoot();
   const keysPath = path.join(projectRoot, "gcp-oauth.keys.json");
   return keysPath; // Already absolute from getProjectRoot
+}
+
+// Helper to determine if we're currently in test mode
+export function isTestMode(): boolean {
+  return getAccountMode() === 'test';
 }
 
 // Interface for OAuth credentials

@@ -1,20 +1,12 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  ListToolsRequestSchema,
-  CallToolRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
-import { OAuth2Client } from "google-auth-library";
 import { fileURLToPath } from "url";
+import { GoogleCalendarMcpServer } from './server.js';
+import { parseArgs } from './config/TransportConfig.js';
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 
 // Import modular components
 import { initializeOAuth2Client } from './auth/client.js';
 import { AuthServer } from './auth/server.js';
-import { TokenManager } from './auth/tokenManager.js';
-import { getToolDefinitions } from './handlers/listTools.js';
-import { handleCallTool } from './handlers/callTool.js';
 
 // Get package version
 const __filename = fileURLToPath(import.meta.url);
@@ -23,84 +15,25 @@ const packageJsonPath = join(__dirname, '..', 'package.json');
 const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
 const VERSION = packageJson.version;
 
-// --- Global Variables --- 
-// Create server instance (global for export)
-const server = new Server(
-  {
-    name: "google-calendar",
-    version: VERSION,
-  },
-  {
-    capabilities: {
-      tools: {},
-    },
-  }
-);
-
-let oauth2Client: OAuth2Client;
-let tokenManager: TokenManager;
-let authServer: AuthServer;
-
 // --- Main Application Logic --- 
 async function main() {
   try {
-    // 1. Initialize Authentication
-    oauth2Client = await initializeOAuth2Client();
-    tokenManager = new TokenManager(oauth2Client);
-    authServer = new AuthServer(oauth2Client);
-
-    // 2. Start auth server if authentication is required
-    // The start method internally validates tokens first
-    const authSuccess = await authServer.start();
-    if (!authSuccess) {
-      process.exit(1);
-    }
-
-    // 3. Set up MCP Handlers
+    // Parse command line arguments
+    const config = parseArgs(process.argv.slice(2));
     
-    // List Tools Handler
-    server.setRequestHandler(ListToolsRequestSchema, async () => {
-      // Directly return the definitions from the handler module
-      return getToolDefinitions();
-    });
-
-    // Call Tool Handler
-    server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      // Check if tokens are valid before handling the request
-      if (!(await tokenManager.validateTokens())) {
-        throw new Error("Authentication required. Please run 'npm run auth' to authenticate.");
-      }
-      
-      // Delegate the actual tool execution to the specialized handler
-      return handleCallTool(request, oauth2Client);
-    });
-
-    // 4. Connect Server Transport
-    const transport = new StdioServerTransport();
-    await server.connect(transport);
-
-    // 5. Set up Graceful Shutdown
-    process.on("SIGINT", cleanup);
-    process.on("SIGTERM", cleanup);
+    // Create and initialize the server
+    const server = new GoogleCalendarMcpServer(config);
+    await server.initialize();
+    
+    // Start the server with the appropriate transport
+    await server.start();
 
   } catch (error: unknown) {
-    process.stderr.write(`Server startup failed: ${error}\n`);
+    process.stderr.write(`Failed to start server: ${error instanceof Error ? error.message : error}\n`);
     process.exit(1);
   }
 }
 
-// --- Cleanup Logic --- 
-async function cleanup() {
-  try {
-    if (authServer) {
-      // Attempt to stop the auth server if it exists and might be running
-      await authServer.stop();
-    }
-    process.exit(0);
-  } catch (error: unknown) {
-    process.exit(1);
-  }
-}
 
 // --- Command Line Interface ---
 async function runAuthServer(): Promise<void> {
@@ -176,8 +109,8 @@ function showVersion(): void {
 }
 
 // --- Exports & Execution Guard --- 
-// Export server and main for testing or potential programmatic use
-export { main, server, runAuthServer };
+// Export main for testing or potential programmatic use
+export { main, runAuthServer };
 
 // Parse CLI arguments
 function parseCliArgs(): { command: string | undefined } {

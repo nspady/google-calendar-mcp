@@ -48,7 +48,7 @@ export class FreeBusyEventHandler extends BaseToolHandler {
           timeZone: args.timeZone,
           groupExpansionMax: args.groupExpansionMax,
           calendarExpansionMax: args.calendarExpansionMax,
-          items: args.items,
+          items: args.calendars,
         },
       });
       return response.data as FreeBusyResponse;

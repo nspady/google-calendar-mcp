@@ -78,10 +78,10 @@ describe('Batch List Events Functionality', () => {
       expect(result.data?.calendarId).toHaveLength(3);
     });
 
-    it('should parse JSON string array of calendar IDs', () => {
-      // This tests the fix for when clients send JSON strings instead of arrays
+    it('should accept actual array of calendar IDs (not JSON string)', () => {
+      // Clients should send actual arrays, not JSON strings
       const input = {
-        calendarId: '["primary", "work@example.com", "personal@example.com"]',
+        calendarId: ['primary', 'work@example.com', 'personal@example.com'],
         timeMin: '2024-01-01T00:00:00Z'
       };
 

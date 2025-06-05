@@ -1,5 +1,6 @@
 # Architecture Overview
 
+
 ## BaseToolHandler
 
 The `BaseToolHandler` class provides a foundation for all tool handlers in this project. It encapsulates common functionality such as:
@@ -86,4 +87,40 @@ const handlerMap: Record<string, BaseToolHandler> = {
     "update-event": new UpdateEventHandler(),
     "delete-event": new DeleteEventHandler(),
 };
+```
+
+### Validation Architecture
+
+### Unified Time Schema Validation
+
+The validation system provides consistent datetime handling across all tools:
+
+- **RFC3339DateTimeSchema**: Base schema requiring timezone-aware datetime strings
+- **TimeMinSchema/TimeMaxSchema**: Standardized time boundary schemas with consistent descriptions
+- **Centralized Validation**: All time parameters use shared schemas from `validators.ts`
+
+### Tool-Specific Validation Requirements
+
+Different tools have varying time parameter requirements based on their function:
+
+- **list-events**: `timeMin` and `timeMax` required for precise event filtering
+- **search-events**: `timeMin` and `timeMax` required to limit search scope 
+- **get-freebusy**: `timeMin` and `timeMax` required for availability queries
+- **create-event**: `start` and `end` required for new events
+- **update-event**: `start` and `end` optional for partial updates
+
+This approach ensures consistent API behavior while maintaining backwards compatibility.
+
+## Code Quality Tests
+
+The test suite includes specialized tests to maintain code quality and MCP compliance:
+
+- **Console Statement Detection**: Automatically scans source code for `console.log`, `console.error`, and other console methods that are not supported in MCP clients. This ensures the server follows MCP best practices by using `process.stderr.write()` for error logging instead.
+- **Tool Handler Tests**: Verify that all calendar operations work correctly with mocked Google APIs
+- **Batch Request Tests**: Test the batch processing capabilities for handling multiple calendar operations
+- **Schema Validation Tests**: Ensure all input validation works correctly, including time format requirements
+
+Run the console statement detection test specifically:
+```bash
+npm test -- console-statements.test.ts
 ```
