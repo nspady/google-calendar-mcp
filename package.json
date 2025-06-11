@@ -1,6 +1,6 @@
 {
-  "name": "@cocal/google-calendar-mcp",
-  "version": "1.3.0",
+  "name": "@sudomcp/google-calendar-mcp",
+  "version": "1.4.0",
   "description": "Google Calendar MCP Server",
   "type": "module",
   "bin": {

@@ -10,7 +10,7 @@ import { readFileSync } from "fs";
 import { join, dirname } from "path";
 
 // Import modular components
-import { initializeOAuth2Client } from './auth/client.js';
+import { initializeOAuth2Client, initializeOAuth2ClientFromHost } from './auth/client.js';
 import { AuthServer } from './auth/server.js';
 import { TokenManager } from './auth/tokenManager.js';
 import { getToolDefinitions } from './handlers/listTools.js';
@@ -38,22 +38,30 @@ const server = new Server(
 );
 
 let oauth2Client: OAuth2Client;
-let tokenManager: TokenManager;
-let authServer: AuthServer;
+let tokenManager: TokenManager | undefined;
+let authServer: AuthServer | undefined;
+let hostAuthMode = false;
 
 // --- Main Application Logic --- 
 async function main() {
   try {
     // 1. Initialize Authentication
-    oauth2Client = await initializeOAuth2Client();
-    tokenManager = new TokenManager(oauth2Client);
-    authServer = new AuthServer(oauth2Client);
-
-    // 2. Start auth server if authentication is required
-    // The start method internally validates tokens first
-    const authSuccess = await authServer.start();
-    if (!authSuccess) {
-      process.exit(1);
+    if (hostAuthMode) {
+      oauth2Client = await initializeOAuth2ClientFromHost();
+      if (!oauth2Client.credentials.access_token) {
+        throw new Error("Missing or invalid GOOGLE_API_ACCESS_TOKEN.");
+      }
+      // No tokenManager, no AuthServer in host-auth mode
+    } else {
+      oauth2Client = await initializeOAuth2Client();
+      tokenManager = new TokenManager(oauth2Client);
+      authServer = new AuthServer(oauth2Client);
+      // 2. Start auth server if authentication is required
+      // The start method internally validates tokens first
+      const authSuccess = await authServer.start();
+      if (!authSuccess) {
+        process.exit(1);
+      }
     }
 
     // 3. Set up MCP Handlers
@@ -66,12 +74,10 @@ async function main() {
 
     // Call Tool Handler
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      // Check if tokens are valid before handling the request
-      if (!(await tokenManager.validateTokens())) {
+      if (!hostAuthMode && tokenManager && !(await tokenManager.validateTokens())) {
         throw new Error("Authentication required. Please run 'npm run auth' to authenticate.");
       }
-      
-      // Delegate the actual tool execution to the specialized handler
+      // In hostAuthMode, assume token is valid (cannot refresh)
       return handleCallTool(request, oauth2Client);
     });
 
@@ -152,7 +158,7 @@ function showHelp(): void {
 Google Calendar MCP Server v${VERSION}
 
 Usage:
-  npx @cocal/google-calendar-mcp [command]
+  npx @cocal/google-calendar-mcp [command] [--host-auth]
 
 Commands:
   auth     Run the authentication flow
@@ -160,14 +166,19 @@ Commands:
   version  Show version information
   help     Show this help message
 
+Options:
+  --host-auth   Use access token from environment variable (GOOGLE_API_ACCESS_TOKEN)
+
 Examples:
   npx @cocal/google-calendar-mcp auth
   npx @cocal/google-calendar-mcp start
+  npx @cocal/google-calendar-mcp start --host-auth
   npx @cocal/google-calendar-mcp version
   npx @cocal/google-calendar-mcp
 
 Environment Variables:
   GOOGLE_OAUTH_CREDENTIALS    Path to OAuth credentials file
+  GOOGLE_API_ACCESS_TOKEN     Access token for --host-auth mode
 `);
 }
 
@@ -190,6 +201,11 @@ function parseCliArgs(): { command: string | undefined } {
     // Handle special version/help flags as commands
     if (arg === '--version' || arg === '-v' || arg === '--help' || arg === '-h') {
       command = arg;
+      continue;
+    }
+    
+    if (arg === '--host-auth') {
+      hostAuthMode = true;
       continue;
     }
     

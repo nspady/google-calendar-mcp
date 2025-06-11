@@ -142,6 +142,14 @@ Along with the normal capabilities you would expect for a calendar integration y
 
 5. Restart Claude **Desktop**
 
+### MCP Server Hosting
+
+Services hosting this MCP server may wish to handle authentication independently. In this case, the access token may be provided by invoking the tool
+with the `host-auth` flag and assigning the token to the environment variable `GMAIL_API_ACCESS_TOKEN`:
+```sh
+GMAIL_API_ACCESS_TOKEN=XXXXX node dist/index.js --host-auth
+```
+
 ## Available Scripts
 
 - `npm run build` - Build the TypeScript code (compiles `src` to `build`)

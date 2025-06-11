@@ -63,3 +63,14 @@ export async function loadCredentials(): Promise<{ client_id: string; client_sec
     throw new Error(`Error loading credentials: ${error instanceof Error ? error.message : error}`);
   }
 }
+
+export async function initializeOAuth2ClientFromHost(): Promise<OAuth2Client> {
+  const accessToken = process.env.GOOGLE_API_ACCESS_TOKEN;
+  if (!accessToken) {
+    throw new Error("Missing GOOGLE_API_ACCESS_TOKEN environment variable.");
+  }
+  // The client ID/secret/redirectUri are not needed for access token only, but GoogleAuthLibrary requires some values.
+  const client = new OAuth2Client();
+  client.setCredentials({ access_token: accessToken });
+  return client;
+}
