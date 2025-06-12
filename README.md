@@ -5,7 +5,7 @@ This is a Model Context Protocol (MCP) server that provides integration with Goo
 ## Features
 
 - **Multi-Calendar Support**: List events from multiple calendars simultaneously
-- **Event Management**: Create, update, delete, and search calendar events
+- **Event Management**: Create, update (including notifications), delete, and search calendar events
 - **Recurring Events**: Advanced modification scopes for recurring events (single instance, all instances, or future instances only)
 - **Calendar Management**: List calendars and their properties
 - **Free/Busy Queries**: Check availability across calendars
@@ -61,15 +61,16 @@ Along with the normal capabilities you would expect for a calendar integration y
    - Add the following scopes (optional):
      - `https://www.googleapis.com/auth/calendar.events` (or broader `https://www.googleapis.com/auth/calendar` if needed)
    - Select "Desktop app" as the application type (Important!)
-   - Add your email address as a test user under the [OAuth Consent screen](https://console.cloud.google.com/apis/credentials/consent)
-      - Note: it will take a few minutes for the test user to be added. The OAuth consent will not allow you to proceed until the test user has propagated.
+   - Save the auth key, you'll need to add its path to the JSON in the next step
+   - Add your email address as a test user under the [Audience screen](https://console.cloud.google.com/auth/audience)
+      - Note: it might take a few minutes for the test user to be added. The OAuth consent will not allow you to proceed until the test user has propagated.
       - Note about test mode: While an app is in test mode the auth tokens will expire after 1 week and need to be refreshed by running `npm run auth`.
 
 ## Installation
 
 ### Option 1: Use with npx (Recommended)
 
-1. **Add to Claude Desktop**: Edit your Claude Desktop configuration file:
+1. **Add to Claude Desktop**: Close Claude Desktop, then edit your Claude Desktop configuration file:
    
    **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
    **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
@@ -88,7 +89,7 @@ Along with the normal capabilities you would expect for a calendar integration y
    }
    ```
 
-2. **Restart Claude Desktop**
+2. **Start Claude Desktop** - it will open the google sign-in dialogue in a browser window 
 
 ### Option 2: Local Installation
 
