@@ -99,7 +99,9 @@ Along with the normal capabilities you would expect for a calendar integration y
    git clone https://github.com/nspady/google-calendar-mcp.git
    cd google-calendar-mcp
    npm install
+   npm run build
    ```
+   Verify that the index.js file is created on this path - google-calendar-mcp/build/index.js
 3. **Configure OAuth credentials** using one of these methods:
    **Option A: Custom file location (recommended)**
    - Place your credentials file anywhere on your system
@@ -138,10 +140,9 @@ Along with the normal capabilities you would expect for a calendar integration y
      }
    }
    ```
-
    Note: Replace `<absolute-path-to-project-folder>` with the actual path to your project directory.
 
-5. Restart Claude **Desktop**
+6. Restart Claude **Desktop**
 
 ## Available Scripts
 
