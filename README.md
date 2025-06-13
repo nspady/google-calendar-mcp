@@ -142,7 +142,7 @@ Along with the normal capabilities you would expect for a calendar integration y
    ```
    Note: Replace `<absolute-path-to-project-folder>` with the actual path to your project directory.
 
-6. Restart Claude **Desktop**
+5. Restart Claude **Desktop**
 
 ## Available Scripts
 
