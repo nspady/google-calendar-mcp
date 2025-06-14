@@ -38,7 +38,7 @@ if (isWatch) {
   const context = await esbuild.context(buildOptions);
   const authContext = await esbuild.context(authServerBuildOptions);
   await Promise.all([context.watch(), authContext.watch()]);
-  console.log('Watching for changes...');
+  process.stderr.write('Watching for changes...\n');
 } else {
   await Promise.all([
     esbuild.build(buildOptions),

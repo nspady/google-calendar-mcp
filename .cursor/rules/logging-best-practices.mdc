@@ -1,0 +1,8 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+console.log is not supported in MCP clients and should never be used.
+For stdio transport, servers should log to stderr only, not stdout (which interferes with protocol operation)
+

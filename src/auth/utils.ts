@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as os from 'os';
 import { fileURLToPath } from 'url';
+import { getSecureTokenPath as getSharedSecureTokenPath, getLegacyTokenPath as getSharedLegacyTokenPath, getAccountMode as getSharedAccountMode } from './paths.js';
 
 // Helper to get the project root directory reliably
 function getProjectRoot(): string {
@@ -11,27 +12,25 @@ function getProjectRoot(): string {
   return path.resolve(projectRoot); // Ensure absolute path
 }
 
-// Returns the absolute path for the saved token file.
-// Uses XDG Base Directory spec with fallback to home directory and legacy project root
-export function getSecureTokenPath(): string {
-  // Check for custom token path environment variable first
-  const customTokenPath = process.env.GOOGLE_CALENDAR_MCP_TOKEN_PATH;
-  if (customTokenPath) {
-    return path.resolve(customTokenPath);
-  }
-
-  // Use XDG Base Directory spec or fallback to ~/.config
-  const configHome = process.env.XDG_CONFIG_HOME || 
-    path.join(os.homedir(), '.config');
-  
-  const tokenDir = path.join(configHome, 'google-calendar-mcp');
-  return path.join(tokenDir, 'tokens.json');
+// Get the current account mode (normal or test) - delegates to shared implementation
+export function getAccountMode(): 'normal' | 'test' {
+  return getSharedAccountMode() as 'normal' | 'test';
 }
 
-// Returns the legacy token path for backward compatibility
+// Helper to detect if we're running in a test environment
+function isRunningInTestEnvironment(): boolean {
+  // Simple and reliable: just check NODE_ENV
+  return process.env.NODE_ENV === 'test';
+}
+
+// Returns the absolute path for the saved token file - delegates to shared implementation
+export function getSecureTokenPath(): string {
+  return getSharedSecureTokenPath();
+}
+
+// Returns the legacy token path for backward compatibility - delegates to shared implementation  
 export function getLegacyTokenPath(): string {
-  const projectRoot = getProjectRoot();
-  return path.join(projectRoot, ".gcp-saved-tokens.json");
+  return getSharedLegacyTokenPath();
 }
 
 // Returns the absolute path for the GCP OAuth keys file with priority:
@@ -48,6 +47,11 @@ export function getKeysFilePath(): string {
   const projectRoot = getProjectRoot();
   const keysPath = path.join(projectRoot, "gcp-oauth.keys.json");
   return keysPath; // Already absolute from getProjectRoot
+}
+
+// Helper to determine if we're currently in test mode
+export function isTestMode(): boolean {
+  return getAccountMode() === 'test';
 }
 
 // Interface for OAuth credentials

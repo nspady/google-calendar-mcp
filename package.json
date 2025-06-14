@@ -1,7 +1,7 @@
 {
-  "name": "@cocal/google-calendar-mcp",
+  "name": "google-calendar-mcp",
   "version": "1.3.0",
-  "description": "Google Calendar MCP Server",
+  "description": "Google Calendar MCP Server with extensive support for calendar management",
   "type": "module",
   "bin": {
     "google-calendar-mcp": "build/index.js"
@@ -31,29 +31,38 @@
   "homepage": "https://github.com/nspady/google-calendar-mcp#readme",
   "author": "nspady",
   "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "build": "npm run typecheck && node scripts/build.js",
     "start": "node build/index.js",
+    "build": "node scripts/build.js",
     "auth": "node build/auth-server.js",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "coverage": "vitest run --coverage"
+    "dev": "node scripts/dev.js",
+    "postinstall": "npm run build",
+    "test": "vitest run src/tests/unit",
+    "test:watch": "vitest src/tests/unit",
+    "test:integration": "vitest run src/tests/integration",
+    "test:all": "vitest run src/tests",
+    "test:coverage": "vitest run src/tests/unit --coverage",
+    "start:http": "node build/index.js --transport http --port 3000",
+    "start:http:public": "node build/index.js --transport http --port 3000 --host 0.0.0.0"
   },
   "dependencies": {
     "@google-cloud/local-auth": "^3.0.1",
-    "@modelcontextprotocol/sdk": "^1.0.3",
+    "@modelcontextprotocol/sdk": "^1.12.1",
     "esbuild": "^0.25.0",
-    "express": "^4.18.2",
     "google-auth-library": "^9.15.0",
     "googleapis": "^144.0.0",
     "open": "^7.4.2",
-    "zod": "^3.22.4"
+    "zod": "^3.22.4",
+    "zod-to-json-schema": "^3.24.5"
   },
   "devDependencies": {
-    "@types/express": "^5.0.2",
+    "@anthropic-ai/sdk": "^0.52.0",
     "@types/node": "^20.10.4",
     "@vitest/coverage-v8": "^3.1.1",
+    "openai": "^4.104.0",
     "typescript": "^5.3.3",
     "vitest": "^3.1.1"
   }

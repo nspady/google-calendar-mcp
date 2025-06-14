@@ -75,7 +75,7 @@ export class BatchRequestHandler {
         const retryAfter = response.headers.get('Retry-After');
         const delay = retryAfter ? parseInt(retryAfter) * 1000 : this.baseDelay * Math.pow(2, attempt);
         
-        console.warn(`Rate limited, retrying after ${delay}ms (attempt ${attempt + 1}/${this.maxRetries})`);
+        process.stderr.write(`Rate limited, retrying after ${delay}ms (attempt ${attempt + 1}/${this.maxRetries})\n`);
         await this.sleep(delay);
         return this.executeBatchWithRetry(requests, attempt + 1);
       }
@@ -100,7 +100,7 @@ export class BatchRequestHandler {
       // Retry on network errors
       if (attempt < this.maxRetries && this.isRetryableError(error)) {
         const delay = this.baseDelay * Math.pow(2, attempt);
-        console.warn(`Network error, retrying after ${delay}ms (attempt ${attempt + 1}/${this.maxRetries}): ${error instanceof Error ? error.message : 'Unknown error'}`);
+        process.stderr.write(`Network error, retrying after ${delay}ms (attempt ${attempt + 1}/${this.maxRetries}): ${error instanceof Error ? error.message : 'Unknown error'}\n`);
         await this.sleep(delay);
         return this.executeBatchWithRetry(requests, attempt + 1);
       }

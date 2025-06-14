@@ -1,14 +1,36 @@
-FROM oven/bun:1
-WORKDIR /usr/src/app
+# Google Calendar MCP Server - Optimized Dockerfile
+# syntax=docker/dockerfile:1
 
-COPY bun.lockb .
-COPY package.json .
-RUN bun install --frozen-lockfile --production --ignore-scripts --no-cache && bun pm cache clean
+FROM node:22-alpine
 
+# Create app user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S -u 1001 -G nodejs nodejs
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files for dependency caching
+COPY package*.json ./
+
+# Copy build scripts and source files needed for build
 COPY scripts ./scripts
 COPY src ./src
 COPY tsconfig.json .
-RUN bun run postinstall
 
-EXPOSE 3000/tcp
-ENTRYPOINT [ "bun", "run", "start" ]
+# Install dependencies and build via postinstall
+RUN npm ci --production --no-audit --no-fund --silent
+
+# Create config directory and set permissions
+RUN mkdir -p /home/nodejs/.config/google-calendar-mcp && \
+    chown -R nodejs:nodejs /home/nodejs/.config && \
+    chown -R nodejs:nodejs /app
+
+# Switch to non-root user
+USER nodejs
+
+# Expose port for HTTP mode (optional)
+EXPOSE 3000
+
+# Default command
+CMD ["npm", "start"]

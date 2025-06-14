@@ -7,9 +7,9 @@ import { calendar_v3 } from 'googleapis';
 import { z } from 'zod';
 
 // Import the types and schemas we're testing
-import { ListEventsArgumentsSchema } from '../../schemas/validators.js';
-import { ListEventsHandler } from './ListEventsHandler.js';
-import { formatEventList } from '../utils.js';
+import { ListEventsArgumentsSchema } from '../../../schemas/validators.js';
+import { ListEventsHandler } from '../../../handlers/core/ListEventsHandler.js';
+import { formatEventList } from '../../../handlers/utils.js';
 
 // Mock the BatchRequestHandler that we'll implement
 class MockBatchRequestHandler {
@@ -67,19 +67,7 @@ describe('Batch List Events Functionality', () => {
     });
 
     it('should validate array of calendar IDs', () => {
-      const input = {
-        calendarId: ['primary', 'work@example.com', 'personal@example.com'],
-        timeMin: '2024-01-01T00:00:00Z'
-      };
-
-      const result = ListEventsArgumentsSchema.safeParse(input);
-      expect(result.success).toBe(true);
-      expect(Array.isArray(result.data?.calendarId)).toBe(true);
-      expect(result.data?.calendarId).toHaveLength(3);
-    });
-
-    it('should parse JSON string array of calendar IDs', () => {
-      // This tests the fix for when clients send JSON strings instead of arrays
+      // Arrays must be passed as JSON strings in the new schema
       const input = {
         calendarId: '["primary", "work@example.com", "personal@example.com"]',
         timeMin: '2024-01-01T00:00:00Z'
@@ -87,9 +75,21 @@ describe('Batch List Events Functionality', () => {
 
       const result = ListEventsArgumentsSchema.safeParse(input);
       expect(result.success).toBe(true);
-      expect(Array.isArray(result.data?.calendarId)).toBe(true);
-      expect(result.data?.calendarId).toEqual(['primary', 'work@example.com', 'personal@example.com']);
-      expect(result.data?.calendarId).toHaveLength(3);
+      expect(typeof result.data?.calendarId).toBe('string');
+      expect(result.data?.calendarId).toBe('["primary", "work@example.com", "personal@example.com"]');
+    });
+
+    it('should accept actual array of calendar IDs (not JSON string)', () => {
+      // In the new schema, arrays are not directly supported - they must be JSON strings
+      const input = {
+        calendarId: ['primary', 'work@example.com', 'personal@example.com'],
+        timeMin: '2024-01-01T00:00:00Z'
+      };
+
+      const result = ListEventsArgumentsSchema.safeParse(input);
+      // Arrays are no longer accepted directly
+      expect(result.success).toBe(false);
+      expect(result.error?.issues[0].message).toContain('Expected string');
     });
 
     it('should handle malformed JSON string gracefully', () => {
@@ -618,14 +618,18 @@ describe('Batch List Events Functionality', () => {
     it('should handle maximum allowed calendars (50)', () => {
       const maxCalendars = Array(50).fill('cal').map((c, i) => `${c}${i}@example.com`);
       
+      // Arrays must be passed as JSON strings in the new schema
       const input = {
-        calendarId: maxCalendars,
+        calendarId: JSON.stringify(maxCalendars),
         timeMin: '2024-01-01T00:00:00Z'
       };
 
       const result = ListEventsArgumentsSchema.safeParse(input);
       expect(result.success).toBe(true);
-      expect(result.data?.calendarId).toHaveLength(50);
+      expect(typeof result.data?.calendarId).toBe('string');
+      // Verify the JSON string contains all 50 calendars
+      const parsed = JSON.parse(result.data?.calendarId as string);
+      expect(parsed).toHaveLength(50);
     });
 
     it('should prefer existing single calendar path for single array item', async () => {

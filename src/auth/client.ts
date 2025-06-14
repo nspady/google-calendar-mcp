@@ -34,6 +34,8 @@ async function loadCredentialsWithFallback(): Promise<OAuthCredentials> {
 }
 
 export async function initializeOAuth2Client(): Promise<OAuth2Client> {
+  // Always use real OAuth credentials - no mocking.
+  // Unit tests should mock at the handler level, integration tests need real credentials.
   try {
     const credentials = await loadCredentialsWithFallback();
     

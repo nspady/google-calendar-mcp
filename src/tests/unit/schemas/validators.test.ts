@@ -1,92 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { z } from 'zod';
+import { UpdateEventArgumentsSchema, ListEventsArgumentsSchema } from '../../../schemas/validators.js';
 
-// Enhanced schema with recurring event support
-const isoDateTimeWithTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?(Z|[+-]\d{2}:\d{2})$/;
+// Helper to generate a future date string in the correct format (without milliseconds)
+function getFutureDateString(daysFromNow: number = 365): string {
+  const futureDate = new Date();
+  futureDate.setDate(futureDate.getDate() + daysFromNow);
+  // Format as ISO string without milliseconds
+  return futureDate.toISOString().split('.')[0] + 'Z';
+}
 
-const ReminderSchema = z.object({
-  method: z.enum(['email', 'popup']).default('popup'),
-  minutes: z.number(),
-});
-
-const RemindersSchema = z.object({
-  useDefault: z.boolean(),
-  overrides: z.array(ReminderSchema).optional(),
-});
-
-// Enhanced UpdateEventArgumentsSchema with recurring event support
-export const EnhancedUpdateEventArgumentsSchema = z.object({
-  calendarId: z.string(),
-  eventId: z.string(),
-  summary: z.string().optional(),
-  description: z.string().optional(),
-  start: z.string()
-    .regex(isoDateTimeWithTimezone, "Must be ISO format with timezone (e.g., 2024-01-01T00:00:00Z)")
-    .optional(),
-  end: z.string()
-    .regex(isoDateTimeWithTimezone, "Must be ISO format with timezone (e.g., 2024-01-01T00:00:00Z)")
-    .optional(),
-  timeZone: z.string(),
-  attendees: z
-    .array(
-      z.object({
-        email: z.string(),
-      })
-    )
-    .optional(),
-  location: z.string().optional(),
-  colorId: z.string().optional(),
-  reminders: RemindersSchema.optional(),
-  recurrence: z.array(z.string()).optional(),
-  // New recurring event parameters
-  modificationScope: z.enum(['single', 'all', 'future']).default('all'),
-  originalStartTime: z.string()
-    .regex(isoDateTimeWithTimezone, "Must be ISO format with timezone (e.g., 2024-01-01T00:00:00Z)")
-    .optional(),
-  futureStartDate: z.string()
-    .regex(isoDateTimeWithTimezone, "Must be ISO format with timezone (e.g., 2024-01-01T00:00:00Z)")
-    .optional(),
-}).refine(
-  (data) => {
-    // Require originalStartTime when modificationScope is 'single'
-    if (data.modificationScope === 'single' && !data.originalStartTime) {
-      return false;
-    }
-    return true;
-  },
-  {
-    message: "originalStartTime is required when modificationScope is 'single'",
-    path: ["originalStartTime"]
-  }
-).refine(
-  (data) => {
-    // Require futureStartDate when modificationScope is 'future'
-    if (data.modificationScope === 'future' && !data.futureStartDate) {
-      return false;
-    }
-    return true;
-  },
-  {
-    message: "futureStartDate is required when modificationScope is 'future'",
-    path: ["futureStartDate"]
-  }
-).refine(
-  (data) => {
-    // Ensure futureStartDate is in the future when provided
-    if (data.futureStartDate) {
-      const futureDate = new Date(data.futureStartDate);
-      const now = new Date();
-      return futureDate > now;
-    }
-    return true;
-  },
-  {
-    message: "futureStartDate must be in the future",
-    path: ["futureStartDate"]
-  }
-);
-
-describe('Enhanced UpdateEventArgumentsSchema', () => {
+describe('UpdateEventArgumentsSchema with Recurring Event Support', () => {
   describe('Basic Validation', () => {
     it('should validate basic required fields', () => {
       const validArgs = {
@@ -95,8 +18,8 @@ describe('Enhanced UpdateEventArgumentsSchema', () => {
         timeZone: 'America/Los_Angeles'
       };
 
-      const result = EnhancedUpdateEventArgumentsSchema.parse(validArgs);
-      expect(result.modificationScope).toBe('all'); // default value
+      const result = UpdateEventArgumentsSchema.parse(validArgs);
+      expect(result.modificationScope).toBeUndefined(); // optional with no default
       expect(result.calendarId).toBe('primary');
       expect(result.eventId).toBe('event123');
       expect(result.timeZone).toBe('America/Los_Angeles');
@@ -108,7 +31,7 @@ describe('Enhanced UpdateEventArgumentsSchema', () => {
         // missing eventId and timeZone
       };
 
-      expect(() => EnhancedUpdateEventArgumentsSchema.parse(invalidArgs)).toThrow();
+      expect(() => UpdateEventArgumentsSchema.parse(invalidArgs)).toThrow();
     });
 
     it('should validate optional fields when provided', () => {
@@ -124,7 +47,7 @@ describe('Enhanced UpdateEventArgumentsSchema', () => {
         end: '2024-06-15T11:00:00-07:00'
       };
 
-      const result = EnhancedUpdateEventArgumentsSchema.parse(validArgs);
+      const result = UpdateEventArgumentsSchema.parse(validArgs);
       expect(result.summary).toBe('Updated Meeting');
       expect(result.description).toBe('Updated description');
       expect(result.location).toBe('New Location');
@@ -133,19 +56,19 @@ describe('Enhanced UpdateEventArgumentsSchema', () => {
   });
 
   describe('Modification Scope Validation', () => {
-    it('should default modificationScope to "all"', () => {
+    it('should leave modificationScope undefined when not provided', () => {
       const args = {
         calendarId: 'primary',
         eventId: 'event123',
         timeZone: 'America/Los_Angeles'
       };
 
-      const result = EnhancedUpdateEventArgumentsSchema.parse(args);
-      expect(result.modificationScope).toBe('all');
+      const result = UpdateEventArgumentsSchema.parse(args);
+      expect(result.modificationScope).toBeUndefined();
     });
 
     it('should accept valid modificationScope values', () => {
-      const validScopes = ['single', 'all', 'future'] as const;
+      const validScopes = ['thisEventOnly', 'all', 'thisAndFollowing'] as const;
 
       validScopes.forEach(scope => {
         const args: any = {
@@ -156,13 +79,13 @@ describe('Enhanced UpdateEventArgumentsSchema', () => {
         };
 
         // Add required fields for each scope
-        if (scope === 'single') {
+        if (scope === 'thisEventOnly') {
           args.originalStartTime = '2024-06-15T10:00:00-07:00';
-        } else if (scope === 'future') {
-          args.futureStartDate = '2025-12-31T10:00:00-08:00';
+        } else if (scope === 'thisAndFollowing') {
+          args.futureStartDate = getFutureDateString(90); // 90 days from now
         }
 
-        const result = EnhancedUpdateEventArgumentsSchema.parse(args);
+        const result = UpdateEventArgumentsSchema.parse(args);
         expect(result.modificationScope).toBe(scope);
       });
     });
@@ -175,36 +98,36 @@ describe('Enhanced UpdateEventArgumentsSchema', () => {
         modificationScope: 'invalid'
       };
 
-      expect(() => EnhancedUpdateEventArgumentsSchema.parse(args)).toThrow();
+      expect(() => UpdateEventArgumentsSchema.parse(args)).toThrow();
     });
   });
 
   describe('Single Instance Scope Validation', () => {
-    it('should require originalStartTime when modificationScope is "single"', () => {
+    it('should require originalStartTime when modificationScope is "thisEventOnly"', () => {
       const args = {
         calendarId: 'primary',
         eventId: 'event123',
         timeZone: 'America/Los_Angeles',
-        modificationScope: 'single'
+        modificationScope: 'thisEventOnly'
         // missing originalStartTime
       };
 
-      expect(() => EnhancedUpdateEventArgumentsSchema.parse(args)).toThrow(
-        /originalStartTime is required when modificationScope is 'single'/
+      expect(() => UpdateEventArgumentsSchema.parse(args)).toThrow(
+        /originalStartTime is required when modificationScope is 'thisEventOnly'/
       );
     });
 
-    it('should accept valid originalStartTime for single scope', () => {
+    it('should accept valid originalStartTime for thisEventOnly scope', () => {
       const args = {
         calendarId: 'primary',
         eventId: 'event123',
         timeZone: 'America/Los_Angeles',
-        modificationScope: 'single',
+        modificationScope: 'thisEventOnly',
         originalStartTime: '2024-06-15T10:00:00-07:00'
       };
 
-      const result = EnhancedUpdateEventArgumentsSchema.parse(args);
-      expect(result.modificationScope).toBe('single');
+      const result = UpdateEventArgumentsSchema.parse(args);
+      expect(result.modificationScope).toBe('thisEventOnly');
       expect(result.originalStartTime).toBe('2024-06-15T10:00:00-07:00');
     });
 
@@ -213,11 +136,11 @@ describe('Enhanced UpdateEventArgumentsSchema', () => {
         calendarId: 'primary',
         eventId: 'event123',
         timeZone: 'America/Los_Angeles',
-        modificationScope: 'single',
+        modificationScope: 'thisEventOnly',
         originalStartTime: '2024-06-15 10:00:00' // invalid format
       };
 
-      expect(() => EnhancedUpdateEventArgumentsSchema.parse(args)).toThrow();
+      expect(() => UpdateEventArgumentsSchema.parse(args)).toThrow();
     });
 
     it('should accept originalStartTime without timezone designator error', () => {
@@ -225,60 +148,60 @@ describe('Enhanced UpdateEventArgumentsSchema', () => {
         calendarId: 'primary',
         eventId: 'event123',
         timeZone: 'America/Los_Angeles',
-        modificationScope: 'single',
+        modificationScope: 'thisEventOnly',
         originalStartTime: '2024-06-15T10:00:00' // missing timezone
       };
 
-      expect(() => EnhancedUpdateEventArgumentsSchema.parse(args)).toThrow();
+      expect(() => UpdateEventArgumentsSchema.parse(args)).toThrow();
     });
   });
 
   describe('Future Instances Scope Validation', () => {
-    it('should require futureStartDate when modificationScope is "future"', () => {
+    it('should require futureStartDate when modificationScope is "thisAndFollowing"', () => {
       const args = {
         calendarId: 'primary',
         eventId: 'event123',
         timeZone: 'America/Los_Angeles',
-        modificationScope: 'future'
+        modificationScope: 'thisAndFollowing'
         // missing futureStartDate
       };
 
-      expect(() => EnhancedUpdateEventArgumentsSchema.parse(args)).toThrow(
-        /futureStartDate is required when modificationScope is 'future'/
+      expect(() => UpdateEventArgumentsSchema.parse(args)).toThrow(
+        /futureStartDate is required when modificationScope is 'thisAndFollowing'/
       );
     });
 
-    it('should accept valid futureStartDate for future scope', () => {
-      const futureDate = new Date('2025-06-15T10:00:00Z'); // Use a specific future date
-      const futureDateString = futureDate.toISOString();
+    it('should accept valid futureStartDate for thisAndFollowing scope', () => {
+      const futureDateString = getFutureDateString(30); // 30 days from now
 
       const args = {
         calendarId: 'primary',
         eventId: 'event123',
         timeZone: 'America/Los_Angeles',
-        modificationScope: 'future',
+        modificationScope: 'thisAndFollowing',
         futureStartDate: futureDateString
       };
 
-      const result = EnhancedUpdateEventArgumentsSchema.parse(args);
-      expect(result.modificationScope).toBe('future');
+      const result = UpdateEventArgumentsSchema.parse(args);
+      expect(result.modificationScope).toBe('thisAndFollowing');
       expect(result.futureStartDate).toBe(futureDateString);
     });
 
     it('should reject futureStartDate in the past', () => {
       const pastDate = new Date();
       pastDate.setFullYear(pastDate.getFullYear() - 1);
-      const pastDateString = pastDate.toISOString();
+      // Format as ISO string without milliseconds
+      const pastDateString = pastDate.toISOString().split('.')[0] + 'Z';
 
       const args = {
         calendarId: 'primary',
         eventId: 'event123',
         timeZone: 'America/Los_Angeles',
-        modificationScope: 'future',
+        modificationScope: 'thisAndFollowing',
         futureStartDate: pastDateString
       };
 
-      expect(() => EnhancedUpdateEventArgumentsSchema.parse(args)).toThrow(
+      expect(() => UpdateEventArgumentsSchema.parse(args)).toThrow(
         /futureStartDate must be in the future/
       );
     });
@@ -288,11 +211,11 @@ describe('Enhanced UpdateEventArgumentsSchema', () => {
         calendarId: 'primary',
         eventId: 'event123',
         timeZone: 'America/Los_Angeles',
-        modificationScope: 'future',
+        modificationScope: 'thisAndFollowing',
         futureStartDate: '2024-12-31 10:00:00' // invalid format
       };
 
-      expect(() => EnhancedUpdateEventArgumentsSchema.parse(args)).toThrow();
+      expect(() => UpdateEventArgumentsSchema.parse(args)).toThrow();
     });
   });
 
@@ -322,7 +245,7 @@ describe('Enhanced UpdateEventArgumentsSchema', () => {
           end: datetime
         };
 
-        expect(() => EnhancedUpdateEventArgumentsSchema.parse(args)).not.toThrow();
+        expect(() => UpdateEventArgumentsSchema.parse(args)).not.toThrow();
       });
     });
 
@@ -335,21 +258,19 @@ describe('Enhanced UpdateEventArgumentsSchema', () => {
           start: datetime
         };
 
-        expect(() => EnhancedUpdateEventArgumentsSchema.parse(args)).toThrow();
+        expect(() => UpdateEventArgumentsSchema.parse(args)).toThrow();
       });
     });
   });
 
   describe('Complex Scenarios', () => {
     it('should validate complete update with all fields', () => {
-      const futureDate = new Date('2025-06-15T10:00:00Z'); // Use a specific future date
-
       const args = {
         calendarId: 'primary',
         eventId: 'event123',
         timeZone: 'America/Los_Angeles',
-        modificationScope: 'future',
-        futureStartDate: futureDate.toISOString(),
+        modificationScope: 'thisAndFollowing',
+        futureStartDate: getFutureDateString(60), // 60 days from now
         summary: 'Updated Meeting',
         description: 'Updated description',
         location: 'New Conference Room',
@@ -370,7 +291,7 @@ describe('Enhanced UpdateEventArgumentsSchema', () => {
         recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=MO']
       };
 
-      const result = EnhancedUpdateEventArgumentsSchema.parse(args);
+      const result = UpdateEventArgumentsSchema.parse(args);
       expect(result).toMatchObject(args);
     });
 
@@ -384,7 +305,7 @@ describe('Enhanced UpdateEventArgumentsSchema', () => {
         // no originalStartTime or futureStartDate required
       };
 
-      expect(() => EnhancedUpdateEventArgumentsSchema.parse(args)).not.toThrow();
+      expect(() => UpdateEventArgumentsSchema.parse(args)).not.toThrow();
     });
 
     it('should allow optional conditional fields when not required', () => {
@@ -397,7 +318,7 @@ describe('Enhanced UpdateEventArgumentsSchema', () => {
         summary: 'Updated Meeting'
       };
 
-      const result = EnhancedUpdateEventArgumentsSchema.parse(args);
+      const result = UpdateEventArgumentsSchema.parse(args);
       expect(result.originalStartTime).toBe('2024-06-15T10:00:00-07:00');
     });
   });
@@ -413,10 +334,73 @@ describe('Enhanced UpdateEventArgumentsSchema', () => {
         location: 'Conference Room A'
       };
 
-      const result = EnhancedUpdateEventArgumentsSchema.parse(legacyArgs);
-      expect(result.modificationScope).toBe('all'); // default
+      const result = UpdateEventArgumentsSchema.parse(legacyArgs);
+      expect(result.modificationScope).toBeUndefined(); // optional with no default
       expect(result.summary).toBe('Updated Meeting');
       expect(result.location).toBe('Conference Room A');
     });
+  });
+});
+
+describe('ListEventsArgumentsSchema JSON String Handling', () => {
+  it('should parse JSON string calendarId into array', () => {
+    const input = {
+      calendarId: '["primary", "secondary@gmail.com"]',
+      timeMin: '2024-01-01T00:00:00Z',
+      timeMax: '2024-01-02T00:00:00Z'
+    };
+
+    const result = ListEventsArgumentsSchema.parse(input);
+    // The new schema keeps JSON strings as strings (they are parsed in the handler)
+    expect(result.calendarId).toBe('["primary", "secondary@gmail.com"]');
+  });
+
+  it('should handle regular string calendarId', () => {
+    const input = {
+      calendarId: 'primary',
+      timeMin: '2024-01-01T00:00:00Z',
+      timeMax: '2024-01-02T00:00:00Z'
+    };
+
+    const result = ListEventsArgumentsSchema.parse(input);
+    expect(result.calendarId).toBe('primary');
+  });
+
+  it('should handle regular array calendarId', () => {
+    // Arrays are no longer directly supported - they must be JSON strings
+    const input = {
+      calendarId: ['primary', 'secondary@gmail.com'],
+      timeMin: '2024-01-01T00:00:00Z',
+      timeMax: '2024-01-02T00:00:00Z'
+    };
+
+    // This should now throw because arrays aren't accepted directly
+    expect(() => ListEventsArgumentsSchema.parse(input)).toThrow();
+  });
+
+  it('should reject invalid JSON string', () => {
+    // Invalid JSON strings are accepted by the schema but will fail in the handler
+    const input = {
+      calendarId: '["primary", invalid]',
+      timeMin: '2024-01-01T00:00:00Z',
+      timeMax: '2024-01-02T00:00:00Z'
+    };
+
+    // The schema accepts any string - validation happens in the handler
+    const result = ListEventsArgumentsSchema.parse(input);
+    expect(result.calendarId).toBe('["primary", invalid]');
+  });
+
+  it('should reject JSON string with non-string elements', () => {
+    // Schema accepts any string - validation happens in the handler
+    const input = {
+      calendarId: '["primary", 123]',
+      timeMin: '2024-01-01T00:00:00Z',
+      timeMax: '2024-01-02T00:00:00Z'
+    };
+
+    // The schema accepts any string - validation happens in the handler
+    const result = ListEventsArgumentsSchema.parse(input);
+    expect(result.calendarId).toBe('["primary", 123]');
   });
 }); 

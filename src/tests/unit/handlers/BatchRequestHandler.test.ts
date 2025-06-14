@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OAuth2Client } from 'google-auth-library';
-import { BatchRequestHandler, BatchRequest, BatchResponse } from './BatchRequestHandler.js';
+import { BatchRequestHandler, BatchRequest, BatchResponse } from '../../../handlers/core/BatchRequestHandler.js';
 
 describe('BatchRequestHandler', () => {
   let mockOAuth2Client: OAuth2Client;
