@@ -1,5 +1,5 @@
 {
-  "name": "@sudomcp/google-calendar-mcp",
+  "name": "@xalia/google-calendar-mcp",
   "version": "1.4.0",
   "description": "Google Calendar MCP Server",
   "type": "module",
@@ -23,13 +23,13 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nspady/google-calendar-mcp.git"
+    "url": "git+https://github.com/General-Intelligence-Labs/google-calendar-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/nspady/google-calendar-mcp/issues"
+    "url": "https://github.com/General-Intelligence-Labs/google-calendar-mcp/issues"
   },
-  "homepage": "https://github.com/nspady/google-calendar-mcp#readme",
-  "author": "nspady",
+  "homepage": "https://github.com/General-Intelligence-Labs/google-calendar-mcp#readme",
+  "author": "nspady, vliew, GhostOfGauss",
   "license": "MIT",
   "scripts": {
     "typecheck": "tsc --noEmit",
