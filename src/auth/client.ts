@@ -71,6 +71,9 @@ export async function initializeOAuth2ClientFromHost(): Promise<OAuth2Client> {
   }
   // The client ID/secret/redirectUri are not needed for access token only, but GoogleAuthLibrary requires some values.
   const client = new OAuth2Client();
-  client.setCredentials({ access_token: accessToken });
+  client.setCredentials({
+    access_token: accessToken,
+    scope: "https://www.googleapis.com/auth/calendar",
+  });
   return client;
 }
