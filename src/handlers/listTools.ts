@@ -367,6 +367,15 @@ export function getToolDefinitions() {
           },
           required: ["timeMin", "timeMax", "items"],
         },
+      },
+      {
+        name: "get-date-time",
+        description: "Get the current date and time (UTC). Always call this first.",
+        inputSchema: {
+          type: "object",
+          properties: {}, // No arguments needed
+          required: [],
+        },
       }
     ],
   };

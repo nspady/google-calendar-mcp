@@ -9,6 +9,7 @@ import { CreateEventHandler } from "./core/CreateEventHandler.js";
 import { UpdateEventHandler } from "./core/UpdateEventHandler.js";
 import { DeleteEventHandler } from "./core/DeleteEventHandler.js";
 import { FreeBusyEventHandler } from "./core/FreeBusyEventHandler.js";
+import { GetDateTimeHandler } from "./core/GetDateTimeHandler.js";
 
 /**
  * Handles incoming tool calls, validates arguments, calls the appropriate service,
@@ -40,6 +41,7 @@ const handlerMap: Record<string, BaseToolHandler> = {
     "update-event": new UpdateEventHandler(),
     "delete-event": new DeleteEventHandler(),
     "get-freebusy": new FreeBusyEventHandler(),
+    "get-date-time": new GetDateTimeHandler(),
 };
 
 function getHandler(toolName: string): BaseToolHandler {
