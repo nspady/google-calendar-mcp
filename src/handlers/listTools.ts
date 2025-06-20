@@ -265,7 +265,7 @@ export function getToolDefinitions() {
               type: "string",
               enum: ["single", "all", "future"],
               default: "all",
-              description: "Scope of modification for recurring events: 'single' (one instance), 'all' (entire series), 'future' (this and future instances). Defaults to 'all' for backward compatibility."
+              description: "Scope of modification for recurring events: 'single' (one instance, requires originalStartTime), 'all' (entire series), 'future' (this and future instances, requires futureStartDate). Defaults to 'all' for backward compatibility."
             },
             originalStartTime: {
               type: "string",
@@ -279,28 +279,31 @@ export function getToolDefinitions() {
             }
           },
           required: ["calendarId", "eventId", "timeZone"], // timeZone is technically required for PATCH
-          allOf: [
-            {
-              if: { 
-                properties: { 
-                  modificationScope: { const: "single" } 
-                } 
-              },
-              then: { 
-                required: ["originalStartTime"] 
-              }
-            },
-            {
-              if: { 
-                properties: { 
-                  modificationScope: { const: "future" } 
-                } 
-              },
-              then: { 
-                required: ["futureStartDate"] 
-              }
-            }
-          ]
+          // NOTE: `allOf` is not part of OpenAI's JsonSchema support, see
+          // https://platform.openai.com/docs/guides/structured-outputs?context=with_parse&api-mode=chat#supported-schemas
+          // These conditions are already enforced by Zod when validating the schema.
+          // allOf: [
+          //   {
+          //     if: { 
+          //       properties: { 
+          //         modificationScope: { const: "single" } 
+          //       } 
+          //     },
+          //     then: { 
+          //       required: ["originalStartTime"] 
+          //     }
+          //   },
+          //   {
+          //     if: { 
+          //       properties: { 
+          //         modificationScope: { const: "future" } 
+          //       } 
+          //     },
+          //     then: { 
+          //       required: ["futureStartDate"] 
+          //     }
+          //   }
+          // ]
         },
       },
       {
