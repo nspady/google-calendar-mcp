@@ -3,6 +3,7 @@
   "version": "1.4.8",
   "description": "Google Calendar MCP Server with extensive support for calendar management",
   "type": "module",
+  "main": "build/index.js",
   "bin": {
     "google-calendar-mcp": "build/index.js"
   },
