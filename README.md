@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/nspady-google-calendar-mcp-badge.png)](https://mseep.ai/app/nspady-google-calendar-mcp)
+
 # Google Calendar MCP Server
 
 This is a Model Context Protocol (MCP) server that provides integration with Google Calendar. It allows LLMs to read, create, update and search for calendar events through a standardized interface.
