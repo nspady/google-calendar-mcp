@@ -199,6 +199,9 @@ Along with the normal capabilities you would expect for a calendar integration y
    - Run `npm install && npm run build` again
    - Check Node.js version (use LTS)
    - Delete the `build/` directory and run `npm run build`
+4. **"Something went wrong" screen during browser authentication**
+   - Perform manual authentication per the below steps
+   - Use a Chromium-based browser to open the authentication URL. Test app authentication may not be supported on some non-Chromium browsers.
 
 ### Manual Authentication
 For re-authentication or troubleshooting:
