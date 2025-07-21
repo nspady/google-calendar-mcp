@@ -208,6 +208,18 @@ export const ToolSchemas = {
       title: z.string().describe("Title of the source")
     }).optional().describe(
       "Source of the event, such as a web page or email message."
+    ),
+    eventId: z.string().optional().describe(
+      "Optional custom event ID (5-1024 characters, base32hex encoding: lowercase letters a-v and digits 0-9 only). If not provided, Google Calendar will generate one."
+    ),
+    calendarsToCheck: z.array(z.string()).optional().describe(
+      "List of calendar IDs to check for conflicts (defaults to just the target calendar)"
+    ),
+    duplicateSimilarityThreshold: z.number().min(0).max(1).optional().describe(
+      "Threshold for duplicate detection (0-1, default: 0.7). Events with similarity above this are flagged as potential duplicates"
+    ),
+    allowDuplicates: z.boolean().optional().describe(
+      "If true, allows creation even when exact duplicates are detected (similarity >= 0.95). Default is false which blocks duplicate creation"
     )
   }),
   
@@ -267,7 +279,13 @@ export const ToolSchemas = {
         return withTimezone || withoutTimezone;
       }, "Must be ISO 8601 format: '2026-01-01T00:00:00'")
       .describe("Start date for future instances in the ISO 8601 format '2024-01-01T10:00:00'")
-      .optional()
+      .optional(),
+    checkConflicts: z.boolean().optional().describe(
+      "Whether to check for conflicts when updating (default: true when changing time)"
+    ),
+    calendarsToCheck: z.array(z.string()).optional().describe(
+      "List of calendar IDs to check for conflicts (defaults to just the target calendar)"
+    )
   }).refine(
     (data) => {
       // Require originalStartTime when modificationScope is 'thisEventOnly'
