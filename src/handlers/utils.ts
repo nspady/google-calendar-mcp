@@ -97,7 +97,8 @@ export function formatEventWithDetails(event: calendar_v3.Schema$Event, calendar
     const eventId = event.id ? `\nEvent ID: ${event.id}` : "";
     const description = event.description ? `\nDescription: ${event.description}` : "";
     const location = event.location ? `\nLocation: ${event.location}` : "";
-    
+    const colorId = event.colorId ? `\nColor ID: ${event.colorId}` : "";
+
     // Format start and end times with timezone
     const startTime = formatDateTime(event.start?.dateTime, event.start?.date, event.start?.timeZone || undefined);
     const endTime = formatDateTime(event.end?.dateTime, event.end?.date, event.end?.timeZone || undefined);
@@ -134,6 +135,6 @@ export function formatEventWithDetails(event: calendar_v3.Schema$Event, calendar
     const eventUrl = getEventUrl(event, calendarId);
     const urlInfo = eventUrl ? `\nView: ${eventUrl}` : "";
     
-    return `${title}${eventId}${description}${timeInfo}${location}${attendeeInfo}${urlInfo}`;
+    return `${title}${eventId}${description}${timeInfo}${location}${colorId}${attendeeInfo}${urlInfo}`;
 }
 
