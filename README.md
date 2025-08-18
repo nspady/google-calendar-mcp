@@ -184,35 +184,44 @@ The server supports multiple Google accounts, allowing you to authenticate and m
 
 ### Setting Up Multiple Accounts
 
-1. **Authenticate a new account:**
+#### Using the Same OAuth Credentials
+If all your accounts are personal Google accounts, you can use the same OAuth credentials file:
+
+```bash
+# Authenticate work account
+GOOGLE_ACCOUNT_MODE=work npm run auth
+# Browser opens - log in with your work Google account
+
+# Authenticate personal account
+GOOGLE_ACCOUNT_MODE=personal npm run auth  
+# Browser opens - log in with your personal Google account
+```
+
+#### Using Different OAuth Credentials
+If you need different OAuth apps (e.g., company OAuth for work, personal OAuth for personal):
+
+1. **Authenticate each account with its own credentials:**
    ```bash
-   # For local installation
-   GOOGLE_ACCOUNT_MODE=work npm run auth
-   GOOGLE_ACCOUNT_MODE=personal npm run auth
+   # Work account with company OAuth credentials
+   GOOGLE_OAUTH_CREDENTIALS="/path/to/work-oauth.json" \
+   GOOGLE_ACCOUNT_MODE=work \
+   npm run auth
    
-   # Using the account manager script
-   node scripts/account-manager.js auth work
-   node scripts/account-manager.js auth personal
+   # Personal account with personal OAuth credentials
+   GOOGLE_OAUTH_CREDENTIALS="/path/to/personal-oauth.json" \
+   GOOGLE_ACCOUNT_MODE=personal \
+   npm run auth
    ```
 
-2. **List available accounts:**
-   ```bash
-   node scripts/account-manager.js list
-   ```
-
-3. **Use a specific account:**
-   ```bash
-   # Via environment variable
-   GOOGLE_ACCOUNT_MODE=work npm start
-   
-   # In Claude Desktop config
+2. **Configure Claude Desktop with multiple accounts:**
+   ```json
    {
      "mcpServers": {
        "google-calendar-work": {
          "command": "npx",
          "args": ["@cocal/google-calendar-mcp"],
          "env": {
-           "GOOGLE_OAUTH_CREDENTIALS": "/path/to/credentials.json",
+           "GOOGLE_OAUTH_CREDENTIALS": "/path/to/work-oauth.json",
            "GOOGLE_ACCOUNT_MODE": "work"
          }
        },
@@ -220,13 +229,27 @@ The server supports multiple Google accounts, allowing you to authenticate and m
          "command": "npx",
          "args": ["@cocal/google-calendar-mcp"],
          "env": {
-           "GOOGLE_OAUTH_CREDENTIALS": "/path/to/credentials.json",
+           "GOOGLE_OAUTH_CREDENTIALS": "/path/to/personal-oauth.json",
            "GOOGLE_ACCOUNT_MODE": "personal"
          }
        }
      }
    }
    ```
+
+3. **List available accounts:**
+   ```bash
+   node scripts/account-manager.js list
+   ```
+
+### Understanding OAuth Credentials vs User Tokens
+
+- **OAuth Credentials** (`gcp-oauth.keys.json`): These authenticate your *application* to Google. You get these from Google Cloud Console.
+- **User Tokens** (stored in `~/.config/google-calendar-mcp/tokens.json`): These authenticate specific *Google user accounts* after login.
+
+You can use:
+- **Same OAuth credentials** for multiple personal accounts (the app is the same, users are different)
+- **Different OAuth credentials** when required (e.g., company policy requires using their OAuth app for work accounts)
 
 ### Account IDs
 
@@ -236,14 +259,17 @@ Account IDs can contain lowercase letters, numbers, dashes, and underscores. Exa
 ### Managing Accounts
 
 ```bash
-# Check status
+# Check status of all accounts
 node scripts/account-manager.js status
 
-# Clear an account
+# Clear tokens for a specific account
 node scripts/account-manager.js clear work
 
-# Re-authenticate
+# Re-authenticate an account
 node scripts/account-manager.js auth work
+
+# Switch between accounts at runtime
+GOOGLE_ACCOUNT_MODE=personal npm start
 ```
 
 All account tokens are stored in `~/.config/google-calendar-mcp/tokens.json` with separate credentials for each account.
