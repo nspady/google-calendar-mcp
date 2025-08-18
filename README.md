@@ -5,6 +5,7 @@ A Model Context Protocol (MCP) server that provides Google Calendar integration 
 ## Features
 
 - **Multi-Calendar Support**: List events from multiple calendars simultaneously
+- **Multi-Account Support**: Manage multiple Google accounts with custom IDs
 - **Event Management**: Create, update, delete, and search calendar events
 - **Recurring Events**: Advanced modification capabilities for recurring events
 - **Free/Busy Queries**: Check availability across calendars
@@ -171,10 +172,81 @@ Along with the normal capabilities you would expect for a calendar integration y
 **Environment Variables:**
 - `GOOGLE_OAUTH_CREDENTIALS` - Path to OAuth credentials file
 - `GOOGLE_CALENDAR_MCP_TOKEN_PATH` - Custom token storage location (optional)
+- `GOOGLE_ACCOUNT_MODE` - Account ID to use (default: "normal")
 
 **Claude Desktop Config Location:**
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+## Multi-Account Support
+
+The server supports multiple Google accounts, allowing you to authenticate and manage different accounts separately.
+
+### Setting Up Multiple Accounts
+
+1. **Authenticate a new account:**
+   ```bash
+   # For local installation
+   GOOGLE_ACCOUNT_MODE=work npm run auth
+   GOOGLE_ACCOUNT_MODE=personal npm run auth
+   
+   # Using the account manager script
+   node scripts/account-manager.js auth work
+   node scripts/account-manager.js auth personal
+   ```
+
+2. **List available accounts:**
+   ```bash
+   node scripts/account-manager.js list
+   ```
+
+3. **Use a specific account:**
+   ```bash
+   # Via environment variable
+   GOOGLE_ACCOUNT_MODE=work npm start
+   
+   # In Claude Desktop config
+   {
+     "mcpServers": {
+       "google-calendar-work": {
+         "command": "npx",
+         "args": ["@cocal/google-calendar-mcp"],
+         "env": {
+           "GOOGLE_OAUTH_CREDENTIALS": "/path/to/credentials.json",
+           "GOOGLE_ACCOUNT_MODE": "work"
+         }
+       },
+       "google-calendar-personal": {
+         "command": "npx",
+         "args": ["@cocal/google-calendar-mcp"],
+         "env": {
+           "GOOGLE_OAUTH_CREDENTIALS": "/path/to/credentials.json",
+           "GOOGLE_ACCOUNT_MODE": "personal"
+         }
+       }
+     }
+   }
+   ```
+
+### Account IDs
+
+Account IDs can contain lowercase letters, numbers, dashes, and underscores. Examples:
+- `work`, `personal`, `client-abc`, `project-2024`, `dev-team`
+
+### Managing Accounts
+
+```bash
+# Check status
+node scripts/account-manager.js status
+
+# Clear an account
+node scripts/account-manager.js clear work
+
+# Re-authenticate
+node scripts/account-manager.js auth work
+```
+
+All account tokens are stored in `~/.config/google-calendar-mcp/tokens.json` with separate credentials for each account.
 
 
 ## Security
