@@ -83,7 +83,7 @@ export class GoogleCalendarMcpServer {
   }
 
   private registerTools(): void {
-    ToolRegistry.registerAll(this.server, this.executeWithHandler.bind(this));
+    ToolRegistry.registerAll(this.server, this.executeWithHandler.bind(this), this.config);
   }
 
   private async ensureAuthenticated(): Promise<void> {

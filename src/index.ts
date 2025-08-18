@@ -85,7 +85,7 @@ function showHelp(): void {
 Google Calendar MCP Server v${VERSION}
 
 Usage:
-  npx @cocal/google-calendar-mcp [command]
+  npx @cocal/google-calendar-mcp [command] [options]
 
 Commands:
   auth     Run the authentication flow
@@ -93,14 +93,26 @@ Commands:
   version  Show version information
   help     Show this help message
 
+Options:
+  --transport <type>        Transport type: stdio (default) | http
+  --port <number>          Port for HTTP transport (default: 3000)
+  --host <string>          Host for HTTP transport (default: 127.0.0.1)
+  --readonly                Enable readonly mode (disables write operations)
+  --disable-tools <list>   Comma-separated list of tools to disable
+  --enable-tools <list>    Comma-separated list of tools to enable exclusively
+
 Examples:
   npx @cocal/google-calendar-mcp auth
   npx @cocal/google-calendar-mcp start
-  npx @cocal/google-calendar-mcp version
-  npx @cocal/google-calendar-mcp
+  npx @cocal/google-calendar-mcp start --readonly
+  npx @cocal/google-calendar-mcp start --disable-tools delete-event,update-event
+  npx @cocal/google-calendar-mcp start --enable-tools list-events,get-event
 
 Environment Variables:
   GOOGLE_OAUTH_CREDENTIALS    Path to OAuth credentials file
+  READONLY_MODE              Enable readonly mode (true/false)
+  DISABLED_TOOLS             Comma-separated list of tools to disable
+  ENABLED_TOOLS              Comma-separated list of tools to enable
 `);
 }
 

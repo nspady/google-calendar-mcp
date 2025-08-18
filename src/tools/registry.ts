@@ -3,6 +3,7 @@ import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { BaseToolHandler } from "../handlers/core/BaseToolHandler.js";
 import { ALLOWED_EVENT_FIELDS } from "../utils/field-mask-builder.js";
+import { ServerConfig } from "../config/TransportConfig.js";
 
 // Import all handlers
 import { ListCalendarsHandler } from "../handlers/core/ListCalendarsHandler.js";
@@ -535,9 +536,30 @@ export class ToolRegistry {
     executeWithHandler: (
       handler: any, 
       args: any
-    ) => Promise<{ content: Array<{ type: "text"; text: string }> }>
+    ) => Promise<{ content: Array<{ type: "text"; text: string }> }>,
+    config?: ServerConfig
   ) {
+    // Define write-operation tools
+    const writeTools = new Set(['create-event', 'update-event', 'delete-event']);
+    
     for (const tool of this.tools) {
+      // Check if tool should be skipped based on configuration
+      if (config) {
+        // Skip if in readonly mode and this is a write operation
+        if (config.readonlyMode && writeTools.has(tool.name)) {
+          continue;
+        }
+        
+        // Skip if tool is in disabled list
+        if (config.disabledTools && config.disabledTools.includes(tool.name)) {
+          continue;
+        }
+        
+        // Skip if enabled list is specified and tool is not in it
+        if (config.enabledTools && !config.enabledTools.includes(tool.name)) {
+          continue;
+        }
+      }
       // Use the existing registerTool method which handles schema conversion properly
       server.registerTool(
         tool.name,

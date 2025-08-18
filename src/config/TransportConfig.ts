@@ -7,6 +7,9 @@ export interface TransportConfig {
 export interface ServerConfig {
   transport: TransportConfig;
   debug?: boolean;
+  readonlyMode?: boolean;
+  disabledTools?: string[];
+  enabledTools?: string[];
 }
 
 export function parseArgs(args: string[]): ServerConfig {
@@ -17,7 +20,10 @@ export function parseArgs(args: string[]): ServerConfig {
       port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
       host: process.env.HOST || '127.0.0.1'
     },
-    debug: process.env.DEBUG === 'true' || false
+    debug: process.env.DEBUG === 'true' || false,
+    readonlyMode: process.env.READONLY_MODE === 'true' || false,
+    disabledTools: process.env.DISABLED_TOOLS ? process.env.DISABLED_TOOLS.split(',').map(t => t.trim()) : undefined,
+    enabledTools: process.env.ENABLED_TOOLS ? process.env.ENABLED_TOOLS.split(',').map(t => t.trim()) : undefined
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -39,6 +45,17 @@ export function parseArgs(args: string[]): ServerConfig {
       case '--debug':
         config.debug = true;
         break;
+      case '--readonly':
+        config.readonlyMode = true;
+        break;
+      case '--disable-tools':
+        const disabledTools = args[++i];
+        config.disabledTools = disabledTools.split(',').map(t => t.trim());
+        break;
+      case '--enable-tools':
+        const enabledTools = args[++i];
+        config.enabledTools = enabledTools.split(',').map(t => t.trim());
+        break;
       case '--help':
         process.stderr.write(`
 Google Calendar MCP Server
@@ -50,13 +67,22 @@ Options:
   --port <number>          Port for HTTP transport (default: 3000)
   --host <string>          Host for HTTP transport (default: 127.0.0.1)
   --debug                  Enable debug logging
+  --readonly                Enable readonly mode (disables write operations)
+  --disable-tools <list>   Comma-separated list of tools to disable (blacklist)
+  --enable-tools <list>    Comma-separated list of tools to enable (whitelist)
   --help                   Show this help message
+
+Note: --disable-tools and --enable-tools are mutually exclusive. 
+      If --enable-tools is specified, only listed tools will be available.
 
 Environment Variables:
   TRANSPORT               Transport type: stdio | http
   PORT                   Port for HTTP transport
   HOST                   Host for HTTP transport
   DEBUG                  Enable debug logging (true/false)
+  READONLY_MODE          Enable readonly mode (true/false)
+  DISABLED_TOOLS         Comma-separated list of tools to disable
+  ENABLED_TOOLS          Comma-separated list of tools to enable
 
 Examples:
   node build/index.js                              # stdio (local use)
