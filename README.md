@@ -171,10 +171,71 @@ Along with the normal capabilities you would expect for a calendar integration y
 **Environment Variables:**
 - `GOOGLE_OAUTH_CREDENTIALS` - Path to OAuth credentials file
 - `GOOGLE_CALENDAR_MCP_TOKEN_PATH` - Custom token storage location (optional)
+- `READONLY_MODE` - Set to `true` to enable readonly mode (disables create, update, delete operations)
+- `DISABLED_TOOLS` - Comma-separated list of tools to disable (e.g., `delete-event,update-event`)
+- `ENABLED_TOOLS` - Comma-separated list of tools to enable exclusively (e.g., `list-events,get-event`)
+
+**Command Line Options:**
+- `--readonly` - Enable readonly mode (disables write operations)
+- `--disable-tools <list>` - Comma-separated list of tools to disable
+- `--enable-tools <list>` - Comma-separated list of tools to enable exclusively
 
 **Claude Desktop Config Location:**
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+### Security Modes
+
+**Readonly Mode:**
+Prevents all write operations (create, update, delete) while allowing all read operations:
+```json
+{
+  "mcpServers": {
+    "google-calendar": {
+      "command": "npx",
+      "args": ["@cocal/google-calendar-mcp", "--readonly"],
+      "env": {
+        "GOOGLE_OAUTH_CREDENTIALS": "/path/to/credentials.json"
+      }
+    }
+  }
+}
+```
+
+**Tool Filtering:**
+You can use either a blacklist or whitelist approach:
+
+Blacklist specific tools:
+```json
+{
+  "mcpServers": {
+    "google-calendar": {
+      "command": "npx",
+      "args": ["@cocal/google-calendar-mcp", "--disable-tools", "delete-event,update-event"],
+      "env": {
+        "GOOGLE_OAUTH_CREDENTIALS": "/path/to/credentials.json"
+      }
+    }
+  }
+}
+```
+
+Whitelist specific tools (only these will be available):
+```json
+{
+  "mcpServers": {
+    "google-calendar": {
+      "command": "npx",
+      "args": ["@cocal/google-calendar-mcp", "--enable-tools", "list-events,get-event,list-calendars"],
+      "env": {
+        "GOOGLE_OAUTH_CREDENTIALS": "/path/to/credentials.json"
+      }
+    }
+  }
+}
+```
+
+Note: `--disable-tools` and `--enable-tools` are mutually exclusive. If both are specified, only `--enable-tools` will be used.
 
 
 ## Security
