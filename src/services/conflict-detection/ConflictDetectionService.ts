@@ -13,10 +13,13 @@ import { getEventUrl } from "../../handlers/utils.js";
 export class ConflictDetectionService {
   private similarityChecker: EventSimilarityChecker;
   private conflictAnalyzer: ConflictAnalyzer;
+  private eventCache: Map<string, { events: calendar_v3.Schema$Event[]; timestamp: number }>;
+  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
   
   constructor() {
     this.similarityChecker = new EventSimilarityChecker();
     this.conflictAnalyzer = new ConflictAnalyzer();
+    this.eventCache = new Map();
   }
 
   /**
@@ -87,8 +90,8 @@ export class ConflictDetectionService {
           result.conflicts.push(...conflicts);
         }
       } catch (error) {
-        // If we can't access a calendar, skip it
-        console.error(`Failed to check calendar ${checkCalendarId}:`, error);
+        // If we can't access a calendar, skip it silently
+        // Errors are expected for calendars without access permissions
       }
     }
 
@@ -97,7 +100,7 @@ export class ConflictDetectionService {
   }
 
   /**
-   * Get events in a specific time range from a calendar
+   * Get events in a specific time range from a calendar with caching
    */
   private async getEventsInTimeRange(
     oauth2Client: OAuth2Client,
@@ -105,25 +108,52 @@ export class ConflictDetectionService {
     timeMin: string,
     timeMax: string
   ): Promise<calendar_v3.Schema$Event[]> {
+    // Create cache key from calendar ID and time range
+    const cacheKey = `${calendarId}:${timeMin}:${timeMax}`;
+    
+    // Check cache
+    const cached = this.eventCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+      return cached.events;
+    }
+    
+    // Fetch from API
     const calendar = google.calendar({ version: "v3", auth: oauth2Client });
     
-    // Extend the time range slightly to catch edge cases
-    const extendedTimeMin = new Date(timeMin);
-    extendedTimeMin.setHours(extendedTimeMin.getHours() - 1);
-    
-    const extendedTimeMax = new Date(timeMax);
-    extendedTimeMax.setHours(extendedTimeMax.getHours() + 1);
-
+    // Use exact time range without extension to avoid false positives
     const response = await calendar.events.list({
       calendarId,
-      timeMin: extendedTimeMin.toISOString(),
-      timeMax: extendedTimeMax.toISOString(),
+      timeMin,
+      timeMax,
       singleEvents: true,
       orderBy: 'startTime',
       maxResults: 250
     });
 
-    return response?.data?.items || [];
+    const events = response?.data?.items || [];
+    
+    // Update cache
+    this.eventCache.set(cacheKey, {
+      events,
+      timestamp: Date.now()
+    });
+    
+    // Clean old cache entries
+    this.cleanCache();
+    
+    return events;
+  }
+  
+  /**
+   * Remove expired cache entries
+   */
+  private cleanCache(): void {
+    const now = Date.now();
+    for (const [key, value] of this.eventCache.entries()) {
+      if (now - value.timestamp > this.CACHE_TTL) {
+        this.eventCache.delete(key);
+      }
+    }
   }
 
   /**
@@ -194,8 +224,8 @@ export class ConflictDetectionService {
             id: conflictingEvent.id!,
             title: conflictingEvent.summary || 'Untitled Event',
             url: getEventUrl(conflictingEvent, calendarId) || undefined,
-            start: conflictingEvent.start?.dateTime || conflictingEvent.start?.date,
-            end: conflictingEvent.end?.dateTime || conflictingEvent.end?.date
+            start: conflictingEvent.start?.dateTime || conflictingEvent.start?.date || undefined,
+            end: conflictingEvent.end?.dateTime || conflictingEvent.end?.date || undefined
           },
           fullEvent: conflictingEvent,
           overlap: {
@@ -258,8 +288,8 @@ export class ConflictDetectionService {
                 event: {
                   id: 'busy-time',
                   title: 'Busy (details unavailable)',
-                  start: busySlot.start,
-                  end: busySlot.end
+                  start: busySlot.start || undefined,
+                  end: busySlot.end || undefined
                 }
               });
             }

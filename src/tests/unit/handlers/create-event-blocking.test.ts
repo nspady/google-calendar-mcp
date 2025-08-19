@@ -83,14 +83,13 @@ describe('CreateEventHandler Blocking Logic', () => {
     expect(response).toContain('View: https://calendar.google.com/calendar/event?eid=existing-lunch-123');
     
     // Should include instructions to override
-    expect(response).toContain('To create anyway, set blockOnHighSimilarity to false.');
+    expect(response).toContain('To create anyway, set allowDuplicates to true.');
   });
 
-  it('should use configurable thresholds', () => {
+  it('should use configurable threshold', () => {
     const handler = new CreateEventHandler();
     
-    // Check that the thresholds are properly defined
-    expect(handler['BLOCK_SIMILARITY_THRESHOLD']).toBe(0.9);
-    expect(handler['DEFAULT_DUPLICATE_THRESHOLD']).toBe(0.8);
+    // Check that the unified threshold is properly defined
+    expect(handler['DUPLICATE_THRESHOLD']).toBe(0.7);
   });
 });

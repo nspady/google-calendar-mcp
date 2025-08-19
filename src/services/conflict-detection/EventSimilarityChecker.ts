@@ -5,6 +5,7 @@ export class EventSimilarityChecker {
 
   /**
    * Check if two events are potentially duplicates based on similarity
+   * Uses simplified rules-based approach instead of complex weighted calculations
    */
   checkSimilarity(event1: calendar_v3.Schema$Event, event2: calendar_v3.Schema$Event): number {
     // Check if one is all-day and the other is timed
@@ -12,39 +13,36 @@ export class EventSimilarityChecker {
     const event2IsAllDay = this.isAllDayEvent(event2);
     
     if (event1IsAllDay !== event2IsAllDay) {
-      // One is all-day and the other is timed - these serve different purposes
-      // Reduce similarity significantly even if titles match
-      const titleSimilarity = this.calculateStringSimilarity(
-        event1.summary || '',
-        event2.summary || ''
-      );
-      
-      // Cap similarity at 0.3 for all-day vs timed events
-      // This prevents them from being flagged as duplicates
-      return Math.min(titleSimilarity * 0.3, 0.3);
+      // Different event types - not duplicates
+      return 0.2; // Low similarity
     }
     
-    // Both are same type (both all-day or both timed)
-    const titleSimilarity = this.calculateStringSimilarity(
-      event1.summary || '',
-      event2.summary || ''
-    );
+    const titleMatch = this.titlesMatch(event1.summary, event2.summary);
+    const timeOverlap = this.eventsOverlap(event1, event2);
+    const sameDay = this.eventsOnSameDay(event1, event2);
     
-    const locationSimilarity = this.calculateStringSimilarity(
-      event1.location || '',
-      event2.location || ''
-    );
+    // Simple rules-based scoring
+    if (titleMatch.exact && timeOverlap) {
+      return 0.95; // Almost certainly a duplicate
+    }
     
-    const timeSimilarity = this.calculateTimeSimilarity(event1, event2);
+    if (titleMatch.similar && timeOverlap) {
+      return 0.7; // Potential duplicate
+    }
     
-    // Weighted average: title is most important, then time, then location
-    const weightedSimilarity = (
-      titleSimilarity * 0.5 +
-      timeSimilarity * 0.35 +
-      locationSimilarity * 0.15
-    );
+    if (titleMatch.exact && sameDay) {
+      return 0.6; // Same title on same day but different times
+    }
     
-    return weightedSimilarity;
+    if (titleMatch.exact && !sameDay) {
+      return 0.4; // Same title but different day - likely recurring event
+    }
+    
+    if (titleMatch.similar) {
+      return 0.3; // Similar titles only
+    }
+    
+    return 0.1; // No significant similarity
   }
 
   /**
@@ -55,59 +53,57 @@ export class EventSimilarityChecker {
   }
 
   /**
-   * Calculate similarity between two strings using Levenshtein distance
+   * Check if two titles match (exact or similar)
+   * Simplified string matching without Levenshtein distance
    */
-  private calculateStringSimilarity(str1: string, str2: string): number {
-    if (!str1 && !str2) return 1;
-    if (!str1 || !str2) return 0;
+  private titlesMatch(title1?: string | null, title2?: string | null): { exact: boolean; similar: boolean } {
+    if (!title1 || !title2) {
+      return { exact: false, similar: false };
+    }
     
-    const s1 = str1.toLowerCase().trim();
-    const s2 = str2.toLowerCase().trim();
+    const t1 = title1.toLowerCase().trim();
+    const t2 = title2.toLowerCase().trim();
     
-    if (s1 === s2) return 1;
+    // Exact match
+    if (t1 === t2) {
+      return { exact: true, similar: true };
+    }
     
-    const distance = this.levenshteinDistance(s1, s2);
-    const maxLength = Math.max(s1.length, s2.length);
+    // Check if one contains the other (for variations like "Meeting" vs "Team Meeting")
+    if (t1.includes(t2) || t2.includes(t1)) {
+      return { exact: false, similar: true };
+    }
     
-    return 1 - (distance / maxLength);
+    // Check for common significant words (more than 3 characters)
+    const words1 = t1.split(/\s+/).filter(w => w.length > 3);
+    const words2 = t2.split(/\s+/).filter(w => w.length > 3);
+    
+    if (words1.length > 0 && words2.length > 0) {
+      const commonWords = words1.filter(w => words2.includes(w));
+      const similarity = commonWords.length / Math.min(words1.length, words2.length);
+      
+      return { exact: false, similar: similarity >= 0.5 };
+    }
+    
+    return { exact: false, similar: false };
   }
 
   /**
-   * Calculate time similarity between events
+   * Check if two events are on the same day
    */
-  private calculateTimeSimilarity(event1: calendar_v3.Schema$Event, event2: calendar_v3.Schema$Event): number {
+  private eventsOnSameDay(event1: calendar_v3.Schema$Event, event2: calendar_v3.Schema$Event): boolean {
     const time1 = this.getEventTime(event1);
     const time2 = this.getEventTime(event2);
     
-    if (!time1 || !time2) return 0;
+    if (!time1 || !time2) return false;
     
-    // Check if events start at the same time
-    if (time1.start.getTime() === time2.start.getTime()) {
-      return 1;
-    }
+    // Compare dates only (ignore time)
+    const date1 = new Date(time1.start);
+    const date2 = new Date(time2.start);
     
-    // Check if events overlap
-    const hasOverlap = this.eventsOverlap(time1, time2);
-    if (hasOverlap) {
-      // Calculate overlap percentage
-      const overlapDuration = this.calculateOverlapDuration(time1, time2);
-      const event1Duration = time1.end.getTime() - time1.start.getTime();
-      const event2Duration = time2.end.getTime() - time2.start.getTime();
-      const avgDuration = (event1Duration + event2Duration) / 2;
-      
-      return Math.min(overlapDuration / avgDuration, 1);
-    }
-    
-    // Events don't overlap, check how close they are
-    const timeDiff = Math.abs(time1.start.getTime() - time2.start.getTime());
-    const hourInMs = 60 * 60 * 1000;
-    
-    // If within 1 hour, give partial similarity
-    if (timeDiff < hourInMs) {
-      return 0.5 * (1 - timeDiff / hourInMs);
-    }
-    
-    return 0;
+    return date1.getFullYear() === date2.getFullYear() &&
+           date1.getMonth() === date2.getMonth() &&
+           date1.getDate() === date2.getDate();
   }
 
   /**
@@ -126,50 +122,31 @@ export class EventSimilarityChecker {
   }
 
   /**
-   * Check if two events overlap
+   * Check if two events overlap in time
+   * Consolidated overlap logic used throughout the service
    */
-  private eventsOverlap(time1: { start: Date; end: Date }, time2: { start: Date; end: Date }): boolean {
+  eventsOverlap(event1: calendar_v3.Schema$Event, event2: calendar_v3.Schema$Event): boolean {
+    const time1 = this.getEventTime(event1);
+    const time2 = this.getEventTime(event2);
+    
+    if (!time1 || !time2) return false;
+    
     return time1.start < time2.end && time2.start < time1.end;
   }
 
   /**
    * Calculate overlap duration in milliseconds
+   * Used by ConflictAnalyzer for detailed overlap analysis
    */
-  private calculateOverlapDuration(time1: { start: Date; end: Date }, time2: { start: Date; end: Date }): number {
+  calculateOverlapDuration(event1: calendar_v3.Schema$Event, event2: calendar_v3.Schema$Event): number {
+    const time1 = this.getEventTime(event1);
+    const time2 = this.getEventTime(event2);
+    
+    if (!time1 || !time2) return 0;
+    
     const overlapStart = Math.max(time1.start.getTime(), time2.start.getTime());
     const overlapEnd = Math.min(time1.end.getTime(), time2.end.getTime());
     return Math.max(0, overlapEnd - overlapStart);
-  }
-
-  /**
-   * Levenshtein distance implementation
-   */
-  private levenshteinDistance(str1: string, str2: string): number {
-    const matrix: number[][] = [];
-    
-    for (let i = 0; i <= str2.length; i++) {
-      matrix[i] = [i];
-    }
-    
-    for (let j = 0; j <= str1.length; j++) {
-      matrix[0][j] = j;
-    }
-    
-    for (let i = 1; i <= str2.length; i++) {
-      for (let j = 1; j <= str1.length; j++) {
-        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1];
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1, // substitution
-            matrix[i][j - 1] + 1,     // insertion
-            matrix[i - 1][j] + 1      // deletion
-          );
-        }
-      }
-    }
-    
-    return matrix[str2.length][str1.length];
   }
 
   /**

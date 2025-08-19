@@ -1,9 +1,16 @@
 import { calendar_v3 } from "googleapis";
 import { EventTimeRange } from "./types.js";
+import { EventSimilarityChecker } from "./EventSimilarityChecker.js";
 
 export class ConflictAnalyzer {
+  private similarityChecker: EventSimilarityChecker;
+  
+  constructor() {
+    this.similarityChecker = new EventSimilarityChecker();
+  }
   /**
    * Analyze overlap between two events
+   * Uses consolidated overlap logic from EventSimilarityChecker
    */
   analyzeOverlap(event1: calendar_v3.Schema$Event, event2: calendar_v3.Schema$Event): {
     hasOverlap: boolean;
@@ -12,6 +19,14 @@ export class ConflictAnalyzer {
     startTime?: string;
     endTime?: string;
   } {
+    // Use consolidated overlap check
+    const hasOverlap = this.similarityChecker.eventsOverlap(event1, event2);
+    
+    if (!hasOverlap) {
+      return { hasOverlap: false };
+    }
+    
+    // Get time ranges for detailed analysis
     const time1 = this.getEventTimeRange(event1);
     const time2 = this.getEventTimeRange(event2);
     
@@ -19,15 +34,10 @@ export class ConflictAnalyzer {
       return { hasOverlap: false };
     }
     
-    // Check if events overlap
-    if (time1.start >= time2.end || time2.start >= time1.end) {
-      return { hasOverlap: false };
-    }
-    
     // Calculate overlap details
+    const overlapDuration = this.similarityChecker.calculateOverlapDuration(event1, event2);
     const overlapStart = new Date(Math.max(time1.start.getTime(), time2.start.getTime()));
     const overlapEnd = new Date(Math.min(time1.end.getTime(), time2.end.getTime()));
-    const overlapDuration = overlapEnd.getTime() - overlapStart.getTime();
     
     // Calculate percentage of overlap relative to the first event
     const event1Duration = time1.end.getTime() - time1.start.getTime();
@@ -88,14 +98,20 @@ export class ConflictAnalyzer {
   /**
    * Check if an event conflicts with a busy time slot
    */
-  checkBusyConflict(event: calendar_v3.Schema$Event, busySlot: { start?: string; end?: string }): boolean {
-    const eventTime = this.getEventTimeRange(event);
-    if (!eventTime || !busySlot.start || !busySlot.end) return false;
+  checkBusyConflict(event: calendar_v3.Schema$Event, busySlot: { start?: string | null; end?: string | null }): boolean {
+    // Handle null values from Google's API
+    const start = busySlot.start ?? undefined;
+    const end = busySlot.end ?? undefined;
     
-    const busyStart = new Date(busySlot.start);
-    const busyEnd = new Date(busySlot.end);
+    if (!start || !end) return false;
     
-    return eventTime.start < busyEnd && busyStart < eventTime.end;
+    // Convert busy slot to event format for consistency
+    const busyEvent: calendar_v3.Schema$Event = {
+      start: { dateTime: start },
+      end: { dateTime: end }
+    };
+    
+    return this.similarityChecker.eventsOverlap(event, busyEvent);
   }
 
   /**
@@ -105,9 +121,6 @@ export class ConflictAnalyzer {
     events: calendar_v3.Schema$Event[],
     targetEvent: calendar_v3.Schema$Event
   ): calendar_v3.Schema$Event[] {
-    const targetTime = this.getEventTimeRange(targetEvent);
-    if (!targetTime) return [];
-    
     return events.filter(event => {
       // Skip the same event
       if (event.id === targetEvent.id) return false;
@@ -115,11 +128,8 @@ export class ConflictAnalyzer {
       // Skip cancelled events
       if (event.status === 'cancelled') return false;
       
-      const eventTime = this.getEventTimeRange(event);
-      if (!eventTime) return false;
-      
-      // Check for overlap
-      return eventTime.start < targetTime.end && targetTime.start < eventTime.end;
+      // Use consolidated overlap check
+      return this.similarityChecker.eventsOverlap(targetEvent, event);
     });
   }
 }

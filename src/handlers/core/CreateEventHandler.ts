@@ -10,8 +10,7 @@ import { ConflictDetectionService } from "../../services/conflict-detection/inde
 
 export class CreateEventHandler extends BaseToolHandler {
     private conflictDetectionService: ConflictDetectionService;
-    private readonly BLOCK_SIMILARITY_THRESHOLD = 0.8; // Threshold for blocking duplicates (90% similar)
-    private readonly DEFAULT_DUPLICATE_THRESHOLD = 0.5; // Default threshold for flagging potential duplicates (80% similar)
+    private readonly DUPLICATE_THRESHOLD = 0.7; // Single unified threshold for duplicate detection
     
     constructor() {
         super();
@@ -41,29 +40,26 @@ export class CreateEventHandler extends BaseToolHandler {
                 checkDuplicates: true,
                 checkConflicts: true,
                 calendarsToCheck: validArgs.calendarsToCheck || [validArgs.calendarId],
-                duplicateSimilarityThreshold: validArgs.duplicateSimilarityThreshold || this.DEFAULT_DUPLICATE_THRESHOLD
+                duplicateSimilarityThreshold: validArgs.duplicateSimilarityThreshold || this.DUPLICATE_THRESHOLD
             }
         );
         
-        // If high similarity duplicates are found, suggest updating instead
-        const highSimilarityDuplicate = conflicts.duplicates.find(dup => dup.event.similarity > this.BLOCK_SIMILARITY_THRESHOLD);
-        if (highSimilarityDuplicate && validArgs.blockOnHighSimilarity !== false) {
-            // Filter to only show the high similarity duplicate(s)
-            const highSimilarityConflicts = {
-                hasConflicts: true,
-                duplicates: conflicts.duplicates.filter(dup => dup.event.similarity > this.BLOCK_SIMILARITY_THRESHOLD),
-                conflicts: []
-            };
-            
+        // Block creation if exact or near-exact duplicate found (95% similarity from new rules)
+        const exactDuplicate = conflicts.duplicates.find(dup => dup.event.similarity >= 0.95);
+        if (exactDuplicate && validArgs.allowDuplicates !== true) {
             // Format the duplicate details
-            const duplicateDetails = formatConflictWarnings(highSimilarityConflicts);
+            const duplicateDetails = formatConflictWarnings({
+                hasConflicts: true,
+                duplicates: [exactDuplicate],
+                conflicts: []
+            });
             
             // Remove the "POTENTIAL DUPLICATES DETECTED" header since we're blocking
             const cleanedDetails = duplicateDetails.replace('⚠️ POTENTIAL DUPLICATES DETECTED:', '').trim();
             
             let blockMessage = `⚠️ DUPLICATE EVENT DETECTED!\n\n`;
             blockMessage += cleanedDetails;
-            blockMessage += `\n\nTo create anyway, set blockOnHighSimilarity to false.`;
+            blockMessage += `\n\nThis event appears to be a duplicate. To create anyway, set allowDuplicates to true.`;
             
             return {
                 content: [{

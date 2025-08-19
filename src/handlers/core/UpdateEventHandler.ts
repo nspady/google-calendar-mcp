@@ -62,7 +62,7 @@ export class UpdateEventHandler extends BaseToolHandler {
         const event = await this.updateEventWithScope(oauth2Client, validArgs);
         
         // Generate response with conflict warnings
-        const text = createEventResponseWithConflicts(event, validArgs.calendarId, conflicts, "updated");
+        const text = createEventResponseWithConflicts(event, validArgs.calendarId, conflicts ?? undefined, "updated");
         
         return {
             content: [{
