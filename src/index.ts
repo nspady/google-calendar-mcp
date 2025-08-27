@@ -163,14 +163,3 @@ switch (command) {
     showHelp();
     process.exit(1);
 }
-
-// --- Keep-alive Express server for K8s ---
-const keepAliveApp = express();
-const KEEPALIVE_PORT = process.env.PORT || 3001;
-
-keepAliveApp.get("/", (req, res) => res.send("✅ MCP is alive"));
-keepAliveApp.get("/health", (req, res) => res.send("ok"));
-
-keepAliveApp.listen(KEEPALIVE_PORT, "0.0.0.0", () => {
-  console.log(`✅ MCP keep-alive server listening on 0.0.0.0:${KEEPALIVE_PORT}`);
-});
