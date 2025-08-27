@@ -108,6 +108,13 @@ export class EventSimilarityChecker {
 
   /**
    * Extract event time information
+   * 
+   * Note: This method handles both:
+   * - Events being created (may have timezone-naive datetimes with separate timeZone field)
+   * - Events from Google Calendar (have timezone-aware datetimes)
+   * 
+   * The MCP trusts Google Calendar to return only relevant events in the queried time range.
+   * Any timezone conversions are handled by the Google Calendar API, not by this service.
    */
   private getEventTime(event: calendar_v3.Schema$Event): { start: Date; end: Date } | null {
     const startTime = event.start?.dateTime || event.start?.date;
@@ -115,6 +122,8 @@ export class EventSimilarityChecker {
     
     if (!startTime || !endTime) return null;
     
+    // Parse the datetime strings as-is
+    // Google Calendar API ensures we only get events in the requested time range
     return {
       start: new Date(startTime),
       end: new Date(endTime)

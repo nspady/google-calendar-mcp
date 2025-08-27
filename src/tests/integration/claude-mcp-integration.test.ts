@@ -872,6 +872,189 @@ Execute the update-event tool call immediately.`
     }, 120000);
   });
 
+  describe('Enhanced Conflict Detection with Real-World Scenarios', () => {
+    it('should intelligently detect and handle duplicate 1-on-1 meetings', async () => {
+      await executeWithContextLogging('Duplicate 1-on-1 Detection', async () => {
+        // First, create a recurring 1-on-1
+        const setupResponse = await claudeMCPClient.sendMessage(
+          `Create a weekly 1-on-1 meeting with Sarah tomorrow at 2 PM for 30 minutes`
+        );
+        
+        expect(setupResponse.content).toBeDefined();
+        // Check that the event was actually created via tool execution
+        const createResult = setupResponse.executedResults.find(r => r.toolCall.name === 'create-event');
+        expect(createResult).toBeDefined();
+        expect(createResult?.success).toBe(true);
+        
+        // Track created event for cleanup
+        if (createResult?.result?.content) {
+          const eventId = TestDataFactory.extractEventIdFromResponse(createResult.result);
+          if (eventId) {
+            testFactory.trackCreatedEvent(eventId, TEST_CALENDAR_ID);
+          }
+        }
+        
+        // Now try to schedule another 1-on-1 at the same time
+        const duplicateResponse = await claudeMCPClient.sendMessage(
+          `Schedule a 1-on-1 with Sarah tomorrow at 2 PM`
+        );
+        
+        expect(duplicateResponse.content).toBeDefined();
+        // Claude should recognize the conflict/duplicate
+        expect(duplicateResponse.content.toLowerCase()).toMatch(
+          /(already|existing|scheduled|conflict|duplicate|have a meeting)/
+        );
+        
+        console.log('✅ Duplicate 1-on-1 detection working correctly');
+      });
+    }, 60000);
+    
+    it('should handle meeting rescheduling with conflict detection', async () => {
+      await executeWithContextLogging('Meeting Rescheduling', async () => {
+        // Create initial meetings
+        const setupResponse = await claudeMCPClient.sendMessage(
+          `Create two meetings tomorrow: 
+           1. Team standup at 10 AM for 30 minutes
+           2. Project review at 11 AM for 1 hour`
+        );
+        
+        expect(setupResponse.content).toBeDefined();
+        
+        // Track created events
+        const createCalls = setupResponse.toolCalls.filter(tc => tc.name === 'create-event');
+        createCalls.forEach((call, index) => {
+          if (setupResponse.executedResults[index]?.result?.content) {
+            const eventId = TestDataFactory.extractEventIdFromResponse(
+              setupResponse.executedResults[index].result
+            );
+            if (eventId) {
+              testFactory.trackCreatedEvent(eventId, TEST_CALENDAR_ID);
+            }
+          }
+        });
+        
+        // Try to move standup to overlap with project review
+        const rescheduleResponse = await claudeMCPClient.sendMessage(
+          `Move the team standup tomorrow to 11:15 AM`
+        );
+        
+        expect(rescheduleResponse.content).toBeDefined();
+        // Should mention the conflict
+        expect(rescheduleResponse.content.toLowerCase()).toMatch(
+          /(conflict|overlap|already scheduled|project review)/
+        );
+        
+        console.log('✅ Meeting rescheduling with conflict detection working');
+      });
+    }, 60000);
+    
+    it('should intelligently handle conference room bookings', async () => {
+      await executeWithContextLogging('Conference Room Booking', async () => {
+        // Book a conference room
+        const bookingResponse = await claudeMCPClient.sendMessage(
+          `Book Conference Room A for our planning session next Monday from 10 AM to 12 PM`
+        );
+        
+        expect(bookingResponse.content).toBeDefined();
+        // Check that the room booking was actually created
+        const createResult = bookingResponse.executedResults.find(r => r.toolCall.name === 'create-event');
+        expect(createResult).toBeDefined();
+        expect(createResult?.success).toBe(true);
+        
+        // Track event
+        if (createResult?.result?.content) {
+          const eventId = TestDataFactory.extractEventIdFromResponse(createResult.result);
+          if (eventId) {
+            testFactory.trackCreatedEvent(eventId, TEST_CALENDAR_ID);
+          }
+        }
+        
+        // Try to book the same room at overlapping time
+        const conflictResponse = await claudeMCPClient.sendMessage(
+          `Schedule a team meeting in Conference Room A next Monday at 11 AM for 1 hour`
+        );
+        
+        expect(conflictResponse.content).toBeDefined();
+        // Should detect room conflict
+        expect(conflictResponse.content.toLowerCase()).toMatch(
+          /(conference room a.*already|conflict|overlap|booked)/
+        );
+        
+        console.log('✅ Conference room conflict detection working');
+      });
+    }, 60000);
+    
+    it('should handle back-to-back meeting scheduling without false positives', async () => {
+      await executeWithContextLogging('Back-to-Back Meetings', async () => {
+        // Schedule back-to-back meetings
+        const response = await claudeMCPClient.sendMessage(
+          `Schedule these back-to-back meetings for tomorrow:
+           - Morning standup from 9 to 10 AM
+           - Design review from 10 to 11 AM
+           - Lunch break from 12 to 1 PM`
+        );
+        
+        expect(response.content).toBeDefined();
+        // Check that the events were actually created
+        const createResults = response.executedResults.filter(r => r.toolCall.name === 'create-event');
+        expect(createResults.length).toBeGreaterThan(0);
+        createResults.forEach(result => {
+          expect(result.success).toBe(true);
+        });
+        
+        // Should NOT show conflicts for adjacent meetings
+        expect(response.content.toLowerCase()).not.toMatch(/(conflict.*standup.*design)/);
+        
+        // Track all created events
+        createResults.forEach(result => {
+          if (result.result?.content) {
+            const eventId = TestDataFactory.extractEventIdFromResponse(result.result);
+            if (eventId) {
+              testFactory.trackCreatedEvent(eventId, TEST_CALENDAR_ID);
+            }
+          }
+        });
+        
+        console.log('✅ Back-to-back meetings scheduled without false positive conflicts');
+      });
+    }, 60000);
+    
+    it('should suggest alternatives when detecting exact duplicates', async () => {
+      await executeWithContextLogging('Duplicate with Alternatives', async () => {
+        // Create an event
+        const initialResponse = await claudeMCPClient.sendMessage(
+          `Create a team retrospective meeting tomorrow at 3 PM for 1 hour`
+        );
+        
+        expect(initialResponse.content).toBeDefined();
+        
+        // Track event
+        const createCall = initialResponse.toolCalls.find(tc => tc.name === 'create-event');
+        if (createCall && initialResponse.executedResults[0]?.result?.content) {
+          const eventId = TestDataFactory.extractEventIdFromResponse(
+            initialResponse.executedResults[0].result
+          );
+          if (eventId) {
+            testFactory.trackCreatedEvent(eventId, TEST_CALENDAR_ID);
+          }
+        }
+        
+        // Try to create the exact same event
+        const duplicateResponse = await claudeMCPClient.sendMessage(
+          `Schedule a team retrospective tomorrow at 3 PM`
+        );
+        
+        expect(duplicateResponse.content).toBeDefined();
+        // Should recognize it's a duplicate and possibly suggest alternatives
+        expect(duplicateResponse.content.toLowerCase()).toMatch(
+          /(already have|duplicate|existing.*retrospective|update instead)/
+        );
+        
+        console.log('✅ Duplicate detection with alternative suggestions working');
+      });
+    }, 60000);
+  });
+
   describe('Error Handling and Edge Cases', () => {
     it('should gracefully handle invalid requests', async () => {
       await executeWithContextLogging('Invalid Request Handling', async () => {

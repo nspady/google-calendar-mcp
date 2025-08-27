@@ -10,6 +10,16 @@ import { EventSimilarityChecker } from "./EventSimilarityChecker.js";
 import { ConflictAnalyzer } from "./ConflictAnalyzer.js";
 import { getEventUrl } from "../../handlers/utils.js";
 
+/**
+ * Service for detecting event conflicts and duplicates.
+ * 
+ * IMPORTANT: This service relies on Google Calendar's list API to find existing events.
+ * Due to eventual consistency in Google Calendar, recently created events may not
+ * immediately appear in list queries. This is a known limitation of the Google Calendar API
+ * and affects duplicate detection for events created in quick succession.
+ * 
+ * In real-world usage, this is rarely an issue as there's natural time between event creation.
+ */
 export class ConflictDetectionService {
   private similarityChecker: EventSimilarityChecker;
   private conflictAnalyzer: ConflictAnalyzer;
@@ -50,23 +60,74 @@ export class ConflictDetectionService {
     }
 
     // Get the time range for checking
-    const timeMin = event.start.dateTime || event.start.date;
-    const timeMax = event.end.dateTime || event.end.date;
+    let timeMin = event.start.dateTime || event.start.date;
+    let timeMax = event.end.dateTime || event.end.date;
 
     if (!timeMin || !timeMax) {
       return result;
     }
 
+    // Extract timezone if present (prefer start time's timezone)
+    const timezone = event.start.timeZone || event.end.timeZone;
+    
+    // For duplicate detection, we need to search a wider time range
+    // to find events that might be duplicates but at different times on the same day
+    // For conflict detection, we also need a slightly wider range to catch overlaps
+    let searchTimeMin = timeMin;
+    let searchTimeMax = timeMax;
+    
+    if (checkDuplicates || checkConflicts) {
+      // Extend search range to the entire day for duplicate detection
+      // or add buffer for conflict detection
+      const startDate = new Date(timeMin);
+      const endDate = new Date(timeMax);
+      
+      if (checkDuplicates) {
+        // For duplicates, search the entire day
+        // Set to start of day
+        const dayStart = new Date(startDate);
+        dayStart.setHours(0, 0, 0, 0);
+        
+        // Set to end of day (next day at midnight)
+        const dayEnd = new Date(endDate);
+        dayEnd.setHours(23, 59, 59, 999);
+        
+        // Convert back to ISO strings
+        searchTimeMin = dayStart.toISOString();
+        searchTimeMax = dayEnd.toISOString();
+      } else if (checkConflicts) {
+        // For conflicts only, add a small buffer to catch events that might start/end
+        // slightly before or after our event
+        const bufferStart = new Date(startDate);
+        bufferStart.setHours(bufferStart.getHours() - 1); // 1 hour before
+        
+        const bufferEnd = new Date(endDate);  
+        bufferEnd.setHours(bufferEnd.getHours() + 1); // 1 hour after
+        
+        searchTimeMin = bufferStart.toISOString();
+        searchTimeMax = bufferEnd.toISOString();
+      }
+    }
+
     // Check each calendar
     for (const checkCalendarId of calendarsToCheck) {
       try {
-        // Get events in the same time range
+        // Get events in the search time range, passing timezone for proper interpretation
         const events = await this.getEventsInTimeRange(
           oauth2Client,
           checkCalendarId,
-          timeMin,
-          timeMax
+          searchTimeMin,
+          searchTimeMax,
+          timezone || undefined
         );
+
+        // Debug logging
+        if (process.env.DEBUG_CONFLICT_DETECTION) {
+          console.error(`[ConflictDetection] Found ${events.length} events in range ${searchTimeMin} to ${searchTimeMax}`);
+          events.forEach(e => {
+            console.error(`[ConflictDetection]   - ${e.summary} at ${e.start?.dateTime || e.start?.date}`);
+          });
+        }
 
         // Check for duplicates
         if (checkDuplicates) {
@@ -106,10 +167,11 @@ export class ConflictDetectionService {
     oauth2Client: OAuth2Client,
     calendarId: string,
     timeMin: string,
-    timeMax: string
+    timeMax: string,
+    timeZone?: string
   ): Promise<calendar_v3.Schema$Event[]> {
     // Create cache key from calendar ID and time range
-    const cacheKey = `${calendarId}:${timeMin}:${timeMax}`;
+    const cacheKey = `${calendarId}:${timeMin}:${timeMax}:${timeZone || ''}`;
     
     // Check cache
     const cached = this.eventCache.get(cacheKey);
@@ -120,17 +182,29 @@ export class ConflictDetectionService {
     // Fetch from API
     const calendar = google.calendar({ version: "v3", auth: oauth2Client });
     
-    // Use exact time range without extension to avoid false positives
-    const response = await calendar.events.list({
+    // Build list parameters
+    const listParams: any = {
       calendarId,
       timeMin,
       timeMax,
       singleEvents: true,
       orderBy: 'startTime',
       maxResults: 250
-    });
+    };
+    
+    // The Google Calendar API accepts both:
+    // 1. Timezone-aware datetimes (with Z or offset)
+    // 2. Timezone-naive datetimes with a timeZone parameter
+    // We pass the timeZone parameter when available for consistency
+    if (timeZone) {
+      listParams.timeZone = timeZone;
+    }
+    
+    // Use exact time range without extension to avoid false positives
+    const response = await calendar.events.list(listParams);
 
     const events = response?.data?.items || [];
+    
     
     // Update cache
     this.eventCache.set(cacheKey, {
@@ -175,6 +249,14 @@ export class ConflictDetectionService {
       if (existingEvent.status === 'cancelled') continue;
 
       const similarity = this.similarityChecker.checkSimilarity(newEvent, existingEvent);
+      
+      // Debug logging
+      if (process.env.DEBUG_CONFLICT_DETECTION && similarity > 0) {
+        console.error(`[ConflictDetection] Similarity check:`);
+        console.error(`[ConflictDetection]   New: ${newEvent.summary} ${newEvent.start?.dateTime || newEvent.start?.date}`);
+        console.error(`[ConflictDetection]   Existing: ${existingEvent.summary} ${existingEvent.start?.dateTime || existingEvent.start?.date}`);
+        console.error(`[ConflictDetection]   Similarity: ${similarity}`);
+      }
       
       if (similarity >= threshold) {
         duplicates.push({
@@ -244,7 +326,7 @@ export class ConflictDetectionService {
   /**
    * Check if the current user has declined an event
    */
-  private isEventDeclined(event: calendar_v3.Schema$Event): boolean {
+  private isEventDeclined(_event: calendar_v3.Schema$Event): boolean {
     // For now, we'll skip this check since we don't have easy access to the user's email
     // This could be enhanced later by passing the user email through the service
     return false;
@@ -255,15 +337,15 @@ export class ConflictDetectionService {
    */
   async checkConflictsWithFreeBusy(
     oauth2Client: OAuth2Client,
-    event: calendar_v3.Schema$Event,
+    eventToCheck: calendar_v3.Schema$Event,
     calendarsToCheck: string[]
   ): Promise<ConflictInfo[]> {
     const conflicts: ConflictInfo[] = [];
     
-    if (!event.start || !event.end) return conflicts;
+    if (!eventToCheck.start || !eventToCheck.end) return conflicts;
     
-    const timeMin = event.start.dateTime || event.start.date;
-    const timeMax = event.end.dateTime || event.end.date;
+    const timeMin = eventToCheck.start.dateTime || eventToCheck.start.date;
+    const timeMax = eventToCheck.end.dateTime || eventToCheck.end.date;
     
     if (!timeMin || !timeMax) return conflicts;
 
@@ -281,7 +363,7 @@ export class ConflictDetectionService {
       for (const [calendarId, calendarInfo] of Object.entries(freeBusyResponse.data.calendars || {})) {
         if (calendarInfo.busy && calendarInfo.busy.length > 0) {
           for (const busySlot of calendarInfo.busy) {
-            if (this.conflictAnalyzer.checkBusyConflict(event, busySlot)) {
+            if (this.conflictAnalyzer.checkBusyConflict(eventToCheck, busySlot)) {
               conflicts.push({
                 type: 'overlap',
                 calendar: calendarId,

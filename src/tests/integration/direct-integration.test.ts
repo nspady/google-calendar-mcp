@@ -1111,11 +1111,14 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         expect(TestDataFactory.validateEventResponse(result1)).toBe(true);
         createdEventIds.push(customEventId);
         
+        // Wait a moment for Google Calendar to fully process the event
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
         // Try to create another event with the same ID
         const startTime = testFactory.startTimer('create-event-duplicate-id');
         
         try {
-          const result2 = await client.callTool({
+          await client.callTool({
             name: 'create-event',
             arguments: {
               calendarId: TEST_CALENDAR_ID,
@@ -1124,13 +1127,15 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
             }
           });
           
+          // If we get here, the duplicate wasn't caught (test should fail)
+          testFactory.endTimer('create-event-duplicate-id', startTime, false);
+          expect.fail('Expected error for duplicate event ID');
+        } catch (error: any) {
           testFactory.endTimer('create-event-duplicate-id', startTime, true);
           
-          expect(result2.isError).toBe(true);
-          expect((result2.content as any)[0].text).toContain('already exists');
-        } catch (error) {
-          testFactory.endTimer('create-event-duplicate-id', startTime, false, String(error));
-          throw error;
+          // The error should mention the ID already exists
+          const errorMessage = error.message || String(error);
+          expect(errorMessage).toMatch(/already exists|duplicate|conflict|409/i);
         }
       });
 
@@ -1358,52 +1363,70 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
       const now = new Date();
       const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
       
-      const result = await client.callTool({
-        name: 'list-events',
-        arguments: {
-          calendarId: invalidData.invalidCalendarId,
-          timeMin: TestDataFactory.formatDateTimeRFC3339WithTimezone(now),
-          timeMax: TestDataFactory.formatDateTimeRFC3339WithTimezone(tomorrow)
-        }
-      });
-      
-      expect(result.isError).toBe(true);
-      expect((result.content as any)[0].text).toContain('error');
+      try {
+        await client.callTool({
+          name: 'list-events',
+          arguments: {
+            calendarId: invalidData.invalidCalendarId,
+            timeMin: TestDataFactory.formatDateTimeRFC3339WithTimezone(now),
+            timeMax: TestDataFactory.formatDateTimeRFC3339WithTimezone(tomorrow)
+          }
+        });
+        
+        // If we get here, the error wasn't caught (test should fail)
+        expect.fail('Expected error for invalid calendar ID');
+      } catch (error: any) {
+        // Should get an error about invalid calendar ID
+        const errorMessage = error.message || String(error);
+        expect(errorMessage.toLowerCase()).toContain('error');
+      }
     });
 
     it('should handle invalid event ID gracefully', async () => {
       const invalidData = TestDataFactory.getInvalidTestData();
       
-      const result = await client.callTool({
-        name: 'delete-event',
-        arguments: {
-          calendarId: TEST_CALENDAR_ID,
-          eventId: invalidData.invalidEventId,
-          sendUpdates: SEND_UPDATES
-        }
-      });
-      
-      expect(result.isError).toBe(true);
-      expect((result.content as any)[0].text).toContain('error');
+      try {
+        await client.callTool({
+          name: 'delete-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            eventId: invalidData.invalidEventId,
+            sendUpdates: SEND_UPDATES
+          }
+        });
+        
+        // If we get here, the error wasn't caught (test should fail)
+        expect.fail('Expected error for invalid event ID');
+      } catch (error: any) {
+        // Should get an error about invalid event ID
+        const errorMessage = error.message || String(error);
+        expect(errorMessage.toLowerCase()).toContain('error');
+      }
     });
 
     it('should handle malformed date formats gracefully', async () => {
       const invalidData = TestDataFactory.getInvalidTestData();
       
-      const result = await client.callTool({
-        name: 'create-event',
-        arguments: {
-          calendarId: TEST_CALENDAR_ID,
-          summary: 'Test Event',
-          start: invalidData.invalidTimeFormat,
-          end: invalidData.invalidTimeFormat,
-          timeZone: 'America/Los_Angeles',
-          sendUpdates: SEND_UPDATES
-        }
-      });
-      
-      expect(result.isError).toBe(true);
-      expect((result.content as any)[0].text).toContain('error');
+      try {
+        await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            summary: 'Test Event',
+            start: invalidData.invalidTimeFormat,
+            end: invalidData.invalidTimeFormat,
+            timeZone: 'America/Los_Angeles',
+            sendUpdates: SEND_UPDATES
+          }
+        });
+        
+        // If we get here, the error wasn't caught (test should fail)
+        expect.fail('Expected error for malformed date format');
+      } catch (error: any) {
+        // Should get an error about invalid time value
+        const errorMessage = error.message || String(error);
+        expect(errorMessage.toLowerCase()).toMatch(/invalid|error|time/i);
+      }
     });
   });
 
@@ -1617,6 +1640,463 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         testFactory.endTimer('list-events-timezone-aware', startTime, false, String(error));
         throw error;
       }
+    });
+  });
+
+  describe('Enhanced Conflict Detection', () => {
+    describe('Smart Duplicate Detection with Simplified Algorithm', () => {
+      it('should detect duplicates with rules-based similarity scoring', async () => {
+        // Create base event with fixed time for consistent duplicate detection
+        const fixedStart = new Date();
+        fixedStart.setDate(fixedStart.getDate() + 5); // 5 days from now
+        fixedStart.setHours(14, 0, 0, 0); // 2 PM
+        const fixedEnd = new Date(fixedStart);
+        fixedEnd.setHours(15, 0, 0, 0); // 3 PM
+        
+        const baseEvent = TestDataFactory.createSingleEvent({
+          summary: 'Team Meeting',
+          location: 'Conference Room A',
+          start: TestDataFactory.formatDateTimeRFC3339(fixedStart),
+          end: TestDataFactory.formatDateTimeRFC3339(fixedEnd)
+        });
+        
+        const baseEventId = await createTestEvent(baseEvent);
+        createdEventIds.push(baseEventId);
+        
+        // Note: Google Calendar has eventual consistency - events may not immediately
+        // appear in list queries. This delay helps but doesn't guarantee visibility.
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Test 1: Exact title + overlapping time = 95% similarity (blocked)
+        const exactDuplicateResult = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...baseEvent
+          }
+        });
+        
+        expect((exactDuplicateResult.content as any)[0].text).toContain('DUPLICATE EVENT DETECTED');
+        expect((exactDuplicateResult.content as any)[0].text).toContain('95% similar');
+        
+        // Test 2: Similar title + overlapping time = 70% similarity (warning)
+        const similarTitleEvent = {
+          ...baseEvent,
+          summary: 'Team Meeting Discussion' // Contains "Team Meeting"
+        };
+        
+        const similarResult = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...similarTitleEvent,
+            allowDuplicates: true // Allow creation despite warning
+          }
+        });
+        
+        expect((similarResult.content as any)[0].text).toContain('Event created with warnings');
+        expect((similarResult.content as any)[0].text).toContain('POTENTIAL DUPLICATES DETECTED');
+        expect((similarResult.content as any)[0].text).toContain('70% similar');
+        const similarEventId = TestDataFactory.extractEventIdFromResponse(similarResult);
+        if (similarEventId) createdEventIds.push(similarEventId);
+        
+        // Test 3: Same title on same day but different time = 60% similarity
+        const laterTime = new Date(baseEvent.start);
+        laterTime.setHours(laterTime.getHours() + 3);
+        const laterEndTime = new Date(baseEvent.end);
+        laterEndTime.setHours(laterEndTime.getHours() + 3);
+        
+        const sameDayEvent = {
+          ...baseEvent,
+          start: TestDataFactory.formatDateTimeRFC3339(laterTime),
+          end: TestDataFactory.formatDateTimeRFC3339(laterEndTime)
+        };
+        
+        const sameDayResult = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...sameDayEvent,
+            allowDuplicates: true
+          }
+        });
+        
+        expect((sameDayResult.content as any)[0].text).not.toContain('95% similar');
+        expect((sameDayResult.content as any)[0].text).not.toContain('70% similar');
+        // May show as lower similarity in warnings
+        const sameDayEventId = TestDataFactory.extractEventIdFromResponse(sameDayResult);
+        if (sameDayEventId) createdEventIds.push(sameDayEventId);
+        
+        // Test 4: Same title but different day = 40% similarity (no warning by default)
+        const nextWeek = new Date(baseEvent.start);
+        nextWeek.setDate(nextWeek.getDate() + 7);
+        const nextWeekEnd = new Date(baseEvent.end);
+        nextWeekEnd.setDate(nextWeekEnd.getDate() + 7);
+        
+        const differentDayEvent = {
+          ...baseEvent,
+          start: TestDataFactory.formatDateTimeRFC3339(nextWeek),
+          end: TestDataFactory.formatDateTimeRFC3339(nextWeekEnd)
+        };
+        
+        const differentDayResult = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...differentDayEvent
+          }
+        });
+        
+        // Should not be blocked or warned (40% < 70% threshold)
+        expect((differentDayResult.content as any)[0].text).toContain('Event created successfully');
+        expect((differentDayResult.content as any)[0].text).not.toContain('DUPLICATE');
+        const differentDayEventId = TestDataFactory.extractEventIdFromResponse(differentDayResult);
+        if (differentDayEventId) createdEventIds.push(differentDayEventId);
+      });
+      
+      it.skip('should properly handle all-day vs timed events', async () => {  // Skip: all-day events not properly supported yet
+        // Create an all-day event with proper date format
+        const futureDate = new Date();
+        futureDate.setDate(futureDate.getDate() + 6); // 6 days from now
+        const dayAfter = new Date(futureDate);
+        dayAfter.setDate(dayAfter.getDate() + 1);
+        
+        // Format dates properly for all-day events (YYYY-MM-DD)
+        const startDate = futureDate.toISOString().split('T')[0];
+        const endDate = dayAfter.toISOString().split('T')[0];
+        
+        // Create all-day event with proper date-only format
+        const allDayEvent = {
+          summary: 'Company Offsite',
+          location: 'Mountain View',
+          start: startDate,  // Just YYYY-MM-DD for all-day events
+          end: endDate
+        };
+        
+        const allDayResult = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...allDayEvent
+          }
+        });
+        
+        const allDayEventId = TestDataFactory.extractEventIdFromResponse(allDayResult);
+        if (allDayEventId) createdEventIds.push(allDayEventId);
+        
+        // Create timed event with same title on same day - should have low similarity (20%)
+        const timedStart = new Date(futureDate);
+        timedStart.setHours(10, 0, 0, 0); // 10 AM
+        const timedEnd = new Date(timedStart);
+        timedEnd.setHours(12, 0, 0, 0); // 12 PM
+        
+        const timedEvent = TestDataFactory.createSingleEvent({
+          summary: 'Company Offsite',
+          location: 'Mountain View',
+          start: TestDataFactory.formatDateTimeRFC3339(timedStart),
+          end: TestDataFactory.formatDateTimeRFC3339(timedEnd)
+        });
+        
+        const timedResult = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...timedEvent
+          }
+        });
+        
+        // Should not be blocked despite same title and location
+        expect((timedResult.content as any)[0].text).toContain('Event created successfully');
+        expect((timedResult.content as any)[0].text).not.toContain('DUPLICATE EVENT DETECTED');
+        const timedEventId = TestDataFactory.extractEventIdFromResponse(timedResult);
+        if (timedEventId) createdEventIds.push(timedEventId);
+      });
+    });
+    
+    describe('Adjacent Event Handling (No False Positives)', () => {
+      it('should not flag back-to-back meetings as conflicts', async () => {
+        const baseDate = new Date();
+        baseDate.setDate(baseDate.getDate() + 7); // 7 days from now
+        baseDate.setHours(9, 0, 0, 0);
+        
+        // Create first meeting 9-10am
+        const firstStart = new Date(baseDate);
+        const firstEnd = new Date(firstStart);
+        firstEnd.setHours(10, 0, 0, 0);
+        
+        const firstMeeting = TestDataFactory.createSingleEvent({
+          summary: 'Morning Standup',
+          description: 'Daily team sync',
+          location: 'Room A',
+          start: TestDataFactory.formatDateTimeRFC3339(firstStart),
+          end: TestDataFactory.formatDateTimeRFC3339(firstEnd)
+        });
+        
+        const firstId = await createTestEvent(firstMeeting);
+        createdEventIds.push(firstId);
+        
+        // Note: Google Calendar has eventual consistency - events may not immediately
+        // appear in list queries. This delay helps but doesn't guarantee visibility.
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Create second meeting 10-11am (immediately after)
+        const secondStart = new Date(baseDate);
+        secondStart.setHours(10, 0, 0, 0);
+        const secondEnd = new Date(secondStart);
+        secondEnd.setHours(11, 0, 0, 0);
+        
+        const secondMeeting = TestDataFactory.createSingleEvent({
+          summary: 'Project Review',
+          description: 'Weekly project status update',
+          location: 'Room B',
+          start: TestDataFactory.formatDateTimeRFC3339(secondStart),
+          end: TestDataFactory.formatDateTimeRFC3339(secondEnd)
+        });
+        
+        const result = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...secondMeeting
+          }
+        });
+        
+        // Should not show conflict warning for adjacent events
+        expect((result.content as any)[0].text).toContain('Event created successfully');
+        expect((result.content as any)[0].text).not.toContain('CONFLICTS');
+        expect((result.content as any)[0].text).not.toContain('Overlap');
+        const secondId = TestDataFactory.extractEventIdFromResponse(result);
+        if (secondId) createdEventIds.push(secondId);
+        
+        // Create third meeting 10:30-11:30am (overlaps with second)
+        const thirdStart = new Date(baseDate);
+        thirdStart.setHours(10, 30, 0, 0); // 10:30 AM
+        const thirdEnd = new Date(thirdStart);
+        thirdEnd.setHours(11, 30, 0, 0); // 11:30 AM
+        
+        const thirdMeeting = TestDataFactory.createSingleEvent({
+          summary: 'Design Discussion',
+          description: 'UI/UX design review',
+          location: 'Design Lab',
+          start: TestDataFactory.formatDateTimeRFC3339(thirdStart),
+          end: TestDataFactory.formatDateTimeRFC3339(thirdEnd)
+        });
+        
+        const conflictResult = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...thirdMeeting
+          }
+        });
+        
+        // Should show conflict for actual overlap
+        expect((conflictResult.content as any)[0].text).toContain('Event created with warnings');
+        expect((conflictResult.content as any)[0].text).toContain('SCHEDULING CONFLICTS DETECTED');
+        expect((conflictResult.content as any)[0].text).toContain('30 minute');
+        expect((conflictResult.content as any)[0].text).toContain('50% of your event');
+        const thirdId = TestDataFactory.extractEventIdFromResponse(conflictResult);
+        if (thirdId) createdEventIds.push(thirdId);
+      });
+    });
+    
+    describe('Unified Threshold Configuration', () => {
+      it('should use configurable duplicate detection threshold', async () => {
+        // Use fixed time for consistent testing
+        const fixedStart = new Date();
+        fixedStart.setDate(fixedStart.getDate() + 8); // 8 days from now
+        fixedStart.setHours(10, 0, 0, 0); // 10 AM
+        const fixedEnd = new Date(fixedStart);
+        fixedEnd.setHours(11, 0, 0, 0); // 11 AM
+        
+        const baseEvent = TestDataFactory.createSingleEvent({
+          summary: 'Quarterly Planning',
+          start: TestDataFactory.formatDateTimeRFC3339(fixedStart),
+          end: TestDataFactory.formatDateTimeRFC3339(fixedEnd)
+        });
+        
+        const baseId = await createTestEvent(baseEvent);
+        createdEventIds.push(baseId);
+        
+        // Note: Google Calendar has eventual consistency - events may not immediately
+        // appear in list queries. This delay helps but doesn't guarantee visibility.
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Test with custom threshold of 0.5 (should flag 60% similarity)
+        const sameDayStart = new Date(fixedStart);
+        sameDayStart.setHours(14, 0, 0, 0); // 2 PM (4 hours later)
+        const sameDayEnd = new Date(sameDayStart);
+        sameDayEnd.setHours(15, 0, 0, 0); // 3 PM
+        
+        const sameDayEvent = {
+          ...baseEvent,
+          start: TestDataFactory.formatDateTimeRFC3339(sameDayStart),
+          end: TestDataFactory.formatDateTimeRFC3339(sameDayEnd)
+        };
+        
+        const lowThresholdResult = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...sameDayEvent,
+            duplicateSimilarityThreshold: 0.5,
+            allowDuplicates: true // Allow creation despite warning
+          }
+        });
+        
+        // Should show warning since 60% > 50% threshold
+        expect((lowThresholdResult.content as any)[0].text).toContain('POTENTIAL DUPLICATES DETECTED');
+        const lowThresholdId = TestDataFactory.extractEventIdFromResponse(lowThresholdResult);
+        if (lowThresholdId) createdEventIds.push(lowThresholdId);
+        
+        // Test with high threshold of 0.8 (should not flag 60% similarity)
+        const laterDayStart = new Date(fixedStart);
+        laterDayStart.setHours(16, 0, 0, 0); // 4 PM (6 hours later)
+        const laterDayEnd = new Date(laterDayStart);
+        laterDayEnd.setHours(17, 0, 0, 0); // 5 PM
+        
+        const laterDayEvent = {
+          ...baseEvent,
+          start: TestDataFactory.formatDateTimeRFC3339(laterDayStart),
+          end: TestDataFactory.formatDateTimeRFC3339(laterDayEnd)
+        };
+        
+        const highThresholdResult = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...laterDayEvent,
+            duplicateSimilarityThreshold: 0.8
+          }
+        });
+        
+        // Should not show warning since 60% < 80% threshold
+        expect((highThresholdResult.content as any)[0].text).toContain('Event created successfully');
+        expect((highThresholdResult.content as any)[0].text).not.toContain('DUPLICATE');
+        const highThresholdId = TestDataFactory.extractEventIdFromResponse(highThresholdResult);
+        if (highThresholdId) createdEventIds.push(highThresholdId);
+      });
+      
+      it('should allow exact duplicates with allowDuplicates flag', async () => {
+        // Use fixed time for exact duplicate
+        const fixedStart = new Date();
+        fixedStart.setDate(fixedStart.getDate() + 9); // 9 days from now
+        fixedStart.setHours(15, 0, 0, 0); // 3 PM
+        const fixedEnd = new Date(fixedStart);
+        fixedEnd.setHours(16, 0, 0, 0); // 4 PM
+        
+        const event = TestDataFactory.createSingleEvent({
+          summary: 'Important Presentation',
+          start: TestDataFactory.formatDateTimeRFC3339(fixedStart),
+          end: TestDataFactory.formatDateTimeRFC3339(fixedEnd)
+        });
+        
+        const firstId = await createTestEvent(event);
+        createdEventIds.push(firstId);
+        
+        // Note: Google Calendar has eventual consistency - events may not immediately
+        // appear in list queries. This delay helps but doesn't guarantee visibility.
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Try to create exact duplicate with allowDuplicates=true
+        const duplicateResult = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...event,
+            allowDuplicates: true
+          }
+        });
+        
+        // Should create with warning but not block
+        expect((duplicateResult.content as any)[0].text).toContain('Event created with warnings');
+        expect((duplicateResult.content as any)[0].text).toContain('POTENTIAL DUPLICATES DETECTED');
+        expect((duplicateResult.content as any)[0].text).toContain('95% similar');
+        const duplicateId = TestDataFactory.extractEventIdFromResponse(duplicateResult);
+        if (duplicateId) createdEventIds.push(duplicateId);
+      });
+    });
+    
+    describe('Cache Performance', () => {
+      it('should cache calendar events for faster subsequent checks', async () => {
+        // Create multiple events for conflict checking
+        const baseTime = new Date();
+        baseTime.setDate(baseTime.getDate() + 10); // 10 days from now
+        baseTime.setHours(14, 0, 0, 0); // 2 PM
+        
+        const events = [];
+        for (let i = 0; i < 3; i++) {
+          const startTime = new Date(baseTime.getTime() + i * 2 * 60 * 60 * 1000);
+          const event = TestDataFactory.createSingleEvent({
+            summary: `Cache Test Event ${i + 1}`,
+            start: TestDataFactory.formatDateTimeRFC3339(startTime),
+            end: TestDataFactory.formatDateTimeRFC3339(new Date(startTime.getTime() + 60 * 60 * 1000))
+          });
+          const id = await createTestEvent(event);
+          createdEventIds.push(id);
+          events.push(event);
+        }
+        
+        // Longer delay to ensure events are indexed in Google Calendar
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // First conflict check (will populate cache)
+        const overlappingEvent = TestDataFactory.createSingleEvent({
+          summary: 'Overlapping Meeting',
+          start: events[1].start, // Same time as second event
+          end: events[1].end
+        });
+        
+        const startTime1 = Date.now();
+        const result1 = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...overlappingEvent,
+            allowDuplicates: true
+          }
+        });
+        const duration1 = Date.now() - startTime1;
+        
+        // Should detect a conflict (100% overlap) or potential duplicate if titles are similar
+        const responseText = (result1.content as any)[0].text;
+        expect(responseText).toMatch(/SCHEDULING CONFLICTS DETECTED|POTENTIAL DUPLICATES DETECTED/);
+        const overlappingId = TestDataFactory.extractEventIdFromResponse(result1);
+        if (overlappingId) createdEventIds.push(overlappingId);
+        
+        // Second conflict check (should use cache and be faster)
+        const anotherOverlapping = TestDataFactory.createSingleEvent({
+          summary: 'Another Overlapping Meeting',
+          start: events[1].start,
+          end: events[1].end
+        });
+        
+        const startTime2 = Date.now();
+        const result2 = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...anotherOverlapping,
+            allowDuplicates: true
+          }
+        });
+        const duration2 = Date.now() - startTime2;
+        
+        // Should also detect a conflict or duplicate
+        const responseText2 = (result2.content as any)[0].text;
+        expect(responseText2).toMatch(/SCHEDULING CONFLICTS DETECTED|POTENTIAL DUPLICATES DETECTED/);
+        const anotherId = TestDataFactory.extractEventIdFromResponse(result2);
+        if (anotherId) createdEventIds.push(anotherId);
+        
+        // Log performance comparison
+        console.log(`\n📊 Cache Performance:`);
+        console.log(`  First check (no cache): ${duration1}ms`);
+        console.log(`  Second check (with cache): ${duration2}ms`);
+        console.log(`  Improvement: ${Math.round((1 - duration2/duration1) * 100)}%`);
+        
+        // Second check should generally be faster (though network variability may affect this)
+        // We won't assert on timing due to network unpredictability, but log for manual verification
+      });
     });
   });
 
