@@ -7,10 +7,10 @@ import { createEventResponseWithConflicts, formatConflictWarnings } from "../uti
 import { createTimeObject } from "../utils/datetime.js";
 import { validateEventId } from "../../utils/event-id-validator.js";
 import { ConflictDetectionService } from "../../services/conflict-detection/index.js";
+import { CONFLICT_DETECTION_CONFIG } from "../../services/conflict-detection/config.js";
 
 export class CreateEventHandler extends BaseToolHandler {
     private conflictDetectionService: ConflictDetectionService;
-    private readonly DUPLICATE_THRESHOLD = 0.7; // Single unified threshold for duplicate detection
     
     constructor() {
         super();
@@ -40,12 +40,14 @@ export class CreateEventHandler extends BaseToolHandler {
                 checkDuplicates: true,
                 checkConflicts: true,
                 calendarsToCheck: validArgs.calendarsToCheck || [validArgs.calendarId],
-                duplicateSimilarityThreshold: validArgs.duplicateSimilarityThreshold || this.DUPLICATE_THRESHOLD
+                duplicateSimilarityThreshold: validArgs.duplicateSimilarityThreshold || CONFLICT_DETECTION_CONFIG.DEFAULT_DUPLICATE_THRESHOLD
             }
         );
         
-        // Block creation if exact or near-exact duplicate found (95% similarity from new rules)
-        const exactDuplicate = conflicts.duplicates.find(dup => dup.event.similarity >= 0.95);
+        // Block creation if exact or near-exact duplicate found
+        const exactDuplicate = conflicts.duplicates.find(
+            dup => dup.event.similarity >= CONFLICT_DETECTION_CONFIG.DUPLICATE_THRESHOLDS.BLOCKING
+        );
         if (exactDuplicate && validArgs.allowDuplicates !== true) {
             // Format the duplicate details
             const duplicateDetails = formatConflictWarnings({
@@ -57,7 +59,8 @@ export class CreateEventHandler extends BaseToolHandler {
             // Remove the "POTENTIAL DUPLICATES DETECTED" header since we're blocking
             const cleanedDetails = duplicateDetails.replace('⚠️ POTENTIAL DUPLICATES DETECTED:', '').trim();
             
-            let blockMessage = `⚠️ DUPLICATE EVENT DETECTED!\n\n`;
+            const similarityPercentage = Math.round(exactDuplicate.event.similarity * 100);
+            let blockMessage = `⚠️ DUPLICATE EVENT DETECTED (${similarityPercentage}% similar)!\n\n`;
             blockMessage += cleanedDetails;
             blockMessage += `\n\nThis event appears to be a duplicate. To create anyway, set allowDuplicates to true.`;
             

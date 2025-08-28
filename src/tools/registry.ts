@@ -209,9 +209,6 @@ export const ToolSchemas = {
     }).optional().describe(
       "Source of the event, such as a web page or email message."
     ),
-    eventId: z.string().optional().describe(
-      "Optional custom event ID (5-1024 characters, base32hex encoding: lowercase letters a-v and digits 0-9 only). If not provided, Google Calendar will generate one."
-    ),
     calendarsToCheck: z.array(z.string()).optional().describe(
       "List of calendar IDs to check for conflicts (defaults to just the target calendar)"
     ),

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { CreateEventHandler } from '../../../handlers/core/CreateEventHandler.js';
 import { OAuth2Client } from 'google-auth-library';
 import { calendar_v3 } from 'googleapis';
+import { CONFLICT_DETECTION_CONFIG } from '../../../services/conflict-detection/config.js';
 
 describe('CreateEventHandler Blocking Logic', () => {
   const mockOAuth2Client = {
@@ -62,10 +63,10 @@ describe('CreateEventHandler Blocking Logic', () => {
     const result = await handler.runTool(args, mockOAuth2Client);
     const response = result.content[0].text;
 
-    // Verify the response format
-    expect(response).toContain('⚠️ DUPLICATE EVENT DETECTED!');
+    // Verify the response format - now includes similarity percentage
+    expect(response).toContain('⚠️ DUPLICATE EVENT DETECTED (100% similar)!');
     
-    // Should show similarity percentage
+    // Should show similarity percentage in the header
     expect(response).toContain('100% similar');
     
     // Should show the duplicate suggestion
@@ -86,10 +87,10 @@ describe('CreateEventHandler Blocking Logic', () => {
     expect(response).toContain('To create anyway, set allowDuplicates to true.');
   });
 
-  it('should use configurable threshold', () => {
-    const handler = new CreateEventHandler();
-    
-    // Check that the unified threshold is properly defined
-    expect(handler['DUPLICATE_THRESHOLD']).toBe(0.7);
+  it('should use centralized threshold configuration', () => {
+    // Verify that the config has the expected thresholds
+    expect(CONFLICT_DETECTION_CONFIG.DEFAULT_DUPLICATE_THRESHOLD).toBe(0.7);
+    expect(CONFLICT_DETECTION_CONFIG.DUPLICATE_THRESHOLDS.WARNING).toBe(0.7);
+    expect(CONFLICT_DETECTION_CONFIG.DUPLICATE_THRESHOLDS.BLOCKING).toBe(0.95);
   });
 });

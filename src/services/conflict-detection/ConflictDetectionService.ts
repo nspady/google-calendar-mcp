@@ -8,6 +8,7 @@ import {
 } from "./types.js";
 import { EventSimilarityChecker } from "./EventSimilarityChecker.js";
 import { ConflictAnalyzer } from "./ConflictAnalyzer.js";
+import { CONFLICT_DETECTION_CONFIG } from "./config.js";
 import { getEventUrl } from "../../handlers/utils.js";
 
 /**
@@ -45,7 +46,7 @@ export class ConflictDetectionService {
       checkDuplicates = true,
       checkConflicts = true,
       calendarsToCheck = [calendarId],
-      duplicateSimilarityThreshold = 0.7,
+      duplicateSimilarityThreshold = CONFLICT_DETECTION_CONFIG.DEFAULT_DUPLICATE_THRESHOLD,
       includeDeclinedEvents = false
     } = options;
 
@@ -268,7 +269,7 @@ export class ConflictDetectionService {
           },
           fullEvent: existingEvent,
           calendarId: calendarId,
-          suggestion: similarity > 0.9 
+          suggestion: similarity >= CONFLICT_DETECTION_CONFIG.DUPLICATE_THRESHOLDS.BLOCKING
             ? 'This appears to be a duplicate. Consider updating the existing event instead.'
             : 'This event is very similar to an existing one. Is this intentional?'
         });
