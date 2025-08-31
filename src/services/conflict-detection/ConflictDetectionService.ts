@@ -10,6 +10,7 @@ import { EventSimilarityChecker } from "./EventSimilarityChecker.js";
 import { ConflictAnalyzer } from "./ConflictAnalyzer.js";
 import { CONFLICT_DETECTION_CONFIG } from "./config.js";
 import { getEventUrl } from "../../handlers/utils.js";
+import { convertToRFC3339 } from "../../handlers/utils/datetime.js";
 
 /**
  * Service for detecting event conflicts and duplicates.
@@ -24,13 +25,10 @@ import { getEventUrl } from "../../handlers/utils.js";
 export class ConflictDetectionService {
   private similarityChecker: EventSimilarityChecker;
   private conflictAnalyzer: ConflictAnalyzer;
-  private eventCache: Map<string, { events: calendar_v3.Schema$Event[]; timestamp: number }>;
-  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
   
   constructor() {
     this.similarityChecker = new EventSimilarityChecker();
     this.conflictAnalyzer = new ConflictAnalyzer();
-    this.eventCache = new Map();
   }
 
   /**
@@ -71,44 +69,25 @@ export class ConflictDetectionService {
     // Extract timezone if present (prefer start time's timezone)
     const timezone = event.start.timeZone || event.end.timeZone;
     
-    // For duplicate detection, we need to search a wider time range
-    // to find events that might be duplicates but at different times on the same day
-    // For conflict detection, we also need a slightly wider range to catch overlaps
-    let searchTimeMin = timeMin;
-    let searchTimeMax = timeMax;
     
-    if (checkDuplicates || checkConflicts) {
-      // Extend search range to the entire day for duplicate detection
-      // or add buffer for conflict detection
-      const startDate = new Date(timeMin);
-      const endDate = new Date(timeMax);
+    // The Google Calendar API requires RFC3339 format for timeMin/timeMax
+    // If we have timezone-naive datetimes with a timezone field, convert them to proper RFC3339
+    // Check for minus but exclude the date separator (e.g., 2025-09-05)
+    const needsConversion = timezone && timeMin && 
+      !timeMin.includes('Z') && 
+      !timeMin.includes('+') && 
+      !timeMin.substring(10).includes('-'); // Only check for minus after the date part
       
-      if (checkDuplicates) {
-        // For duplicates, search the entire day
-        // Set to start of day
-        const dayStart = new Date(startDate);
-        dayStart.setHours(0, 0, 0, 0);
-        
-        // Set to end of day (next day at midnight)
-        const dayEnd = new Date(endDate);
-        dayEnd.setHours(23, 59, 59, 999);
-        
-        // Convert back to ISO strings
-        searchTimeMin = dayStart.toISOString();
-        searchTimeMax = dayEnd.toISOString();
-      } else if (checkConflicts) {
-        // For conflicts only, add a small buffer to catch events that might start/end
-        // slightly before or after our event
-        const bufferStart = new Date(startDate);
-        bufferStart.setHours(bufferStart.getHours() - 1); // 1 hour before
-        
-        const bufferEnd = new Date(endDate);  
-        bufferEnd.setHours(bufferEnd.getHours() + 1); // 1 hour after
-        
-        searchTimeMin = bufferStart.toISOString();
-        searchTimeMax = bufferEnd.toISOString();
-      }
+    if (needsConversion) {
+      timeMin = convertToRFC3339(timeMin, timezone);
+      timeMax = convertToRFC3339(timeMax, timezone);
     }
+    
+    
+    // Use the exact time range provided for searching
+    // This ensures duplicate detection only flags events that actually overlap
+    const searchTimeMin = timeMin;
+    const searchTimeMax = timeMax;
 
     // Check each calendar
     for (const checkCalendarId of calendarsToCheck) {
@@ -121,14 +100,6 @@ export class ConflictDetectionService {
           searchTimeMax,
           timezone || undefined
         );
-
-        // Debug logging
-        if (process.env.DEBUG_CONFLICT_DETECTION) {
-          console.error(`[ConflictDetection] Found ${events.length} events in range ${searchTimeMin} to ${searchTimeMax}`);
-          events.forEach(e => {
-            console.error(`[ConflictDetection]   - ${e.summary} at ${e.start?.dateTime || e.start?.date}`);
-          });
-        }
 
         // Check for duplicates
         if (checkDuplicates) {
@@ -162,7 +133,7 @@ export class ConflictDetectionService {
   }
 
   /**
-   * Get events in a specific time range from a calendar with caching
+   * Get events in a specific time range from a calendar
    */
   private async getEventsInTimeRange(
     oauth2Client: OAuth2Client,
@@ -171,15 +142,6 @@ export class ConflictDetectionService {
     timeMax: string,
     timeZone?: string
   ): Promise<calendar_v3.Schema$Event[]> {
-    // Create cache key from calendar ID and time range
-    const cacheKey = `${calendarId}:${timeMin}:${timeMax}:${timeZone || ''}`;
-    
-    // Check cache
-    const cached = this.eventCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
-      return cached.events;
-    }
-    
     // Fetch from API
     const calendar = google.calendar({ version: "v3", auth: oauth2Client });
     
@@ -201,34 +163,13 @@ export class ConflictDetectionService {
       listParams.timeZone = timeZone;
     }
     
+    
     // Use exact time range without extension to avoid false positives
     const response = await calendar.events.list(listParams);
 
     const events = response?.data?.items || [];
     
-    
-    // Update cache
-    this.eventCache.set(cacheKey, {
-      events,
-      timestamp: Date.now()
-    });
-    
-    // Clean old cache entries
-    this.cleanCache();
-    
     return events;
-  }
-  
-  /**
-   * Remove expired cache entries
-   */
-  private cleanCache(): void {
-    const now = Date.now();
-    for (const [key, value] of this.eventCache.entries()) {
-      if (now - value.timestamp > this.CACHE_TTL) {
-        this.eventCache.delete(key);
-      }
-    }
   }
 
   /**
@@ -242,6 +183,7 @@ export class ConflictDetectionService {
   ): DuplicateInfo[] {
     const duplicates: DuplicateInfo[] = [];
 
+
     for (const existingEvent of existingEvents) {
       // Skip if it's the same event (for updates)
       if (existingEvent.id === newEvent.id) continue;
@@ -251,13 +193,6 @@ export class ConflictDetectionService {
 
       const similarity = this.similarityChecker.checkSimilarity(newEvent, existingEvent);
       
-      // Debug logging
-      if (process.env.DEBUG_CONFLICT_DETECTION && similarity > 0) {
-        console.error(`[ConflictDetection] Similarity check:`);
-        console.error(`[ConflictDetection]   New: ${newEvent.summary} ${newEvent.start?.dateTime || newEvent.start?.date}`);
-        console.error(`[ConflictDetection]   Existing: ${existingEvent.summary} ${existingEvent.start?.dateTime || existingEvent.start?.date}`);
-        console.error(`[ConflictDetection]   Similarity: ${similarity}`);
-      }
       
       if (similarity >= threshold) {
         duplicates.push({
@@ -275,6 +210,7 @@ export class ConflictDetectionService {
         });
       }
     }
+
 
     return duplicates;
   }

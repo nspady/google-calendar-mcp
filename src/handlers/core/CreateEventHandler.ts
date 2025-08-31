@@ -48,7 +48,9 @@ export class CreateEventHandler extends BaseToolHandler {
         const exactDuplicate = conflicts.duplicates.find(
             dup => dup.event.similarity >= CONFLICT_DETECTION_CONFIG.DUPLICATE_THRESHOLDS.BLOCKING
         );
+        
         if (exactDuplicate && validArgs.allowDuplicates !== true) {
+            
             // Format the duplicate details
             const duplicateDetails = formatConflictWarnings({
                 hasConflicts: true,

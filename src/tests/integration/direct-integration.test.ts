@@ -78,24 +78,34 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
   }, 30000);
 
   afterAll(async () => {
+    console.log('\n🏁 Starting final cleanup...');
+    
     // Final cleanup - ensure all test events are removed
-    await cleanupAllTestEvents();
+    const allEventIds = testFactory.getCreatedEventIds();
+    if (allEventIds.length > 0) {
+      console.log(`📋 Found ${allEventIds.length} total events created during all tests`);
+      await cleanupAllTestEvents();
+    } else {
+      console.log('✨ No additional events to clean up');
+    }
     
     // Close client connection
     if (client) {
       await client.close();
+      console.log('🔌 Closed MCP client connection');
     }
     
     // Terminate server process
     if (serverProcess && !serverProcess.killed) {
       serverProcess.kill();
       await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('🛑 Terminated MCP server process');
     }
 
     // Log performance summary
     logPerformanceSummary();
     
-    console.log('🧹 Integration test cleanup completed');
+    console.log('✅ Integration test cleanup completed successfully\n');
   }, 30000);
 
   beforeEach(() => {
@@ -105,8 +115,11 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
 
   afterEach(async () => {
     // Cleanup events created in this test
-    await cleanupTestEvents(createdEventIds);
-    createdEventIds = [];
+    if (createdEventIds.length > 0) {
+      console.log(`🧹 Cleaning up ${createdEventIds.length} events from test...`);
+      await cleanupTestEvents(createdEventIds);
+      createdEventIds = [];
+    }
   });
 
   describe('Tool Availability and Basic Functionality', () => {
@@ -1653,6 +1666,43 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         const fixedEnd = new Date(fixedStart);
         fixedEnd.setHours(15, 0, 0, 0); // 3 PM
         
+        // Pre-check: Clear any existing events in this time window
+        const timeRangeStart = new Date(fixedStart);
+        timeRangeStart.setHours(0, 0, 0, 0); // Start of day
+        const timeRangeEnd = new Date(fixedStart);
+        timeRangeEnd.setHours(23, 59, 59, 999); // End of day
+        
+        const existingEventsResult = await client.callTool({
+          name: 'list-events',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            timeMin: TestDataFactory.formatDateTimeRFC3339(timeRangeStart),
+            timeMax: TestDataFactory.formatDateTimeRFC3339(timeRangeEnd)
+          }
+        });
+        
+        // Delete any existing events found
+        const existingEventIds = TestDataFactory.extractAllEventIds(existingEventsResult);
+        if (existingEventIds.length > 0) {
+          console.log(`🧹 Pre-test cleanup: Removing ${existingEventIds.length} existing events from test time window`);
+          for (const eventId of existingEventIds) {
+            try {
+              await client.callTool({
+                name: 'delete-event',
+                arguments: {
+                  calendarId: TEST_CALENDAR_ID,
+                  eventId,
+                  sendUpdates: SEND_UPDATES
+                }
+              });
+            } catch (error) {
+              // Ignore errors - event might be protected or already deleted
+            }
+          }
+          // Wait for deletions to propagate
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+        
         const baseEvent = TestDataFactory.createSingleEvent({
           summary: 'Team Meeting',
           location: 'Conference Room A',
@@ -1700,7 +1750,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         const similarEventId = TestDataFactory.extractEventIdFromResponse(similarResult);
         if (similarEventId) createdEventIds.push(similarEventId);
         
-        // Test 3: Same title on same day but different time = 60% similarity
+        // Test 3: Same title on same day but different time = NO DUPLICATE (different time window)
         const laterTime = new Date(baseEvent.start);
         laterTime.setHours(laterTime.getHours() + 3);
         const laterEndTime = new Date(baseEvent.end);
@@ -1716,18 +1766,18 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           name: 'create-event',
           arguments: {
             calendarId: TEST_CALENDAR_ID,
-            ...sameDayEvent,
-            allowDuplicates: true
+            ...sameDayEvent
           }
         });
         
-        expect((sameDayResult.content as any)[0].text).not.toContain('95% similar');
-        expect((sameDayResult.content as any)[0].text).not.toContain('70% similar');
-        // May show as lower similarity in warnings
+        // With exact time window search, events at different times are NOT detected as duplicates
+        expect((sameDayResult.content as any)[0].text).toContain('Event created successfully');
+        expect((sameDayResult.content as any)[0].text).not.toContain('DUPLICATE');
+        expect((sameDayResult.content as any)[0].text).not.toContain('similar');
         const sameDayEventId = TestDataFactory.extractEventIdFromResponse(sameDayResult);
         if (sameDayEventId) createdEventIds.push(sameDayEventId);
         
-        // Test 4: Same title but different day = 40% similarity (no warning by default)
+        // Test 4: Same title but different day = NO DUPLICATE (different time window)
         const nextWeek = new Date(baseEvent.start);
         nextWeek.setDate(nextWeek.getDate() + 7);
         const nextWeekEnd = new Date(baseEvent.end);
@@ -1747,7 +1797,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           }
         });
         
-        // Should not be blocked or warned (40% < 70% threshold)
+        // With exact time window search, events on different days are NOT detected as duplicates
         expect((differentDayResult.content as any)[0].text).toContain('Event created successfully');
         expect((differentDayResult.content as any)[0].text).not.toContain('DUPLICATE');
         const differentDayEventId = TestDataFactory.extractEventIdFromResponse(differentDayResult);
@@ -1818,6 +1868,43 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         const baseDate = new Date();
         baseDate.setDate(baseDate.getDate() + 7); // 7 days from now
         baseDate.setHours(9, 0, 0, 0);
+        
+        // Pre-check: Clear any existing events in this time window
+        const timeRangeStart = new Date(baseDate);
+        timeRangeStart.setHours(0, 0, 0, 0); // Start of day
+        const timeRangeEnd = new Date(baseDate);
+        timeRangeEnd.setHours(23, 59, 59, 999); // End of day
+        
+        const existingEventsResult = await client.callTool({
+          name: 'list-events',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            timeMin: TestDataFactory.formatDateTimeRFC3339(timeRangeStart),
+            timeMax: TestDataFactory.formatDateTimeRFC3339(timeRangeEnd)
+          }
+        });
+        
+        // Delete any existing events found
+        const existingEventIds = TestDataFactory.extractAllEventIds(existingEventsResult);
+        if (existingEventIds.length > 0) {
+          console.log(`🧹 Pre-test cleanup: Removing ${existingEventIds.length} existing events from test time window`);
+          for (const eventId of existingEventIds) {
+            try {
+              await client.callTool({
+                name: 'delete-event',
+                arguments: {
+                  calendarId: TEST_CALENDAR_ID,
+                  eventId,
+                  sendUpdates: SEND_UPDATES
+                }
+              });
+            } catch (error) {
+              // Ignore errors - event might be protected or already deleted
+            }
+          }
+          // Wait for deletions to propagate
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
         
         // Create first meeting 9-10am
         const firstStart = new Date(baseDate);
@@ -1909,6 +1996,43 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         const fixedEnd = new Date(fixedStart);
         fixedEnd.setHours(11, 0, 0, 0); // 11 AM
         
+        // Pre-check: Clear any existing events in this time window
+        const timeRangeStart = new Date(fixedStart);
+        timeRangeStart.setHours(0, 0, 0, 0); // Start of day
+        const timeRangeEnd = new Date(fixedStart);
+        timeRangeEnd.setHours(23, 59, 59, 999); // End of day
+        
+        const existingEventsResult = await client.callTool({
+          name: 'list-events',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            timeMin: TestDataFactory.formatDateTimeRFC3339(timeRangeStart),
+            timeMax: TestDataFactory.formatDateTimeRFC3339(timeRangeEnd)
+          }
+        });
+        
+        // Delete any existing events found
+        const existingEventIds = TestDataFactory.extractAllEventIds(existingEventsResult);
+        if (existingEventIds.length > 0) {
+          console.log(`🧹 Pre-test cleanup: Removing ${existingEventIds.length} existing events from test time window`);
+          for (const eventId of existingEventIds) {
+            try {
+              await client.callTool({
+                name: 'delete-event',
+                arguments: {
+                  calendarId: TEST_CALENDAR_ID,
+                  eventId,
+                  sendUpdates: SEND_UPDATES
+                }
+              });
+            } catch (error) {
+              // Ignore errors - event might be protected or already deleted
+            }
+          }
+          // Wait for deletions to propagate
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+        
         const baseEvent = TestDataFactory.createSingleEvent({
           summary: 'Quarterly Planning',
           start: TestDataFactory.formatDateTimeRFC3339(fixedStart),
@@ -1922,55 +2046,43 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         // appear in list queries. This delay helps but doesn't guarantee visibility.
         await new Promise(resolve => setTimeout(resolve, 3000));
         
-        // Test with custom threshold of 0.5 (should flag 60% similarity)
-        const sameDayStart = new Date(fixedStart);
-        sameDayStart.setHours(14, 0, 0, 0); // 2 PM (4 hours later)
-        const sameDayEnd = new Date(sameDayStart);
-        sameDayEnd.setHours(15, 0, 0, 0); // 3 PM
-        
-        const sameDayEvent = {
+        // Test with custom threshold of 0.5 for similar title at same time
+        const similarEvent = {
           ...baseEvent,
-          start: TestDataFactory.formatDateTimeRFC3339(sameDayStart),
-          end: TestDataFactory.formatDateTimeRFC3339(sameDayEnd)
+          summary: 'Quarterly Planning Meeting'  // Similar but not identical title
         };
         
         const lowThresholdResult = await client.callTool({
           name: 'create-event',
           arguments: {
             calendarId: TEST_CALENDAR_ID,
-            ...sameDayEvent,
+            ...similarEvent,
             duplicateSimilarityThreshold: 0.5,
             allowDuplicates: true // Allow creation despite warning
           }
         });
         
-        // Should show warning since 60% > 50% threshold
+        // Should show warning since similarity > 50% threshold
         expect((lowThresholdResult.content as any)[0].text).toContain('POTENTIAL DUPLICATES DETECTED');
         const lowThresholdId = TestDataFactory.extractEventIdFromResponse(lowThresholdResult);
         if (lowThresholdId) createdEventIds.push(lowThresholdId);
         
-        // Test with high threshold of 0.8 (should not flag 60% similarity)
-        const laterDayStart = new Date(fixedStart);
-        laterDayStart.setHours(16, 0, 0, 0); // 4 PM (6 hours later)
-        const laterDayEnd = new Date(laterDayStart);
-        laterDayEnd.setHours(17, 0, 0, 0); // 5 PM
-        
-        const laterDayEvent = {
+        // Test with high threshold of 0.9 (should not flag ~70% similarity)
+        const slightlyDifferentEvent = {
           ...baseEvent,
-          start: TestDataFactory.formatDateTimeRFC3339(laterDayStart),
-          end: TestDataFactory.formatDateTimeRFC3339(laterDayEnd)
+          summary: 'Q4 Planning'  // Different enough title to be below 90% threshold
         };
         
         const highThresholdResult = await client.callTool({
           name: 'create-event',
           arguments: {
             calendarId: TEST_CALENDAR_ID,
-            ...laterDayEvent,
-            duplicateSimilarityThreshold: 0.8
+            ...slightlyDifferentEvent,
+            duplicateSimilarityThreshold: 0.9
           }
         });
         
-        // Should not show warning since 60% < 80% threshold
+        // Should not show warning since similarity < 90% threshold
         expect((highThresholdResult.content as any)[0].text).toContain('Event created successfully');
         expect((highThresholdResult.content as any)[0].text).not.toContain('DUPLICATE');
         const highThresholdId = TestDataFactory.extractEventIdFromResponse(highThresholdResult);
@@ -1984,6 +2096,43 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         fixedStart.setHours(15, 0, 0, 0); // 3 PM
         const fixedEnd = new Date(fixedStart);
         fixedEnd.setHours(16, 0, 0, 0); // 4 PM
+        
+        // Pre-check: Clear any existing events in this time window
+        const timeRangeStart = new Date(fixedStart);
+        timeRangeStart.setHours(0, 0, 0, 0); // Start of day
+        const timeRangeEnd = new Date(fixedStart);
+        timeRangeEnd.setHours(23, 59, 59, 999); // End of day
+        
+        const existingEventsResult = await client.callTool({
+          name: 'list-events',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            timeMin: TestDataFactory.formatDateTimeRFC3339(timeRangeStart),
+            timeMax: TestDataFactory.formatDateTimeRFC3339(timeRangeEnd)
+          }
+        });
+        
+        // Delete any existing events found
+        const existingEventIds = TestDataFactory.extractAllEventIds(existingEventsResult);
+        if (existingEventIds.length > 0) {
+          console.log(`🧹 Pre-test cleanup: Removing ${existingEventIds.length} existing events from test time window`);
+          for (const eventId of existingEventIds) {
+            try {
+              await client.callTool({
+                name: 'delete-event',
+                arguments: {
+                  calendarId: TEST_CALENDAR_ID,
+                  eventId,
+                  sendUpdates: SEND_UPDATES
+                }
+              });
+            } catch (error) {
+              // Ignore errors - event might be protected or already deleted
+            }
+          }
+          // Wait for deletions to propagate
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
         
         const event = TestDataFactory.createSingleEvent({
           summary: 'Important Presentation',
@@ -2017,12 +2166,49 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
       });
     });
     
-    describe('Cache Performance', () => {
-      it('should cache calendar events for faster subsequent checks', async () => {
+    describe('Conflict Detection Performance', () => {
+      it('should detect conflicts for overlapping events', async () => {
         // Create multiple events for conflict checking
         const baseTime = new Date();
         baseTime.setDate(baseTime.getDate() + 10); // 10 days from now
         baseTime.setHours(14, 0, 0, 0); // 2 PM
+        
+        // Pre-check: Clear any existing events in this time window
+        const timeRangeStart = new Date(baseTime);
+        timeRangeStart.setHours(0, 0, 0, 0); // Start of day
+        const timeRangeEnd = new Date(baseTime);
+        timeRangeEnd.setHours(23, 59, 59, 999); // End of day
+        
+        const existingEventsResult = await client.callTool({
+          name: 'list-events',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            timeMin: TestDataFactory.formatDateTimeRFC3339(timeRangeStart),
+            timeMax: TestDataFactory.formatDateTimeRFC3339(timeRangeEnd)
+          }
+        });
+        
+        // Delete any existing events found
+        const existingEventIds = TestDataFactory.extractAllEventIds(existingEventsResult);
+        if (existingEventIds.length > 0) {
+          console.log(`🧹 Pre-test cleanup: Removing ${existingEventIds.length} existing events from test time window`);
+          for (const eventId of existingEventIds) {
+            try {
+              await client.callTool({
+                name: 'delete-event',
+                arguments: {
+                  calendarId: TEST_CALENDAR_ID,
+                  eventId,
+                  sendUpdates: SEND_UPDATES
+                }
+              });
+            } catch (error) {
+              // Ignore errors - event might be protected or already deleted
+            }
+          }
+          // Wait for deletions to propagate
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
         
         const events = [];
         for (let i = 0; i < 3; i++) {
@@ -2040,14 +2226,13 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         // Longer delay to ensure events are indexed in Google Calendar
         await new Promise(resolve => setTimeout(resolve, 3000));
         
-        // First conflict check (will populate cache)
+        // First conflict check
         const overlappingEvent = TestDataFactory.createSingleEvent({
           summary: 'Overlapping Meeting',
           start: events[1].start, // Same time as second event
           end: events[1].end
         });
         
-        const startTime1 = Date.now();
         const result1 = await client.callTool({
           name: 'create-event',
           arguments: {
@@ -2056,22 +2241,21 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
             allowDuplicates: true
           }
         });
-        const duration1 = Date.now() - startTime1;
         
-        // Should detect a conflict (100% overlap) or potential duplicate if titles are similar
+        // Should detect a conflict (100% overlap)
         const responseText = (result1.content as any)[0].text;
-        expect(responseText).toMatch(/SCHEDULING CONFLICTS DETECTED|POTENTIAL DUPLICATES DETECTED/);
+        expect(responseText).toContain('SCHEDULING CONFLICTS DETECTED');
+        expect(responseText).toContain('100% of your event');
         const overlappingId = TestDataFactory.extractEventIdFromResponse(result1);
         if (overlappingId) createdEventIds.push(overlappingId);
         
-        // Second conflict check (should use cache and be faster)
+        // Second conflict check with different event
         const anotherOverlapping = TestDataFactory.createSingleEvent({
           summary: 'Another Overlapping Meeting',
           start: events[1].start,
           end: events[1].end
         });
         
-        const startTime2 = Date.now();
         const result2 = await client.callTool({
           name: 'create-event',
           arguments: {
@@ -2080,22 +2264,13 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
             allowDuplicates: true
           }
         });
-        const duration2 = Date.now() - startTime2;
         
-        // Should also detect a conflict or duplicate
+        // Should also detect a conflict
         const responseText2 = (result2.content as any)[0].text;
-        expect(responseText2).toMatch(/SCHEDULING CONFLICTS DETECTED|POTENTIAL DUPLICATES DETECTED/);
+        expect(responseText2).toContain('SCHEDULING CONFLICTS DETECTED');
+        expect(responseText2).toContain('100% of your event');
         const anotherId = TestDataFactory.extractEventIdFromResponse(result2);
         if (anotherId) createdEventIds.push(anotherId);
-        
-        // Log performance comparison
-        console.log(`\n📊 Cache Performance:`);
-        console.log(`  First check (no cache): ${duration1}ms`);
-        console.log(`  Second check (with cache): ${duration2}ms`);
-        console.log(`  Improvement: ${Math.round((1 - duration2/duration1) * 100)}%`);
-        
-        // Second check should generally be faster (though network variability may affect this)
-        // We won't assert on timing due to network unpredictability, but log for manual verification
       });
     });
   });
@@ -2257,6 +2432,8 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
   }
 
   async function cleanupTestEvents(eventIds: string[]): Promise<void> {
+    const cleanupResults = { success: 0, failed: 0 };
+    
     for (const eventId of eventIds) {
       try {
         const deleteStartTime = testFactory.startTimer('delete-event');
@@ -2271,11 +2448,25 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         });
         
         testFactory.endTimer('delete-event', deleteStartTime, true);
-      } catch (error) {
+        cleanupResults.success++;
+      } catch (error: any) {
         const deleteStartTime = testFactory.startTimer('delete-event');
         testFactory.endTimer('delete-event', deleteStartTime, false, String(error));
-        console.warn(`Failed to cleanup event ${eventId}:`, String(error));
+        
+        // Only warn for non-404 errors (404 means event was already deleted)
+        const errorMessage = String(error);
+        if (!errorMessage.includes('404') && !errorMessage.includes('Not Found')) {
+          console.warn(`⚠️  Failed to cleanup event ${eventId}:`, errorMessage);
+        }
+        cleanupResults.failed++;
       }
+    }
+    
+    if (cleanupResults.success > 0) {
+      console.log(`✅ Successfully deleted ${cleanupResults.success} test event(s)`);
+    }
+    if (cleanupResults.failed > 0 && cleanupResults.failed !== eventIds.length) {
+      console.log(`⚠️  Failed to delete ${cleanupResults.failed} test event(s) (may have been already deleted)`);
     }
   }
 

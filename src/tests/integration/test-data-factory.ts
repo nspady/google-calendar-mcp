@@ -271,6 +271,37 @@ export class TestDataFactory {
     return null;
   }
 
+  static extractAllEventIds(response: any): string[] {
+    const text = response.content[0]?.text;
+    if (!text) return [];
+    
+    const eventIds: string[] = [];
+    
+    // Look for event IDs in list format - they appear in parentheses after event titles
+    // Pattern: anything that looks like an event ID in parentheses
+    const pattern = /\(([a-zA-Z0-9_@.-]{10,})\)/g;
+    
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      const eventId = match[1].trim();
+      // Basic validation - should be at least 10 characters and not contain spaces
+      if (eventId.length >= 10 && !eventId.includes(' ')) {
+        eventIds.push(eventId);
+      }
+    }
+    
+    // Also look for Event ID: patterns
+    const idPattern = /Event ID:\s*([a-zA-Z0-9_@.-]+)/g;
+    while ((match = idPattern.exec(text)) !== null) {
+      const eventId = match[1].trim();
+      if (eventId.length >= 10 && !eventIds.includes(eventId)) {
+        eventIds.push(eventId);
+      }
+    }
+    
+    return eventIds;
+  }
+
   // Error simulation helpers
   static getInvalidTestData() {
     return {
