@@ -177,10 +177,12 @@ describe('Batch List Events Functionality', () => {
         orderBy: 'startTime'
       });
 
-      // Should return text content with events
+      // Should return structured JSON with events
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
-      expect((result.content[0] as any).text).toContain('Found');
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.events).toHaveLength(2);
+      expect(response.totalCount).toBe(2);
     });
 
     it('should handle empty results for single calendar', async () => {
@@ -197,10 +199,12 @@ describe('Batch List Events Functionality', () => {
       // Act
       const result = await listEventsHandler.runTool(args, mockOAuth2Client);
 
-      // Assert - no events means text saying no events found
+      // Assert - no events means empty array in JSON
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
-      expect((result.content[0] as any).text).toContain('No events found');
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.events).toHaveLength(0);
+      expect(response.totalCount).toBe(0);
     });
   });
 
@@ -653,10 +657,13 @@ describe('Batch List Events Functionality', () => {
         orderBy: 'startTime'
       });
 
-      // Should return text content with events
+      // Should return structured JSON with events
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
-      expect((result.content[0] as any).text).toContain('Found');
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.events).toHaveLength(1);
+      expect(response.totalCount).toBe(1);
+      expect(response.events[0].id).toBe('event1');
     });
   });
 }); 
