@@ -544,10 +544,10 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           // Verify the event was created successfully and shows up in searches
           await verifyEventInSearch(eventData.summary);
           
-          // Verify the response contains expected success indicators
-          const responseText = (result.content as any)[0].text;
-          expect(responseText).toContain('Event created successfully!');
-          expect(responseText).toContain(eventData.summary);
+          // Verify the response contains expected event data
+          const response = JSON.parse((result.content as any)[0].text);
+          expect(response.event).toBeDefined();
+          expect(response.event.summary).toBe(eventData.summary);
           
           console.log('✅ Event created successfully without explicit timezone - using calendar default');
         } catch (error) {
@@ -663,7 +663,11 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         });
         
         expect(invalidSingleResult.isError).toBe(true);
-        expect((invalidSingleResult.content as any)[0].text).toContain('originalStartTime is required');
+        // Should throw an error for missing originalStartTime
+        expect(invalidSingleResult.isError).toBe(true);
+        if (invalidSingleResult.error) {
+          expect(invalidSingleResult.error.message).toContain('originalStartTime');
+        }
         
         // Test case 2: Missing futureStartDate for 'thisAndFollowing' scope
         const invalidFutureResult = await client.callTool({
@@ -679,7 +683,11 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         });
         
         expect(invalidFutureResult.isError).toBe(true);
-        expect((invalidFutureResult.content as any)[0].text).toContain('futureStartDate is required');
+        // Should throw an error for missing futureStartDate
+        expect(invalidFutureResult.isError).toBe(true);
+        if (invalidFutureResult.error) {
+          expect(invalidFutureResult.error.message).toContain('futureStartDate');
+        }
       });
 
       it('should reject non-"all" scopes for single (non-recurring) events', async () => {
@@ -775,8 +783,9 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         });
         
         expect(TestDataFactory.validateEventResponse(updateResult)).toBe(true);
-        expect((updateResult.content as any)[0].text).toContain('Event updated');
-        expect((updateResult.content as any)[0].text).toContain('Updated Complex Meeting');
+        const updateResponse = JSON.parse((updateResult.content as any)[0].text);
+        expect(updateResponse.event).toBeDefined();
+        expect(updateResponse.event.summary).toBe('Updated Complex Meeting');
         
         // Verify the update
         await verifyEventInSearch('Updated Complex Meeting - All Fields');
@@ -1245,7 +1254,10 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           });
           
           expect(TestDataFactory.validateEventResponse(searchResult)).toBe(true);
-          expect((searchResult.content as any)[0].text).toContain(eventId);
+          const searchResponse = JSON.parse((searchResult.content as any)[0].text);
+          expect(searchResponse.events).toBeDefined();
+          const foundEvent = searchResponse.events.find((e: any) => e.id === eventId);
+          expect(foundEvent).toBeDefined();
         } catch (error) {
           testFactory.endTimer('create-event-extended-properties', startTime, false, String(error));
           throw error;
@@ -1732,8 +1744,11 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           }
         });
         
-        expect((exactDuplicateResult.content as any)[0].text).toContain('DUPLICATE EVENT DETECTED');
-        expect((exactDuplicateResult.content as any)[0].text).toContain('95% similar');
+        // In v2.0, exact duplicates throw an error
+        expect(exactDuplicateResult.isError).toBe(true);
+        if (exactDuplicateResult.error) {
+          expect(exactDuplicateResult.error.message).toContain('Duplicate event detected');
+        }
         
         // Test 2: Similar title + overlapping time = 70% similarity (warning)
         const similarTitleEvent = {
@@ -1750,9 +1765,14 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           }
         });
         
-        expect((similarResult.content as any)[0].text).toContain('Event created with warnings');
-        expect((similarResult.content as any)[0].text).toContain('POTENTIAL DUPLICATES DETECTED');
-        expect((similarResult.content as any)[0].text).toContain('70% similar');
+        const similarResponse = JSON.parse((similarResult.content as any)[0].text);
+        expect(similarResponse.event).toBeDefined();
+        expect(similarResponse.warnings).toBeDefined();
+        expect(similarResponse.duplicates).toBeDefined();
+        expect(similarResponse.duplicates.length).toBeGreaterThan(0);
+        if (similarResponse.duplicates[0]) {
+          expect(similarResponse.duplicates[0].event.similarity).toBeGreaterThanOrEqual(0.7);
+        }
         const similarEventId = TestDataFactory.extractEventIdFromResponse(similarResult);
         if (similarEventId) createdEventIds.push(similarEventId);
         
@@ -1777,9 +1797,10 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         });
         
         // With exact time window search, events at different times are NOT detected as duplicates
-        expect((sameDayResult.content as any)[0].text).toContain('Event created successfully');
-        expect((sameDayResult.content as any)[0].text).not.toContain('DUPLICATE');
-        expect((sameDayResult.content as any)[0].text).not.toContain('similar');
+        const sameDayResponse = JSON.parse((sameDayResult.content as any)[0].text);
+        expect(sameDayResponse.event).toBeDefined();
+        expect(sameDayResponse.duplicates).toBeUndefined();
+        expect(sameDayResponse.warnings).toBeUndefined();
         const sameDayEventId = TestDataFactory.extractEventIdFromResponse(sameDayResult);
         if (sameDayEventId) createdEventIds.push(sameDayEventId);
         
@@ -1804,8 +1825,9 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         });
         
         // With exact time window search, events on different days are NOT detected as duplicates
-        expect((differentDayResult.content as any)[0].text).toContain('Event created successfully');
-        expect((differentDayResult.content as any)[0].text).not.toContain('DUPLICATE');
+        const differentDayResponse = JSON.parse((differentDayResult.content as any)[0].text);
+        expect(differentDayResponse.event).toBeDefined();
+        expect(differentDayResponse.duplicates).toBeUndefined();
         const differentDayEventId = TestDataFactory.extractEventIdFromResponse(differentDayResult);
         if (differentDayEventId) createdEventIds.push(differentDayEventId);
       });
@@ -1898,9 +1920,10 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         });
         
         // Should not show conflict warning for adjacent events
-        expect((result.content as any)[0].text).toContain('Event created successfully');
-        expect((result.content as any)[0].text).not.toContain('CONFLICTS');
-        expect((result.content as any)[0].text).not.toContain('Overlap');
+        const resultResponse = JSON.parse((result.content as any)[0].text);
+        expect(resultResponse.event).toBeDefined();
+        expect(resultResponse.conflicts).toBeUndefined();
+        expect(resultResponse.warnings).toBeUndefined();
         const secondId = TestDataFactory.extractEventIdFromResponse(result);
         if (secondId) createdEventIds.push(secondId);
         
@@ -1927,10 +1950,15 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         });
         
         // Should show conflict for actual overlap
-        expect((conflictResult.content as any)[0].text).toContain('Event created with warnings');
-        expect((conflictResult.content as any)[0].text).toContain('SCHEDULING CONFLICTS DETECTED');
-        expect((conflictResult.content as any)[0].text).toContain('30 minute');
-        expect((conflictResult.content as any)[0].text).toContain('50% of your event');
+        const conflictResponse = JSON.parse((conflictResult.content as any)[0].text);
+        expect(conflictResponse.event).toBeDefined();
+        expect(conflictResponse.warnings).toBeDefined();
+        expect(conflictResponse.conflicts).toBeDefined();
+        expect(conflictResponse.conflicts.length).toBeGreaterThan(0);
+        if (conflictResponse.conflicts[0]) {
+          expect(conflictResponse.conflicts[0].overlap?.duration).toContain('30 minute');
+          expect(conflictResponse.conflicts[0].overlap?.percentage).toContain('50%');
+        }
         const thirdId = TestDataFactory.extractEventIdFromResponse(conflictResult);
         if (thirdId) createdEventIds.push(thirdId);
       });
@@ -2016,7 +2044,10 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         if (lowThresholdId) createdEventIds.push(lowThresholdId);
         
         // Should show warning since similarity > 50% threshold
-        expect((lowThresholdResult.content as any)[0].text).toContain('POTENTIAL DUPLICATES DETECTED');
+        const lowThresholdResponse = JSON.parse((lowThresholdResult.content as any)[0].text);
+        expect(lowThresholdResponse.event).toBeDefined();
+        expect(lowThresholdResponse.duplicates).toBeDefined();
+        expect(lowThresholdResponse.duplicates.length).toBeGreaterThan(0);
         
         // Test with high threshold of 0.9 (should not flag ~70% similarity)
         const slightlyDifferentEvent = {
@@ -2039,7 +2070,9 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         
         // Should not show DUPLICATE warning since similarity < 90% threshold
         // Note: May show conflict warning if events overlap in time
-        expect((highThresholdResult.content as any)[0].text).not.toContain('DUPLICATE');
+        const highThresholdResponse = JSON.parse((highThresholdResult.content as any)[0].text);
+        expect(highThresholdResponse.event).toBeDefined();
+        expect(highThresholdResponse.duplicates).toBeUndefined();
       });
       
       it('should allow exact duplicates with allowDuplicates flag', async () => {
@@ -2111,8 +2144,11 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         });
         
         // Should create with warning but not block
-        expect((duplicateResult.content as any)[0].text).toContain('Event created with warnings');
-        expect((duplicateResult.content as any)[0].text).toContain('POTENTIAL DUPLICATES DETECTED');
+        const duplicateResponse = JSON.parse((duplicateResult.content as any)[0].text);
+        expect(duplicateResponse.event).toBeDefined();
+        expect(duplicateResponse.warnings).toBeDefined();
+        expect(duplicateResponse.duplicates).toBeDefined();
+        expect(duplicateResponse.duplicates.length).toBeGreaterThan(0);
         expect((duplicateResult.content as any)[0].text).toContain('95% similar');
         const duplicateId = TestDataFactory.extractEventIdFromResponse(duplicateResult);
         if (duplicateId) createdEventIds.push(duplicateId);
