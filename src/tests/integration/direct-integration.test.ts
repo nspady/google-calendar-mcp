@@ -409,7 +409,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           }
         });
         
-        const eventId = TestDataFactory.extractEventIdFromResponse(createResult);
+        const eventId = extractEventId(createResult);
         expect(eventId).toBeTruthy();
         if (eventId) createdEventIds.push(eventId);
         
@@ -535,7 +535,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           
           expect(TestDataFactory.validateEventResponse(result)).toBe(true);
           
-          const eventId = TestDataFactory.extractEventIdFromResponse(result);
+          const eventId = extractEventId(result);
           expect(eventId).toBeTruthy();
           
           createdEventIds.push(eventId!);
@@ -883,7 +883,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           }
         });
         
-        const matchingEventId = TestDataFactory.extractEventIdFromResponse(result1);
+        const matchingEventId = extractEventId(result1);
         createdEventIds.push(matchingEventId!);
         
         // Create event without matching properties
@@ -901,7 +901,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           }
         });
         
-        const nonMatchingEventId = TestDataFactory.extractEventIdFromResponse(result2);
+        const nonMatchingEventId = extractEventId(result2);
         createdEventIds.push(nonMatchingEventId!);
         
         // Wait for events to be searchable
@@ -1009,7 +1009,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           }
         });
         
-        const eventId = TestDataFactory.extractEventIdFromResponse(result);
+        const eventId = extractEventId(result);
         createdEventIds.push(eventId!);
         
         // Wait for event to be searchable
@@ -1192,7 +1192,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           
           expect(TestDataFactory.validateEventResponse(result)).toBe(true);
           
-          const eventId = TestDataFactory.extractEventIdFromResponse(result);
+          const eventId = extractEventId(result);
           expect(eventId).toBeTruthy();
           
           createdEventIds.push(eventId!);
@@ -1234,7 +1234,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           
           expect(TestDataFactory.validateEventResponse(result)).toBe(true);
           
-          const eventId = TestDataFactory.extractEventIdFromResponse(result);
+          const eventId = extractEventId(result);
           expect(eventId).toBeTruthy();
           
           createdEventIds.push(eventId!);
@@ -1292,7 +1292,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           
           expect(TestDataFactory.validateEventResponse(result)).toBe(true);
           
-          const eventId = TestDataFactory.extractEventIdFromResponse(result);
+          const eventId = extractEventId(result);
           expect(eventId).toBeTruthy();
           
           createdEventIds.push(eventId!);
@@ -1327,7 +1327,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           
           expect(TestDataFactory.validateEventResponse(result)).toBe(true);
           
-          const eventId = TestDataFactory.extractEventIdFromResponse(result);
+          const eventId = extractEventId(result);
           expect(eventId).toBeTruthy();
           
           createdEventIds.push(eventId!);
@@ -1375,7 +1375,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           
           expect(TestDataFactory.validateEventResponse(result)).toBe(true);
           
-          const eventId = TestDataFactory.extractEventIdFromResponse(result);
+          const eventId = extractEventId(result);
           expect(eventId).toBeTruthy();
           
           createdEventIds.push(eventId!);
@@ -1773,7 +1773,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         if (similarResponse.duplicates[0]) {
           expect(similarResponse.duplicates[0].event.similarity).toBeGreaterThanOrEqual(0.7);
         }
-        const similarEventId = TestDataFactory.extractEventIdFromResponse(similarResult);
+        const similarEventId = extractEventId(similarResult);
         if (similarEventId) createdEventIds.push(similarEventId);
         
         // Test 3: Same title on same day but different time = NO DUPLICATE (different time window)
@@ -1801,7 +1801,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         expect(sameDayResponse.event).toBeDefined();
         expect(sameDayResponse.duplicates).toBeUndefined();
         expect(sameDayResponse.warnings).toBeUndefined();
-        const sameDayEventId = TestDataFactory.extractEventIdFromResponse(sameDayResult);
+        const sameDayEventId = extractEventId(sameDayResult);
         if (sameDayEventId) createdEventIds.push(sameDayEventId);
         
         // Test 4: Same title but different day = NO DUPLICATE (different time window)
@@ -1828,7 +1828,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         const differentDayResponse = JSON.parse((differentDayResult.content as any)[0].text);
         expect(differentDayResponse.event).toBeDefined();
         expect(differentDayResponse.duplicates).toBeUndefined();
-        const differentDayEventId = TestDataFactory.extractEventIdFromResponse(differentDayResult);
+        const differentDayEventId = extractEventId(differentDayResult);
         if (differentDayEventId) createdEventIds.push(differentDayEventId);
       });
       
@@ -1924,7 +1924,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         expect(resultResponse.event).toBeDefined();
         expect(resultResponse.conflicts).toBeUndefined();
         expect(resultResponse.warnings).toBeUndefined();
-        const secondId = TestDataFactory.extractEventIdFromResponse(result);
+        const secondId = extractEventId(result);
         if (secondId) createdEventIds.push(secondId);
         
         // Create third meeting 10:30-11:30am (overlaps with second)
@@ -1959,7 +1959,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           expect(conflictResponse.conflicts[0].overlap?.duration).toContain('30 minute');
           expect(conflictResponse.conflicts[0].overlap?.percentage).toContain('50%');
         }
-        const thirdId = TestDataFactory.extractEventIdFromResponse(conflictResult);
+        const thirdId = extractEventId(conflictResult);
         if (thirdId) createdEventIds.push(thirdId);
       });
     });
@@ -2040,7 +2040,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         });
         
         // Track for cleanup immediately after creation
-        const lowThresholdId = TestDataFactory.extractEventIdFromResponse(lowThresholdResult);
+        const lowThresholdId = extractEventId(lowThresholdResult);
         if (lowThresholdId) createdEventIds.push(lowThresholdId);
         
         // Should show warning since similarity > 50% threshold
@@ -2065,7 +2065,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         });
         
         // Track for cleanup immediately after creation
-        const highThresholdId = TestDataFactory.extractEventIdFromResponse(highThresholdResult);
+        const highThresholdId = extractEventId(highThresholdResult);
         if (highThresholdId) createdEventIds.push(highThresholdId);
         
         // Should not show DUPLICATE warning since similarity < 90% threshold
@@ -2150,7 +2150,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         expect(duplicateResponse.duplicates).toBeDefined();
         expect(duplicateResponse.duplicates.length).toBeGreaterThan(0);
         expect((duplicateResult.content as any)[0].text).toContain('95% similar');
-        const duplicateId = TestDataFactory.extractEventIdFromResponse(duplicateResult);
+        const duplicateId = extractEventId(duplicateResult);
         if (duplicateId) createdEventIds.push(duplicateId);
       });
     });
@@ -2235,7 +2235,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         const responseText = (result1.content as any)[0].text;
         expect(responseText).toContain('SCHEDULING CONFLICTS DETECTED');
         expect(responseText).toContain('100% of your event');
-        const overlappingId = TestDataFactory.extractEventIdFromResponse(result1);
+        const overlappingId = extractEventId(result1);
         if (overlappingId) createdEventIds.push(overlappingId);
         
         // Second conflict check with different event
@@ -2258,7 +2258,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         const responseText2 = (result2.content as any)[0].text;
         expect(responseText2).toContain('SCHEDULING CONFLICTS DETECTED');
         expect(responseText2).toContain('100% of your event');
-        const anotherId = TestDataFactory.extractEventIdFromResponse(result2);
+        const anotherId = extractEventId(result2);
         if (anotherId) createdEventIds.push(anotherId);
       });
     });
@@ -2306,6 +2306,18 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
   });
 
   // Helper Functions
+  function extractEventId(result: any): string | null {
+    try {
+      const text = (result.content as any)[0]?.text;
+      if (!text) return null;
+      
+      const response = JSON.parse(text);
+      return response.event?.id || null;
+    } catch {
+      return null;
+    }
+  }
+
   async function createTestEvent(eventData: TestEvent): Promise<string> {
     const startTime = testFactory.startTimer('create-event');
     
@@ -2322,13 +2334,18 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
       
       expect(TestDataFactory.validateEventResponse(result)).toBe(true);
       
-      const eventId = TestDataFactory.extractEventIdFromResponse(result);
+      // Handle structured JSON response
+      const text = (result.content as any)[0]?.text;
+      if (!text) throw new Error('No response text');
+      
+      const response = JSON.parse(text);
+      const eventId = response.event?.id;
       
       expect(eventId).toBeTruthy();
       
-      testFactory.addCreatedEventId(eventId!);
+      testFactory.addCreatedEventId(eventId);
       
-      return eventId!;
+      return eventId;
     } catch (error) {
       testFactory.endTimer('create-event', startTime, false, String(error));
       throw error;
@@ -2351,7 +2368,14 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
       testFactory.endTimer('list-events', startTime, true);
       
       expect(TestDataFactory.validateEventResponse(result)).toBe(true);
-      expect((result.content as any)[0].text).toContain(eventId);
+      
+      // Handle structured JSON response
+      const text = (result.content as any)[0]?.text;
+      const response = JSON.parse(text);
+      
+      // Check if the event ID is in the list
+      const eventIds = response.events?.map((e: any) => e.id) || [];
+      expect(eventIds).toContain(eventId);
     } catch (error) {
       testFactory.endTimer('list-events', startTime, false, String(error));
       throw error;
@@ -2379,7 +2403,17 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
       testFactory.endTimer('search-events', startTime, true);
       
       expect(TestDataFactory.validateEventResponse(result)).toBe(true);
-      expect((result.content as any)[0].text.toLowerCase()).toContain(query.toLowerCase());
+      
+      // Handle structured JSON response
+      const text = (result.content as any)[0]?.text;
+      const response = JSON.parse(text);
+      
+      // Check if query matches any event in results
+      const hasMatch = response.events?.some((e: any) => 
+        e.summary?.toLowerCase().includes(query.toLowerCase()) ||
+        e.description?.toLowerCase().includes(query.toLowerCase())
+      );
+      expect(hasMatch).toBe(true);
     } catch (error) {
       testFactory.endTimer('search-events', startTime, false, String(error));
       throw error;
