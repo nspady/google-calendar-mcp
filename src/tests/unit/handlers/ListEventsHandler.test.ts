@@ -77,7 +77,9 @@ Content-Type: application/json
     const result = await handler.runTool(args, mockOAuth2Client);
     expect(result.content).toHaveLength(1);
     expect(result.content[0].type).toBe('text');
-    expect((result.content[0] as any).text).toContain('Found');
+    const response = JSON.parse((result.content[0] as any).text);
+    expect(response.events).toBeDefined();
+    expect(response.totalCount).toBeGreaterThanOrEqual(0);
   });
 
   it('should handle multiple calendar IDs as array', async () => {
@@ -90,7 +92,9 @@ Content-Type: application/json
     const result = await handler.runTool(args, mockOAuth2Client);
     expect(result.content).toHaveLength(1);
     expect(result.content[0].type).toBe('text');
-    expect((result.content[0] as any).text).toContain('Found');
+    const response = JSON.parse((result.content[0] as any).text);
+    expect(response.events).toBeDefined();
+    expect(response.totalCount).toBeGreaterThanOrEqual(0);
   });
 
   it('should handle calendar IDs passed as JSON string', async () => {
@@ -111,7 +115,10 @@ Content-Type: application/json
     const result = await handler.runTool(processedArgs, mockOAuth2Client);
     expect(result.content).toHaveLength(1);
     expect(result.content[0].type).toBe('text');
-    expect((result.content[0] as any).text).toContain('Found');
+    const response = JSON.parse((result.content[0] as any).text);
+    expect(response.events).toBeDefined();
+    expect(response.totalCount).toBeGreaterThanOrEqual(0);
+    expect(response.calendars).toEqual(['primary', 'secondary@gmail.com']);
   });
 });
 
