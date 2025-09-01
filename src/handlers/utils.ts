@@ -1,4 +1,5 @@
 import { calendar_v3 } from "googleapis";
+import { ConflictCheckResult } from "../services/conflict-detection/types.js";
 
 /**
  * Generates a Google Calendar event view URL
@@ -136,5 +137,93 @@ export function formatEventWithDetails(event: calendar_v3.Schema$Event, calendar
     const urlInfo = eventUrl ? `\nView: ${eventUrl}` : "";
     
     return `${title}${eventId}${description}${timeInfo}${location}${colorId}${attendeeInfo}${urlInfo}`;
+}
+
+/**
+ * Formats conflict check results for display
+ */
+export function formatConflictWarnings(conflicts: ConflictCheckResult): string {
+    if (!conflicts.hasConflicts) return "";
+    
+    let warnings = "";
+    
+    // Format duplicate warnings
+    if (conflicts.duplicates.length > 0) {
+        warnings += "\n\n⚠️ POTENTIAL DUPLICATES DETECTED:";
+        for (const dup of conflicts.duplicates) {
+            warnings += `\n\n━━━ Duplicate Event (${Math.round(dup.event.similarity * 100)}% similar) ━━━`;
+            warnings += `\n${dup.suggestion}`;
+            
+            // Show full event details if available
+            if (dup.fullEvent) {
+                warnings += `\n\nExisting event details:`;
+                warnings += `\n${formatEventWithDetails(dup.fullEvent, dup.calendarId)}`;
+            } else {
+                // Fallback to basic info
+                warnings += `\n• "${dup.event.title}"`;
+                if (dup.event.url) {
+                    warnings += `\n  View existing event: ${dup.event.url}`;
+                }
+            }
+        }
+    }
+    
+    // Format conflict warnings
+    if (conflicts.conflicts.length > 0) {
+        warnings += "\n\n⚠️ SCHEDULING CONFLICTS DETECTED:";
+        const conflictsByCalendar = conflicts.conflicts.reduce((acc, conflict) => {
+            if (!acc[conflict.calendar]) acc[conflict.calendar] = [];
+            acc[conflict.calendar].push(conflict);
+            return acc;
+        }, {} as Record<string, typeof conflicts.conflicts>);
+        
+        for (const [calendar, calendarConflicts] of Object.entries(conflictsByCalendar)) {
+            warnings += `\n\nCalendar: ${calendar}`;
+            for (const conflict of calendarConflicts) {
+                warnings += `\n\n━━━ Conflicting Event ━━━`;
+                if (conflict.overlap) {
+                    warnings += `\n⚠️  Overlap: ${conflict.overlap.duration} (${conflict.overlap.percentage}% of your event)`;
+                }
+                
+                // Show full event details if available
+                if (conflict.fullEvent) {
+                    warnings += `\n\nConflicting event details:`;
+                    warnings += `\n${formatEventWithDetails(conflict.fullEvent, calendar)}`;
+                } else {
+                    // Fallback to basic info
+                    warnings += `\n• Conflicts with "${conflict.event.title}"`;
+                    if (conflict.event.start && conflict.event.end) {
+                        const start = formatDateTime(conflict.event.start);
+                        const end = formatDateTime(conflict.event.end);
+                        warnings += `\n  Time: ${start} - ${end}`;
+                    }
+                    if (conflict.event.url) {
+                        warnings += `\n  View event: ${conflict.event.url}`;
+                    }
+                }
+            }
+        }
+    }
+    
+    return warnings;
+}
+
+/**
+ * Creates a response with event details and optional conflict warnings
+ */
+export function createEventResponseWithConflicts(
+    event: calendar_v3.Schema$Event,
+    calendarId: string,
+    conflicts?: ConflictCheckResult,
+    actionVerb: string = "created"
+): string {
+    const eventDetails = formatEventWithDetails(event, calendarId);
+    const conflictWarnings = conflicts ? formatConflictWarnings(conflicts) : "";
+    
+    const successMessage = conflicts?.hasConflicts 
+        ? `Event ${actionVerb} with warnings!`
+        : `Event ${actionVerb} successfully!`;
+    
+    return `${successMessage}\n\n${eventDetails}${conflictWarnings}`;
 }
 

@@ -4,15 +4,65 @@ import { UpdateEventInput } from "../../tools/registry.js";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
 import { RecurringEventHelpers, RecurringEventError, RECURRING_EVENT_ERRORS } from './RecurringEventHelpers.js';
-import { formatEventWithDetails } from "../utils.js";
+import { createEventResponseWithConflicts } from "../utils.js";
+import { ConflictDetectionService } from "../../services/conflict-detection/index.js";
+import { createTimeObject } from "../utils/datetime.js";
 
 export class UpdateEventHandler extends BaseToolHandler {
+    private conflictDetectionService: ConflictDetectionService;
+    
+    constructor() {
+        super();
+        this.conflictDetectionService = new ConflictDetectionService();
+    }
+    
     async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
         const validArgs = args as UpdateEventInput;
+        
+        // Check for conflicts if enabled
+        let conflicts = null;
+        if (validArgs.checkConflicts !== false && (validArgs.start || validArgs.end)) {
+            // Get the existing event to merge with updates
+            const calendar = this.getCalendar(oauth2Client);
+            const existingEvent = await calendar.events.get({
+                calendarId: validArgs.calendarId,
+                eventId: validArgs.eventId
+            });
+            
+            if (!existingEvent.data) {
+                throw new Error('Event not found');
+            }
+            
+            // Create updated event object for conflict checking
+            const timezone = validArgs.timeZone || await this.getCalendarTimezone(oauth2Client, validArgs.calendarId);
+            const eventToCheck: calendar_v3.Schema$Event = {
+                ...existingEvent.data,
+                id: validArgs.eventId,
+                summary: validArgs.summary || existingEvent.data.summary,
+                description: validArgs.description || existingEvent.data.description,
+                start: validArgs.start ? createTimeObject(validArgs.start, timezone) : existingEvent.data.start,
+                end: validArgs.end ? createTimeObject(validArgs.end, timezone) : existingEvent.data.end,
+                location: validArgs.location || existingEvent.data.location,
+            };
+            
+            // Check for conflicts
+            conflicts = await this.conflictDetectionService.checkConflicts(
+                oauth2Client,
+                eventToCheck,
+                validArgs.calendarId,
+                {
+                    checkDuplicates: false, // Don't check duplicates for updates
+                    checkConflicts: true,
+                    calendarsToCheck: validArgs.calendarsToCheck || [validArgs.calendarId]
+                }
+            );
+        }
+        
+        // Update the event
         const event = await this.updateEventWithScope(oauth2Client, validArgs);
         
-        const eventDetails = formatEventWithDetails(event, validArgs.calendarId);
-        const text = `Event updated successfully!\n\n${eventDetails}`;
+        // Generate response with conflict warnings
+        const text = createEventResponseWithConflicts(event, validArgs.calendarId, conflicts ?? undefined, "updated");
         
         return {
             content: [{

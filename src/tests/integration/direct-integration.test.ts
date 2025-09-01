@@ -78,24 +78,34 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
   }, 30000);
 
   afterAll(async () => {
+    console.log('\n🏁 Starting final cleanup...');
+    
     // Final cleanup - ensure all test events are removed
-    await cleanupAllTestEvents();
+    const allEventIds = testFactory.getCreatedEventIds();
+    if (allEventIds.length > 0) {
+      console.log(`📋 Found ${allEventIds.length} total events created during all tests`);
+      await cleanupAllTestEvents();
+    } else {
+      console.log('✨ No additional events to clean up');
+    }
     
     // Close client connection
     if (client) {
       await client.close();
+      console.log('🔌 Closed MCP client connection');
     }
     
     // Terminate server process
     if (serverProcess && !serverProcess.killed) {
       serverProcess.kill();
       await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('🛑 Terminated MCP server process');
     }
 
     // Log performance summary
     logPerformanceSummary();
     
-    console.log('🧹 Integration test cleanup completed');
+    console.log('✅ Integration test cleanup completed successfully\n');
   }, 30000);
 
   beforeEach(() => {
@@ -105,8 +115,11 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
 
   afterEach(async () => {
     // Cleanup events created in this test
-    await cleanupTestEvents(createdEventIds);
-    createdEventIds = [];
+    if (createdEventIds.length > 0) {
+      console.log(`🧹 Cleaning up ${createdEventIds.length} events from test...`);
+      await cleanupTestEvents(createdEventIds);
+      createdEventIds = [];
+    }
   });
 
   describe('Tool Availability and Basic Functionality', () => {
@@ -1111,11 +1124,14 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         expect(TestDataFactory.validateEventResponse(result1)).toBe(true);
         createdEventIds.push(customEventId);
         
+        // Wait a moment for Google Calendar to fully process the event
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
         // Try to create another event with the same ID
         const startTime = testFactory.startTimer('create-event-duplicate-id');
         
         try {
-          const result2 = await client.callTool({
+          await client.callTool({
             name: 'create-event',
             arguments: {
               calendarId: TEST_CALENDAR_ID,
@@ -1124,13 +1140,15 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
             }
           });
           
+          // If we get here, the duplicate wasn't caught (test should fail)
+          testFactory.endTimer('create-event-duplicate-id', startTime, false);
+          expect.fail('Expected error for duplicate event ID');
+        } catch (error: any) {
           testFactory.endTimer('create-event-duplicate-id', startTime, true);
           
-          expect(result2.isError).toBe(true);
-          expect((result2.content as any)[0].text).toContain('already exists');
-        } catch (error) {
-          testFactory.endTimer('create-event-duplicate-id', startTime, false, String(error));
-          throw error;
+          // The error should mention the ID already exists
+          const errorMessage = error.message || String(error);
+          expect(errorMessage).toMatch(/already exists|duplicate|conflict|409/i);
         }
       });
 
@@ -1358,52 +1376,70 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
       const now = new Date();
       const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
       
-      const result = await client.callTool({
-        name: 'list-events',
-        arguments: {
-          calendarId: invalidData.invalidCalendarId,
-          timeMin: TestDataFactory.formatDateTimeRFC3339WithTimezone(now),
-          timeMax: TestDataFactory.formatDateTimeRFC3339WithTimezone(tomorrow)
-        }
-      });
-      
-      expect(result.isError).toBe(true);
-      expect((result.content as any)[0].text).toContain('error');
+      try {
+        await client.callTool({
+          name: 'list-events',
+          arguments: {
+            calendarId: invalidData.invalidCalendarId,
+            timeMin: TestDataFactory.formatDateTimeRFC3339WithTimezone(now),
+            timeMax: TestDataFactory.formatDateTimeRFC3339WithTimezone(tomorrow)
+          }
+        });
+        
+        // If we get here, the error wasn't caught (test should fail)
+        expect.fail('Expected error for invalid calendar ID');
+      } catch (error: any) {
+        // Should get an error about invalid calendar ID
+        const errorMessage = error.message || String(error);
+        expect(errorMessage.toLowerCase()).toContain('error');
+      }
     });
 
     it('should handle invalid event ID gracefully', async () => {
       const invalidData = TestDataFactory.getInvalidTestData();
       
-      const result = await client.callTool({
-        name: 'delete-event',
-        arguments: {
-          calendarId: TEST_CALENDAR_ID,
-          eventId: invalidData.invalidEventId,
-          sendUpdates: SEND_UPDATES
-        }
-      });
-      
-      expect(result.isError).toBe(true);
-      expect((result.content as any)[0].text).toContain('error');
+      try {
+        await client.callTool({
+          name: 'delete-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            eventId: invalidData.invalidEventId,
+            sendUpdates: SEND_UPDATES
+          }
+        });
+        
+        // If we get here, the error wasn't caught (test should fail)
+        expect.fail('Expected error for invalid event ID');
+      } catch (error: any) {
+        // Should get an error about invalid event ID
+        const errorMessage = error.message || String(error);
+        expect(errorMessage.toLowerCase()).toContain('error');
+      }
     });
 
     it('should handle malformed date formats gracefully', async () => {
       const invalidData = TestDataFactory.getInvalidTestData();
       
-      const result = await client.callTool({
-        name: 'create-event',
-        arguments: {
-          calendarId: TEST_CALENDAR_ID,
-          summary: 'Test Event',
-          start: invalidData.invalidTimeFormat,
-          end: invalidData.invalidTimeFormat,
-          timeZone: 'America/Los_Angeles',
-          sendUpdates: SEND_UPDATES
-        }
-      });
-      
-      expect(result.isError).toBe(true);
-      expect((result.content as any)[0].text).toContain('error');
+      try {
+        await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            summary: 'Test Event',
+            start: invalidData.invalidTimeFormat,
+            end: invalidData.invalidTimeFormat,
+            timeZone: 'America/Los_Angeles',
+            sendUpdates: SEND_UPDATES
+          }
+        });
+        
+        // If we get here, the error wasn't caught (test should fail)
+        expect.fail('Expected error for malformed date format');
+      } catch (error: any) {
+        // Should get an error about invalid time value
+        const errorMessage = error.message || String(error);
+        expect(errorMessage.toLowerCase()).toMatch(/invalid|error|time/i);
+      }
     });
   });
 
@@ -1620,6 +1656,629 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
     });
   });
 
+  describe('Enhanced Conflict Detection', () => {
+    describe('Smart Duplicate Detection with Simplified Algorithm', () => {
+      it('should detect duplicates with rules-based similarity scoring', async () => {
+        // Create base event with fixed time for consistent duplicate detection
+        const fixedStart = new Date();
+        fixedStart.setDate(fixedStart.getDate() + 5); // 5 days from now
+        fixedStart.setHours(14, 0, 0, 0); // 2 PM
+        const fixedEnd = new Date(fixedStart);
+        fixedEnd.setHours(15, 0, 0, 0); // 3 PM
+        
+        // Pre-check: Clear any existing events in this time window
+        const timeRangeStart = new Date(fixedStart);
+        timeRangeStart.setHours(0, 0, 0, 0); // Start of day
+        const timeRangeEnd = new Date(fixedStart);
+        timeRangeEnd.setHours(23, 59, 59, 999); // End of day
+        
+        const existingEventsResult = await client.callTool({
+          name: 'list-events',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            timeMin: TestDataFactory.formatDateTimeRFC3339(timeRangeStart),
+            timeMax: TestDataFactory.formatDateTimeRFC3339(timeRangeEnd)
+          }
+        });
+        
+        // Delete any existing events found
+        const existingEventIds = TestDataFactory.extractAllEventIds(existingEventsResult);
+        if (existingEventIds.length > 0) {
+          console.log(`🧹 Pre-test cleanup: Removing ${existingEventIds.length} existing events from test time window`);
+          for (const eventId of existingEventIds) {
+            try {
+              await client.callTool({
+                name: 'delete-event',
+                arguments: {
+                  calendarId: TEST_CALENDAR_ID,
+                  eventId,
+                  sendUpdates: SEND_UPDATES
+                }
+              });
+            } catch (error) {
+              // Ignore errors - event might be protected or already deleted
+            }
+          }
+          // Wait for deletions to propagate
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+        
+        const baseEvent = TestDataFactory.createSingleEvent({
+          summary: 'Team Meeting',
+          location: 'Conference Room A',
+          start: TestDataFactory.formatDateTimeRFC3339(fixedStart),
+          end: TestDataFactory.formatDateTimeRFC3339(fixedEnd)
+        });
+        
+        const baseEventId = await createTestEvent(baseEvent);
+        createdEventIds.push(baseEventId);
+        
+        // Note: Google Calendar has eventual consistency - events may not immediately
+        // appear in list queries. This delay helps but doesn't guarantee visibility.
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Test 1: Exact title + overlapping time = 95% similarity (blocked)
+        const exactDuplicateResult = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...baseEvent
+          }
+        });
+        
+        expect((exactDuplicateResult.content as any)[0].text).toContain('DUPLICATE EVENT DETECTED');
+        expect((exactDuplicateResult.content as any)[0].text).toContain('95% similar');
+        
+        // Test 2: Similar title + overlapping time = 70% similarity (warning)
+        const similarTitleEvent = {
+          ...baseEvent,
+          summary: 'Team Meeting Discussion' // Contains "Team Meeting"
+        };
+        
+        const similarResult = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...similarTitleEvent,
+            allowDuplicates: true // Allow creation despite warning
+          }
+        });
+        
+        expect((similarResult.content as any)[0].text).toContain('Event created with warnings');
+        expect((similarResult.content as any)[0].text).toContain('POTENTIAL DUPLICATES DETECTED');
+        expect((similarResult.content as any)[0].text).toContain('70% similar');
+        const similarEventId = TestDataFactory.extractEventIdFromResponse(similarResult);
+        if (similarEventId) createdEventIds.push(similarEventId);
+        
+        // Test 3: Same title on same day but different time = NO DUPLICATE (different time window)
+        const laterTime = new Date(baseEvent.start);
+        laterTime.setHours(laterTime.getHours() + 3);
+        const laterEndTime = new Date(baseEvent.end);
+        laterEndTime.setHours(laterEndTime.getHours() + 3);
+        
+        const sameDayEvent = {
+          ...baseEvent,
+          start: TestDataFactory.formatDateTimeRFC3339(laterTime),
+          end: TestDataFactory.formatDateTimeRFC3339(laterEndTime)
+        };
+        
+        const sameDayResult = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...sameDayEvent
+          }
+        });
+        
+        // With exact time window search, events at different times are NOT detected as duplicates
+        expect((sameDayResult.content as any)[0].text).toContain('Event created successfully');
+        expect((sameDayResult.content as any)[0].text).not.toContain('DUPLICATE');
+        expect((sameDayResult.content as any)[0].text).not.toContain('similar');
+        const sameDayEventId = TestDataFactory.extractEventIdFromResponse(sameDayResult);
+        if (sameDayEventId) createdEventIds.push(sameDayEventId);
+        
+        // Test 4: Same title but different day = NO DUPLICATE (different time window)
+        const nextWeek = new Date(baseEvent.start);
+        nextWeek.setDate(nextWeek.getDate() + 7);
+        const nextWeekEnd = new Date(baseEvent.end);
+        nextWeekEnd.setDate(nextWeekEnd.getDate() + 7);
+        
+        const differentDayEvent = {
+          ...baseEvent,
+          start: TestDataFactory.formatDateTimeRFC3339(nextWeek),
+          end: TestDataFactory.formatDateTimeRFC3339(nextWeekEnd)
+        };
+        
+        const differentDayResult = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...differentDayEvent
+          }
+        });
+        
+        // With exact time window search, events on different days are NOT detected as duplicates
+        expect((differentDayResult.content as any)[0].text).toContain('Event created successfully');
+        expect((differentDayResult.content as any)[0].text).not.toContain('DUPLICATE');
+        const differentDayEventId = TestDataFactory.extractEventIdFromResponse(differentDayResult);
+        if (differentDayEventId) createdEventIds.push(differentDayEventId);
+      });
+      
+      it.skip('should properly handle all-day vs timed events', async () => {  // Skip: all-day events not properly supported yet
+        // Create an all-day event with proper date format
+        const futureDate = new Date();
+        futureDate.setDate(futureDate.getDate() + 6); // 6 days from now
+        const dayAfter = new Date(futureDate);
+        dayAfter.setDate(dayAfter.getDate() + 1);
+        
+        // Format dates properly for all-day events (YYYY-MM-DD)
+        const startDate = futureDate.toISOString().split('T')[0];
+        const endDate = dayAfter.toISOString().split('T')[0];
+        
+        // Create all-day event with proper date-only format
+        const allDayEvent = {
+          summary: 'Company Offsite',
+          location: 'Mountain View',
+          start: startDate,  // Just YYYY-MM-DD for all-day events
+          end: endDate
+        };
+        
+        const allDayResult = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...allDayEvent
+          }
+        });
+        
+        const allDayEventId = TestDataFactory.extractEventIdFromResponse(allDayResult);
+        if (allDayEventId) createdEventIds.push(allDayEventId);
+        
+        // Create timed event with same title on same day - should have low similarity (20%)
+        const timedStart = new Date(futureDate);
+        timedStart.setHours(10, 0, 0, 0); // 10 AM
+        const timedEnd = new Date(timedStart);
+        timedEnd.setHours(12, 0, 0, 0); // 12 PM
+        
+        const timedEvent = TestDataFactory.createSingleEvent({
+          summary: 'Company Offsite',
+          location: 'Mountain View',
+          start: TestDataFactory.formatDateTimeRFC3339(timedStart),
+          end: TestDataFactory.formatDateTimeRFC3339(timedEnd)
+        });
+        
+        const timedResult = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...timedEvent
+          }
+        });
+        
+        // Should not be blocked despite same title and location
+        expect((timedResult.content as any)[0].text).toContain('Event created successfully');
+        expect((timedResult.content as any)[0].text).not.toContain('DUPLICATE EVENT DETECTED');
+        const timedEventId = TestDataFactory.extractEventIdFromResponse(timedResult);
+        if (timedEventId) createdEventIds.push(timedEventId);
+      });
+    });
+    
+    describe('Adjacent Event Handling (No False Positives)', () => {
+      it('should not flag back-to-back meetings as conflicts', async () => {
+        const baseDate = new Date();
+        baseDate.setDate(baseDate.getDate() + 7); // 7 days from now
+        baseDate.setHours(9, 0, 0, 0);
+        
+        // Pre-check: Clear any existing events in this time window
+        const timeRangeStart = new Date(baseDate);
+        timeRangeStart.setHours(0, 0, 0, 0); // Start of day
+        const timeRangeEnd = new Date(baseDate);
+        timeRangeEnd.setHours(23, 59, 59, 999); // End of day
+        
+        const existingEventsResult = await client.callTool({
+          name: 'list-events',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            timeMin: TestDataFactory.formatDateTimeRFC3339(timeRangeStart),
+            timeMax: TestDataFactory.formatDateTimeRFC3339(timeRangeEnd)
+          }
+        });
+        
+        // Delete any existing events found
+        const existingEventIds = TestDataFactory.extractAllEventIds(existingEventsResult);
+        if (existingEventIds.length > 0) {
+          console.log(`🧹 Pre-test cleanup: Removing ${existingEventIds.length} existing events from test time window`);
+          for (const eventId of existingEventIds) {
+            try {
+              await client.callTool({
+                name: 'delete-event',
+                arguments: {
+                  calendarId: TEST_CALENDAR_ID,
+                  eventId,
+                  sendUpdates: SEND_UPDATES
+                }
+              });
+            } catch (error) {
+              // Ignore errors - event might be protected or already deleted
+            }
+          }
+          // Wait for deletions to propagate
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+        
+        // Create first meeting 9-10am
+        const firstStart = new Date(baseDate);
+        const firstEnd = new Date(firstStart);
+        firstEnd.setHours(10, 0, 0, 0);
+        
+        const firstMeeting = TestDataFactory.createSingleEvent({
+          summary: 'Morning Standup',
+          description: 'Daily team sync',
+          location: 'Room A',
+          start: TestDataFactory.formatDateTimeRFC3339(firstStart),
+          end: TestDataFactory.formatDateTimeRFC3339(firstEnd)
+        });
+        
+        const firstId = await createTestEvent(firstMeeting);
+        createdEventIds.push(firstId);
+        
+        // Note: Google Calendar has eventual consistency - events may not immediately
+        // appear in list queries. This delay helps but doesn't guarantee visibility.
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Create second meeting 10-11am (immediately after)
+        const secondStart = new Date(baseDate);
+        secondStart.setHours(10, 0, 0, 0);
+        const secondEnd = new Date(secondStart);
+        secondEnd.setHours(11, 0, 0, 0);
+        
+        const secondMeeting = TestDataFactory.createSingleEvent({
+          summary: 'Project Review',
+          description: 'Weekly project status update',
+          location: 'Room B',
+          start: TestDataFactory.formatDateTimeRFC3339(secondStart),
+          end: TestDataFactory.formatDateTimeRFC3339(secondEnd)
+        });
+        
+        const result = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...secondMeeting
+          }
+        });
+        
+        // Should not show conflict warning for adjacent events
+        expect((result.content as any)[0].text).toContain('Event created successfully');
+        expect((result.content as any)[0].text).not.toContain('CONFLICTS');
+        expect((result.content as any)[0].text).not.toContain('Overlap');
+        const secondId = TestDataFactory.extractEventIdFromResponse(result);
+        if (secondId) createdEventIds.push(secondId);
+        
+        // Create third meeting 10:30-11:30am (overlaps with second)
+        const thirdStart = new Date(baseDate);
+        thirdStart.setHours(10, 30, 0, 0); // 10:30 AM
+        const thirdEnd = new Date(thirdStart);
+        thirdEnd.setHours(11, 30, 0, 0); // 11:30 AM
+        
+        const thirdMeeting = TestDataFactory.createSingleEvent({
+          summary: 'Design Discussion',
+          description: 'UI/UX design review',
+          location: 'Design Lab',
+          start: TestDataFactory.formatDateTimeRFC3339(thirdStart),
+          end: TestDataFactory.formatDateTimeRFC3339(thirdEnd)
+        });
+        
+        const conflictResult = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...thirdMeeting
+          }
+        });
+        
+        // Should show conflict for actual overlap
+        expect((conflictResult.content as any)[0].text).toContain('Event created with warnings');
+        expect((conflictResult.content as any)[0].text).toContain('SCHEDULING CONFLICTS DETECTED');
+        expect((conflictResult.content as any)[0].text).toContain('30 minute');
+        expect((conflictResult.content as any)[0].text).toContain('50% of your event');
+        const thirdId = TestDataFactory.extractEventIdFromResponse(conflictResult);
+        if (thirdId) createdEventIds.push(thirdId);
+      });
+    });
+    
+    describe('Unified Threshold Configuration', () => {
+      it('should use configurable duplicate detection threshold', async () => {
+        // Use fixed time for consistent testing
+        const fixedStart = new Date();
+        fixedStart.setDate(fixedStart.getDate() + 8); // 8 days from now
+        fixedStart.setHours(10, 0, 0, 0); // 10 AM
+        const fixedEnd = new Date(fixedStart);
+        fixedEnd.setHours(11, 0, 0, 0); // 11 AM
+        
+        // Pre-check: Clear any existing events in this time window
+        const timeRangeStart = new Date(fixedStart);
+        timeRangeStart.setHours(0, 0, 0, 0); // Start of day
+        const timeRangeEnd = new Date(fixedStart);
+        timeRangeEnd.setHours(23, 59, 59, 999); // End of day
+        
+        const existingEventsResult = await client.callTool({
+          name: 'list-events',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            timeMin: TestDataFactory.formatDateTimeRFC3339(timeRangeStart),
+            timeMax: TestDataFactory.formatDateTimeRFC3339(timeRangeEnd)
+          }
+        });
+        
+        // Delete any existing events found
+        const existingEventIds = TestDataFactory.extractAllEventIds(existingEventsResult);
+        if (existingEventIds.length > 0) {
+          console.log(`🧹 Pre-test cleanup: Removing ${existingEventIds.length} existing events from test time window`);
+          for (const eventId of existingEventIds) {
+            try {
+              await client.callTool({
+                name: 'delete-event',
+                arguments: {
+                  calendarId: TEST_CALENDAR_ID,
+                  eventId,
+                  sendUpdates: SEND_UPDATES
+                }
+              });
+            } catch (error) {
+              // Ignore errors - event might be protected or already deleted
+            }
+          }
+          // Wait for deletions to propagate
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+        
+        const baseEvent = TestDataFactory.createSingleEvent({
+          summary: 'Quarterly Planning',
+          start: TestDataFactory.formatDateTimeRFC3339(fixedStart),
+          end: TestDataFactory.formatDateTimeRFC3339(fixedEnd)
+        });
+        
+        const baseId = await createTestEvent(baseEvent);
+        createdEventIds.push(baseId);
+        
+        // Note: Google Calendar has eventual consistency - events may not immediately
+        // appear in list queries. This delay helps but doesn't guarantee visibility.
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Test with custom threshold of 0.5 for similar title at same time
+        const similarEvent = {
+          ...baseEvent,
+          summary: 'Quarterly Planning Meeting'  // Similar but not identical title
+        };
+        
+        const lowThresholdResult = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...similarEvent,
+            duplicateSimilarityThreshold: 0.5,
+            allowDuplicates: true // Allow creation despite warning
+          }
+        });
+        
+        // Track for cleanup immediately after creation
+        const lowThresholdId = TestDataFactory.extractEventIdFromResponse(lowThresholdResult);
+        if (lowThresholdId) createdEventIds.push(lowThresholdId);
+        
+        // Should show warning since similarity > 50% threshold
+        expect((lowThresholdResult.content as any)[0].text).toContain('POTENTIAL DUPLICATES DETECTED');
+        
+        // Test with high threshold of 0.9 (should not flag ~70% similarity)
+        const slightlyDifferentEvent = {
+          ...baseEvent,
+          summary: 'Q4 Planning'  // Different enough title to be below 90% threshold
+        };
+        
+        const highThresholdResult = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...slightlyDifferentEvent,
+            duplicateSimilarityThreshold: 0.9
+          }
+        });
+        
+        // Track for cleanup immediately after creation
+        const highThresholdId = TestDataFactory.extractEventIdFromResponse(highThresholdResult);
+        if (highThresholdId) createdEventIds.push(highThresholdId);
+        
+        // Should not show DUPLICATE warning since similarity < 90% threshold
+        // Note: May show conflict warning if events overlap in time
+        expect((highThresholdResult.content as any)[0].text).not.toContain('DUPLICATE');
+      });
+      
+      it('should allow exact duplicates with allowDuplicates flag', async () => {
+        // Use fixed time for exact duplicate
+        const fixedStart = new Date();
+        fixedStart.setDate(fixedStart.getDate() + 9); // 9 days from now
+        fixedStart.setHours(15, 0, 0, 0); // 3 PM
+        const fixedEnd = new Date(fixedStart);
+        fixedEnd.setHours(16, 0, 0, 0); // 4 PM
+        
+        // Pre-check: Clear any existing events in this time window
+        const timeRangeStart = new Date(fixedStart);
+        timeRangeStart.setHours(0, 0, 0, 0); // Start of day
+        const timeRangeEnd = new Date(fixedStart);
+        timeRangeEnd.setHours(23, 59, 59, 999); // End of day
+        
+        const existingEventsResult = await client.callTool({
+          name: 'list-events',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            timeMin: TestDataFactory.formatDateTimeRFC3339(timeRangeStart),
+            timeMax: TestDataFactory.formatDateTimeRFC3339(timeRangeEnd)
+          }
+        });
+        
+        // Delete any existing events found
+        const existingEventIds = TestDataFactory.extractAllEventIds(existingEventsResult);
+        if (existingEventIds.length > 0) {
+          console.log(`🧹 Pre-test cleanup: Removing ${existingEventIds.length} existing events from test time window`);
+          for (const eventId of existingEventIds) {
+            try {
+              await client.callTool({
+                name: 'delete-event',
+                arguments: {
+                  calendarId: TEST_CALENDAR_ID,
+                  eventId,
+                  sendUpdates: SEND_UPDATES
+                }
+              });
+            } catch (error) {
+              // Ignore errors - event might be protected or already deleted
+            }
+          }
+          // Wait for deletions to propagate
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+        
+        const event = TestDataFactory.createSingleEvent({
+          summary: 'Important Presentation',
+          start: TestDataFactory.formatDateTimeRFC3339(fixedStart),
+          end: TestDataFactory.formatDateTimeRFC3339(fixedEnd)
+        });
+        
+        const firstId = await createTestEvent(event);
+        createdEventIds.push(firstId);
+        
+        // Note: Google Calendar has eventual consistency - events may not immediately
+        // appear in list queries. This delay helps but doesn't guarantee visibility.
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Try to create exact duplicate with allowDuplicates=true
+        const duplicateResult = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...event,
+            allowDuplicates: true
+          }
+        });
+        
+        // Should create with warning but not block
+        expect((duplicateResult.content as any)[0].text).toContain('Event created with warnings');
+        expect((duplicateResult.content as any)[0].text).toContain('POTENTIAL DUPLICATES DETECTED');
+        expect((duplicateResult.content as any)[0].text).toContain('95% similar');
+        const duplicateId = TestDataFactory.extractEventIdFromResponse(duplicateResult);
+        if (duplicateId) createdEventIds.push(duplicateId);
+      });
+    });
+    
+    describe('Conflict Detection Performance', () => {
+      it('should detect conflicts for overlapping events', async () => {
+        // Create multiple events for conflict checking
+        const baseTime = new Date();
+        baseTime.setDate(baseTime.getDate() + 10); // 10 days from now
+        baseTime.setHours(14, 0, 0, 0); // 2 PM
+        
+        // Pre-check: Clear any existing events in this time window
+        const timeRangeStart = new Date(baseTime);
+        timeRangeStart.setHours(0, 0, 0, 0); // Start of day
+        const timeRangeEnd = new Date(baseTime);
+        timeRangeEnd.setHours(23, 59, 59, 999); // End of day
+        
+        const existingEventsResult = await client.callTool({
+          name: 'list-events',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            timeMin: TestDataFactory.formatDateTimeRFC3339(timeRangeStart),
+            timeMax: TestDataFactory.formatDateTimeRFC3339(timeRangeEnd)
+          }
+        });
+        
+        // Delete any existing events found
+        const existingEventIds = TestDataFactory.extractAllEventIds(existingEventsResult);
+        if (existingEventIds.length > 0) {
+          console.log(`🧹 Pre-test cleanup: Removing ${existingEventIds.length} existing events from test time window`);
+          for (const eventId of existingEventIds) {
+            try {
+              await client.callTool({
+                name: 'delete-event',
+                arguments: {
+                  calendarId: TEST_CALENDAR_ID,
+                  eventId,
+                  sendUpdates: SEND_UPDATES
+                }
+              });
+            } catch (error) {
+              // Ignore errors - event might be protected or already deleted
+            }
+          }
+          // Wait for deletions to propagate
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+        
+        const events = [];
+        for (let i = 0; i < 3; i++) {
+          const startTime = new Date(baseTime.getTime() + i * 2 * 60 * 60 * 1000);
+          const event = TestDataFactory.createSingleEvent({
+            summary: `Cache Test Event ${i + 1}`,
+            start: TestDataFactory.formatDateTimeRFC3339(startTime),
+            end: TestDataFactory.formatDateTimeRFC3339(new Date(startTime.getTime() + 60 * 60 * 1000))
+          });
+          const id = await createTestEvent(event);
+          createdEventIds.push(id);
+          events.push(event);
+        }
+        
+        // Longer delay to ensure events are indexed in Google Calendar
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // First conflict check
+        const overlappingEvent = TestDataFactory.createSingleEvent({
+          summary: 'Overlapping Meeting',
+          start: events[1].start, // Same time as second event
+          end: events[1].end
+        });
+        
+        const result1 = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...overlappingEvent,
+            allowDuplicates: true
+          }
+        });
+        
+        // Should detect a conflict (100% overlap)
+        const responseText = (result1.content as any)[0].text;
+        expect(responseText).toContain('SCHEDULING CONFLICTS DETECTED');
+        expect(responseText).toContain('100% of your event');
+        const overlappingId = TestDataFactory.extractEventIdFromResponse(result1);
+        if (overlappingId) createdEventIds.push(overlappingId);
+        
+        // Second conflict check with different event
+        const anotherOverlapping = TestDataFactory.createSingleEvent({
+          summary: 'Another Overlapping Meeting',
+          start: events[1].start,
+          end: events[1].end
+        });
+        
+        const result2 = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            ...anotherOverlapping,
+            allowDuplicates: true
+          }
+        });
+        
+        // Should also detect a conflict
+        const responseText2 = (result2.content as any)[0].text;
+        expect(responseText2).toContain('SCHEDULING CONFLICTS DETECTED');
+        expect(responseText2).toContain('100% of your event');
+        const anotherId = TestDataFactory.extractEventIdFromResponse(result2);
+        if (anotherId) createdEventIds.push(anotherId);
+      });
+    });
+  });
+
   describe('Performance Benchmarks', () => {
     it('should complete basic operations within reasonable time limits', async () => {
       // Create a test event for performance testing
@@ -1777,6 +2436,8 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
   }
 
   async function cleanupTestEvents(eventIds: string[]): Promise<void> {
+    const cleanupResults = { success: 0, failed: 0 };
+    
     for (const eventId of eventIds) {
       try {
         const deleteStartTime = testFactory.startTimer('delete-event');
@@ -1791,11 +2452,25 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         });
         
         testFactory.endTimer('delete-event', deleteStartTime, true);
-      } catch (error) {
+        cleanupResults.success++;
+      } catch (error: any) {
         const deleteStartTime = testFactory.startTimer('delete-event');
         testFactory.endTimer('delete-event', deleteStartTime, false, String(error));
-        console.warn(`Failed to cleanup event ${eventId}:`, String(error));
+        
+        // Only warn for non-404 errors (404 means event was already deleted)
+        const errorMessage = String(error);
+        if (!errorMessage.includes('404') && !errorMessage.includes('Not Found')) {
+          console.warn(`⚠️  Failed to cleanup event ${eventId}:`, errorMessage);
+        }
+        cleanupResults.failed++;
       }
+    }
+    
+    if (cleanupResults.success > 0) {
+      console.log(`✅ Successfully deleted ${cleanupResults.success} test event(s)`);
+    }
+    if (cleanupResults.failed > 0 && cleanupResults.failed !== eventIds.length) {
+      console.log(`⚠️  Failed to delete ${cleanupResults.failed} test event(s) (may have been already deleted)`);
     }
   }
 

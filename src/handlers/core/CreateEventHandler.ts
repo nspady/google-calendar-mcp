@@ -3,17 +3,82 @@ import { OAuth2Client } from "google-auth-library";
 import { CreateEventInput } from "../../tools/registry.js";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
-import { formatEventWithDetails } from "../utils.js";
+import { createEventResponseWithConflicts, formatConflictWarnings } from "../utils.js";
 import { createTimeObject } from "../utils/datetime.js";
 import { validateEventId } from "../../utils/event-id-validator.js";
+import { ConflictDetectionService } from "../../services/conflict-detection/index.js";
+import { CONFLICT_DETECTION_CONFIG } from "../../services/conflict-detection/config.js";
 
 export class CreateEventHandler extends BaseToolHandler {
+    private conflictDetectionService: ConflictDetectionService;
+    
+    constructor() {
+        super();
+        this.conflictDetectionService = new ConflictDetectionService();
+    }
+    
     async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
         const validArgs = args as CreateEventInput;
+        
+        // Create the event object for conflict checking
+        const timezone = args.timeZone || await this.getCalendarTimezone(oauth2Client, validArgs.calendarId);
+        const eventToCheck: calendar_v3.Schema$Event = {
+            summary: args.summary,
+            description: args.description,
+            start: createTimeObject(args.start, timezone),
+            end: createTimeObject(args.end, timezone),
+            attendees: args.attendees,
+            location: args.location,
+        };
+        
+        // Check for conflicts and duplicates
+        const conflicts = await this.conflictDetectionService.checkConflicts(
+            oauth2Client,
+            eventToCheck,
+            validArgs.calendarId,
+            {
+                checkDuplicates: true,
+                checkConflicts: true,
+                calendarsToCheck: validArgs.calendarsToCheck || [validArgs.calendarId],
+                duplicateSimilarityThreshold: validArgs.duplicateSimilarityThreshold || CONFLICT_DETECTION_CONFIG.DEFAULT_DUPLICATE_THRESHOLD
+            }
+        );
+        
+        // Block creation if exact or near-exact duplicate found
+        const exactDuplicate = conflicts.duplicates.find(
+            dup => dup.event.similarity >= CONFLICT_DETECTION_CONFIG.DUPLICATE_THRESHOLDS.BLOCKING
+        );
+        
+        if (exactDuplicate && validArgs.allowDuplicates !== true) {
+            
+            // Format the duplicate details
+            const duplicateDetails = formatConflictWarnings({
+                hasConflicts: true,
+                duplicates: [exactDuplicate],
+                conflicts: []
+            });
+            
+            // Remove the "POTENTIAL DUPLICATES DETECTED" header since we're blocking
+            const cleanedDetails = duplicateDetails.replace('⚠️ POTENTIAL DUPLICATES DETECTED:', '').trim();
+            
+            const similarityPercentage = Math.round(exactDuplicate.event.similarity * 100);
+            let blockMessage = `⚠️ DUPLICATE EVENT DETECTED (${similarityPercentage}% similar)!\n\n`;
+            blockMessage += cleanedDetails;
+            blockMessage += `\n\nThis event appears to be a duplicate. To create anyway, set allowDuplicates to true.`;
+            
+            return {
+                content: [{
+                    type: "text",
+                    text: blockMessage
+                }]
+            };
+        }
+        
+        // Create the event
         const event = await this.createEvent(oauth2Client, validArgs);
         
-        const eventDetails = formatEventWithDetails(event, validArgs.calendarId);
-        const text = `Event created successfully!\n\n${eventDetails}`;
+        // Generate response with conflict warnings
+        const text = createEventResponseWithConflicts(event, validArgs.calendarId, conflicts, "created");
         
         return {
             content: [{
