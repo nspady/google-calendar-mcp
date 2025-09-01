@@ -60,8 +60,9 @@ describe('Conflict Detection Integration Tests', () => {
         }
       });
 
-      expect(createResult.content[0].text).toContain('Event created successfully');
-      const eventId = TestDataFactory.extractEventIdFromResponse(createResult);
+      const createResponse = JSON.parse(createResult.content[0].text);
+      expect(createResponse.event).toBeDefined();
+      const eventId = createResponse.event.id;
       TestDataFactory.trackCreatedEvent(eventId, testCalendarId);
 
       // Try to create a duplicate
@@ -74,10 +75,12 @@ describe('Conflict Detection Integration Tests', () => {
         }
       });
 
-      // Should block creation due to high similarity
-      expect(duplicateResult.content[0].text).toContain('DUPLICATE EVENT DETECTED');
-      expect(duplicateResult.content[0].text).toContain('View existing event:');
-      expect(duplicateResult.content[0].text).toMatch(/\d+% similar/);
+      // Should throw error due to high similarity
+      // In v2.0, duplicate detection throws an error
+      expect(duplicateResult.isError).toBe(true);
+      if (duplicateResult.error) {
+        expect(duplicateResult.error.message).toContain('Duplicate event detected');
+      }
     });
 
     it('should not treat all-day event as duplicate of timed event', async function() {
@@ -107,7 +110,8 @@ describe('Conflict Detection Integration Tests', () => {
         }
       });
 
-      expect(allDayResult.content[0].text).toContain('Event created successfully');
+      const allDayResponse = JSON.parse(allDayResult.content[0].text);
+      expect(allDayResponse.event).toBeDefined();
       const allDayEventId = TestDataFactory.extractEventIdFromResponse(allDayResult);
       TestDataFactory.trackCreatedEvent(allDayEventId, testCalendarId);
 
@@ -126,8 +130,9 @@ describe('Conflict Detection Integration Tests', () => {
       });
 
       // Should NOT be blocked as duplicate even though title and location match
-      expect(timedResult.content[0].text).toContain('Event created');
-      expect(timedResult.content[0].text).not.toContain('DUPLICATE EVENT DETECTED');
+      const timedResponse = JSON.parse(timedResult.content[0].text);
+      expect(timedResponse.event).toBeDefined();
+      expect(timedResponse.duplicates).toBeUndefined();
       
       // May show as low similarity duplicate in warnings
       if (timedResult.content[0].text.includes('POTENTIAL DUPLICATES')) {
@@ -174,8 +179,11 @@ describe('Conflict Detection Integration Tests', () => {
         }
       });
 
-      expect(duplicateResult.content[0].text).toContain('Event created with warnings');
-      expect(duplicateResult.content[0].text).toContain('POTENTIAL DUPLICATES DETECTED');
+      const duplicateResponse = JSON.parse(duplicateResult.content[0].text);
+      expect(duplicateResponse.event).toBeDefined();
+      expect(duplicateResponse.warnings).toBeDefined();
+      expect(duplicateResponse.duplicates).toBeDefined();
+      expect(duplicateResponse.duplicates.length).toBeGreaterThan(0);
       const secondEventId = TestDataFactory.extractEventIdFromResponse(duplicateResult);
       TestDataFactory.trackCreatedEvent(secondEventId, testCalendarId);
     });
@@ -230,12 +238,15 @@ describe('Conflict Detection Integration Tests', () => {
         }
       });
 
-      expect(conflictResult.content[0].text).toContain('Event created with warnings');
-      expect(conflictResult.content[0].text).toContain('SCHEDULING CONFLICTS DETECTED');
-      expect(conflictResult.content[0].text).toContain('Overlap:');
-      expect(conflictResult.content[0].text).toContain('30 minute');
-      expect(conflictResult.content[0].text).toContain('50% of your event');
-      expect(conflictResult.content[0].text).toContain('View conflicting event:');
+      const conflictResponse = JSON.parse(conflictResult.content[0].text);
+      expect(conflictResponse.event).toBeDefined();
+      expect(conflictResponse.warnings).toBeDefined();
+      expect(conflictResponse.conflicts).toBeDefined();
+      expect(conflictResponse.conflicts.length).toBeGreaterThan(0);
+      const conflict = conflictResponse.conflicts[0];
+      expect(conflict.overlap).toBeDefined();
+      expect(conflict.overlap.duration).toContain('30 minute');
+      expect(conflict.overlap.percentage).toContain('50%');
       
       const secondEventId = TestDataFactory.extractEventIdFromResponse(conflictResult);
       TestDataFactory.trackCreatedEvent(secondEventId, testCalendarId);
@@ -264,7 +275,8 @@ describe('Conflict Detection Integration Tests', () => {
         }
       });
 
-      expect(result.content[0].text).toContain('Event created successfully');
+      const response = JSON.parse(result.content[0].text);
+      expect(response.event).toBeDefined();
       const eventId = TestDataFactory.extractEventIdFromResponse(result);
       TestDataFactory.trackCreatedEvent(eventId, testCalendarId);
     });
@@ -315,9 +327,11 @@ describe('Conflict Detection Integration Tests', () => {
         }
       });
 
-      expect(updateResult.content[0].text).toContain('Event updated with warnings');
-      expect(updateResult.content[0].text).toContain('SCHEDULING CONFLICTS DETECTED');
-      expect(updateResult.content[0].text).toContain('View conflicting event:');
+      const updateResponse = JSON.parse(updateResult.content[0].text);
+      expect(updateResponse.event).toBeDefined();
+      expect(updateResponse.warnings).toBeDefined();
+      expect(updateResponse.conflicts).toBeDefined();
+      expect(updateResponse.conflicts.length).toBeGreaterThan(0);
     });
 
     it('should skip conflict check when checkConflicts=false', async function() {
@@ -350,7 +364,9 @@ describe('Conflict Detection Integration Tests', () => {
         }
       });
 
-      expect(updateResult.content[0].text).toContain('Event updated successfully');
+      const updateResponse = JSON.parse(updateResult.content[0].text);
+      expect(updateResponse.event).toBeDefined();
+      expect(updateResponse.conflicts).toBeUndefined();
       expect(updateResult.content[0].text).not.toContain('CONFLICTS');
     });
   });
