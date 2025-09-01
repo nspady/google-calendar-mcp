@@ -6,7 +6,7 @@ export interface TestEvent {
   description?: string;
   start: string;
   end: string;
-  timeZone: string;
+  timeZone?: string; // Optional for all-day events
   location?: string;
   attendees?: Array<{ email: string }>;
   colorId?: string;
@@ -78,18 +78,20 @@ export class TestDataFactory {
   static createAllDayEvent(overrides: Partial<TestEvent> = {}): TestEvent {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
     
     const dayAfter = new Date(tomorrow);
     dayAfter.setDate(dayAfter.getDate() + 1);
-    dayAfter.setHours(0, 0, 0, 0);
+
+    // For all-day events, use date-only format (YYYY-MM-DD)
+    const startDate = tomorrow.toISOString().split('T')[0];
+    const endDate = dayAfter.toISOString().split('T')[0];
 
     return {
       summary: 'Test All-Day Event',
       description: 'All-day test event',
-      start: this.formatDateTimeRFC3339(tomorrow),
-      end: this.formatDateTimeRFC3339(dayAfter),
-      timeZone: 'America/Los_Angeles',
+      start: startDate,
+      end: endDate,
+      // Note: timeZone is not used for all-day events (they're date-only)
       ...overrides
     };
   }
@@ -173,7 +175,7 @@ export class TestDataFactory {
   }
 
   // Performance tracking
-  startTimer(operation: string): number {
+  startTimer(_operation: string): number {
     return Date.now();
   }
 

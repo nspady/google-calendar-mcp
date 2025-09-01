@@ -32,18 +32,31 @@ function formatDateTime(dateTime?: string | null, date?: string | null, timeZone
         const dt = dateTime || date;
         if (!dt) return "unspecified";
         
+        // If it's a date-only event (all-day), handle it specially
+        if (date && !dateTime) {
+            // For all-day events, just format the date string directly
+            // Date-only strings like "2025-03-15" should be displayed as-is
+            const [year, month, day] = date.split('-').map(Number);
+            
+            // Create a date string without any timezone conversion
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+            
+            // Calculate day of week using Zeller's congruence (timezone-independent)
+            const q = day;
+            const m = month <= 2 ? month + 12 : month;
+            const y = month <= 2 ? year - 1 : year;
+            const k = y % 100;
+            const j = Math.floor(y / 100);
+            const h = (q + Math.floor((13 * (m + 1)) / 5) + k + Math.floor(k / 4) + Math.floor(j / 4) - 2 * j) % 7;
+            const dayOfWeek = (h + 6) % 7; // Convert to 0=Sunday format
+            
+            return `${dayNames[dayOfWeek]}, ${monthNames[month - 1]} ${day}, ${year}`;
+        }
+        
         const parsedDate = new Date(dt);
         if (isNaN(parsedDate.getTime())) return dt;
-        
-        // If it's a date-only event, just return the date
-        if (date && !dateTime) {
-            return parsedDate.toLocaleDateString('en-US', {
-                weekday: 'short',
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric'
-            });
-        }
         
         // For timed events, include timezone
         const options: Intl.DateTimeFormatOptions = {
@@ -112,15 +125,41 @@ export function formatEventWithDetails(event: calendar_v3.Schema$Event, calendar
             timeInfo = `\nDate: ${startTime}`;
         } else {
             // Multi-day all-day event - end date is exclusive, so subtract 1 day for display
-            const endDate = event.end?.date ? new Date(event.end.date) : null;
-            if (endDate) {
-                endDate.setDate(endDate.getDate() - 1); // Subtract 1 day since end is exclusive
-                const adjustedEndTime = endDate.toLocaleDateString('en-US', {
-                    weekday: 'short',
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric'
-                });
+            if (event.end?.date) {
+                // Parse the end date properly without timezone conversion
+                const [year, month, day] = event.end.date.split('-').map(Number);
+                
+                // Subtract 1 day since end is exclusive, handling month/year boundaries
+                let adjustedDay = day - 1;
+                let adjustedMonth = month;
+                let adjustedYear = year;
+                
+                if (adjustedDay < 1) {
+                    adjustedMonth--;
+                    if (adjustedMonth < 1) {
+                        adjustedMonth = 12;
+                        adjustedYear--;
+                    }
+                    // Get days in the previous month
+                    const daysInMonth = new Date(adjustedYear, adjustedMonth, 0).getDate();
+                    adjustedDay = daysInMonth;
+                }
+                
+                // Format without using Date object to avoid timezone issues
+                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                
+                // Calculate day of week using Zeller's congruence
+                const q = adjustedDay;
+                const m = adjustedMonth <= 2 ? adjustedMonth + 12 : adjustedMonth;
+                const y = adjustedMonth <= 2 ? adjustedYear - 1 : adjustedYear;
+                const k = y % 100;
+                const j = Math.floor(y / 100);
+                const h = (q + Math.floor((13 * (m + 1)) / 5) + k + Math.floor(k / 4) + Math.floor(j / 4) - 2 * j) % 7;
+                const dayOfWeek = (h + 6) % 7; // Convert to 0=Sunday format
+                
+                const adjustedEndTime = `${dayNames[dayOfWeek]}, ${monthNames[adjustedMonth - 1]} ${adjustedDay}, ${adjustedYear}`;
                 timeInfo = `\nStart Date: ${startTime}\nEnd Date: ${adjustedEndTime}`;
             } else {
                 timeInfo = `\nStart Date: ${startTime}`;
