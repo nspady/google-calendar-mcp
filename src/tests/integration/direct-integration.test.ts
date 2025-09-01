@@ -385,6 +385,80 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         await verifyEventInSearch(allDayEvent.summary);
       });
 
+      it('should correctly display all-day events in non-UTC timezones', async () => {
+        // Create an all-day event for a specific date
+        // For all-day events, use date-only format (YYYY-MM-DD)
+        const startDate = '2025-03-15'; // March 15, 2025
+        const endDate = '2025-03-16';   // March 16, 2025 (exclusive)
+        
+        // Create all-day event
+        const createResult = await client.callTool({
+          name: 'create-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            summary: 'All-Day Event Timezone Test',
+            description: 'Testing all-day event display in different timezones',
+            start: startDate,
+            end: endDate
+          }
+        });
+        
+        const eventId = TestDataFactory.extractEventIdFromResponse(createResult);
+        expect(eventId).toBeTruthy();
+        if (eventId) createdEventIds.push(eventId);
+        
+        // Test 1: List events without timezone (should use calendar's default)
+        const listDefaultTz = await client.callTool({
+          name: 'list-events',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            timeMin: '2025-03-14T00:00:00',
+            timeMax: '2025-03-17T23:59:59'
+          }
+        });
+        
+        const defaultText = (listDefaultTz.content as any)[0].text;
+        console.log('Default timezone listing:', defaultText);
+        
+        // Test 2: List events with UTC timezone
+        const listUTC = await client.callTool({
+          name: 'list-events',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            timeMin: '2025-03-14T00:00:00Z',
+            timeMax: '2025-03-17T23:59:59Z',
+            timeZone: 'UTC'
+          }
+        });
+        
+        const utcText = (listUTC.content as any)[0].text;
+        console.log('UTC listing:', utcText);
+        
+        // Test 3: List events with Pacific timezone (UTC-7/8)
+        const listPacific = await client.callTool({
+          name: 'list-events',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            timeMin: '2025-03-14T00:00:00-07:00',
+            timeMax: '2025-03-17T23:59:59-07:00',
+            timeZone: 'America/Los_Angeles'
+          }
+        });
+        
+        const pacificText = (listPacific.content as any)[0].text;
+        console.log('Pacific timezone listing:', pacificText);
+        
+        // All listings should show the event on March 15, 2025, not March 14
+        expect(defaultText).toContain('Mar 15');
+        expect(utcText).toContain('Mar 15');
+        expect(pacificText).toContain('Mar 15');
+        
+        // Should NOT show March 14 (the bug would cause it to show March 14)
+        expect(defaultText).not.toContain('Mar 14, 2025');
+        expect(utcText).not.toContain('Mar 14, 2025');
+        expect(pacificText).not.toContain('Mar 14, 2025');
+      });
+
       it('should handle events with attendees', async () => {
         const eventWithAttendees = TestDataFactory.createEventWithAttendees({
           summary: 'Integration Test - Event with Attendees'
@@ -486,88 +560,6 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         await testRecurringEventUpdates(eventId);
       });
 
-      it.skip('should handle update-event with single instance scope (thisEventOnly)', async () => {
-        // Create a recurring event first with a specific start time
-        const baseDate = new Date();
-        baseDate.setDate(baseDate.getDate() + 7); // Next week
-        baseDate.setHours(10, 0, 0, 0);
-        baseDate.setMinutes(0);
-        baseDate.setSeconds(0);
-        baseDate.setMilliseconds(0);
-        
-        const eventStart = TestDataFactory.formatDateTimeRFC3339WithTimezone(baseDate);
-        const eventEnd = new Date(baseDate.getTime() + 60 * 60 * 1000); // 1 hour later
-        
-        const recurringEvent = {
-          summary: 'Weekly Team Meeting - Single Instance Test',
-          description: 'This is a recurring weekly meeting',
-          start: eventStart,
-          end: TestDataFactory.formatDateTimeRFC3339WithTimezone(eventEnd),
-          recurrence: ['RRULE:FREQ=WEEKLY;COUNT=5'], // 5 occurrences
-          timeZone: 'America/Los_Angeles',
-          sendUpdates: SEND_UPDATES
-        };
-        
-        const eventId = await createTestEvent(recurringEvent);
-        createdEventIds.push(eventId);
-        
-        // Wait for event to be searchable and instances to be generated
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
-        // List events to find the actual first instance
-        const timeRanges = TestDataFactory.getTimeRanges();
-        const listResult = await client.callTool({
-          name: 'list-events',
-          arguments: {
-            calendarId: TEST_CALENDAR_ID,
-            timeMin: timeRanges.nextWeek.timeMin,
-            timeMax: timeRanges.nextMonth.timeMax
-          }
-        });
-        
-        // Find our recurring event instance
-        const responseText = (listResult.content as any)[0].text;
-        const eventMatch = responseText.match(new RegExp(`${eventId}.*?Start:\\s*([^\\n]+)`, 's'));
-        
-        if (!eventMatch) {
-          throw new Error('Could not find recurring event instance in list');
-        }
-        
-        // Extract the actual start time of the first instance
-        const instanceStartTime = eventMatch[1].trim();
-        
-        // Update just one instance of the recurring event
-        const updateResult = await client.callTool({
-          name: 'update-event',
-          arguments: {
-            calendarId: TEST_CALENDAR_ID,
-            eventId: eventId,
-            modificationScope: 'thisEventOnly',
-            originalStartTime: instanceStartTime,
-            summary: 'Special Q2 Review Meeting - Single Instance',
-            timeZone: 'America/Los_Angeles',
-            sendUpdates: SEND_UPDATES
-          }
-        });
-        
-        // The test might fail if the implementation isn't complete yet
-        // Check if it's an expected error
-        if (updateResult.isError) {
-          const errorText = (updateResult.content as any)[0].text;
-          // If it's a "Not Found" error, it means the instance ID formatting might be incorrect
-          // This is expected if the feature isn't fully implemented
-          expect(errorText).toMatch(/Not Found|not found|Invalid instance|Event updated/i);
-          console.log('Note: Single instance update may not be fully implemented yet');
-          return; // Skip the rest of the test
-        }
-        
-        expect(TestDataFactory.validateEventResponse(updateResult)).toBe(true);
-        const updateResponseText = (updateResult.content as any)[0].text;
-        expect(updateResponseText).toContain('Event updated');
-        
-        // Verify the single instance was updated
-        await verifyEventInSearch('Special Q2 Review Meeting');
-      });
 
       it('should handle update-event with future instances scope (thisAndFollowing)', async () => {
         // Create a recurring event
@@ -1804,63 +1796,6 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         if (differentDayEventId) createdEventIds.push(differentDayEventId);
       });
       
-      it.skip('should properly handle all-day vs timed events', async () => {  // Skip: all-day events not properly supported yet
-        // Create an all-day event with proper date format
-        const futureDate = new Date();
-        futureDate.setDate(futureDate.getDate() + 6); // 6 days from now
-        const dayAfter = new Date(futureDate);
-        dayAfter.setDate(dayAfter.getDate() + 1);
-        
-        // Format dates properly for all-day events (YYYY-MM-DD)
-        const startDate = futureDate.toISOString().split('T')[0];
-        const endDate = dayAfter.toISOString().split('T')[0];
-        
-        // Create all-day event with proper date-only format
-        const allDayEvent = {
-          summary: 'Company Offsite',
-          location: 'Mountain View',
-          start: startDate,  // Just YYYY-MM-DD for all-day events
-          end: endDate
-        };
-        
-        const allDayResult = await client.callTool({
-          name: 'create-event',
-          arguments: {
-            calendarId: TEST_CALENDAR_ID,
-            ...allDayEvent
-          }
-        });
-        
-        const allDayEventId = TestDataFactory.extractEventIdFromResponse(allDayResult);
-        if (allDayEventId) createdEventIds.push(allDayEventId);
-        
-        // Create timed event with same title on same day - should have low similarity (20%)
-        const timedStart = new Date(futureDate);
-        timedStart.setHours(10, 0, 0, 0); // 10 AM
-        const timedEnd = new Date(timedStart);
-        timedEnd.setHours(12, 0, 0, 0); // 12 PM
-        
-        const timedEvent = TestDataFactory.createSingleEvent({
-          summary: 'Company Offsite',
-          location: 'Mountain View',
-          start: TestDataFactory.formatDateTimeRFC3339(timedStart),
-          end: TestDataFactory.formatDateTimeRFC3339(timedEnd)
-        });
-        
-        const timedResult = await client.callTool({
-          name: 'create-event',
-          arguments: {
-            calendarId: TEST_CALENDAR_ID,
-            ...timedEvent
-          }
-        });
-        
-        // Should not be blocked despite same title and location
-        expect((timedResult.content as any)[0].text).toContain('Event created successfully');
-        expect((timedResult.content as any)[0].text).not.toContain('DUPLICATE EVENT DETECTED');
-        const timedEventId = TestDataFactory.extractEventIdFromResponse(timedResult);
-        if (timedEventId) createdEventIds.push(timedEventId);
-      });
     });
     
     describe('Adjacent Event Handling (No False Positives)', () => {

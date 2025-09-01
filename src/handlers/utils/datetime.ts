@@ -93,11 +93,20 @@ function convertLocalTimeToUTC(year: number, month: number, day: number, hour: n
 
 /**
  * Creates a time object for Google Calendar API, handling both timezone-aware and timezone-naive datetime strings
+ * Also handles all-day events by using 'date' field instead of 'dateTime'
  * @param datetime ISO 8601 datetime string (with or without timezone)
  * @param fallbackTimezone Timezone to use if datetime is timezone-naive (IANA format)
  * @returns Google Calendar API time object
  */
-export function createTimeObject(datetime: string, fallbackTimezone: string): { dateTime: string; timeZone?: string } {
+export function createTimeObject(datetime: string, fallbackTimezone: string): { dateTime?: string; date?: string; timeZone?: string } {
+    // Check if this is a date-only string (all-day event)
+    // Date-only format: YYYY-MM-DD (no time component)
+    if (!/T/.test(datetime)) {
+        // This is a date-only string, use the 'date' field for all-day event
+        return { date: datetime };
+    }
+    
+    // This is a datetime string with time component
     if (hasTimezoneInDatetime(datetime)) {
         // Timezone included in datetime - use as-is, no separate timeZone property needed
         return { dateTime: datetime };

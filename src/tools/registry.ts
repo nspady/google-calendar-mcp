@@ -116,18 +116,20 @@ export const ToolSchemas = {
     description: z.string().optional().describe("Description/notes for the event"),
     start: z.string()
       .refine((val) => {
+        const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(val); // All-day event format
         const withTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(val);
         const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
-        return withTimezone || withoutTimezone;
-      }, "Must be ISO 8601 format: '2026-01-01T00:00:00'")
-      .describe("Event start time: '2024-01-01T10:00:00'"),
+        return dateOnly || withTimezone || withoutTimezone;
+      }, "Must be ISO 8601 format: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events")
+      .describe("Event start time: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events"),
     end: z.string()
       .refine((val) => {
+        const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(val); // All-day event format
         const withTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(val);
         const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
-        return withTimezone || withoutTimezone;
-      }, "Must be ISO 8601 format: '2026-01-01T00:00:00'")
-      .describe("Event end time: '2024-01-01T11:00:00'"),
+        return dateOnly || withTimezone || withoutTimezone;
+      }, "Must be ISO 8601 format: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events")
+      .describe("Event end time: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events (exclusive)"),
     timeZone: z.string().optional().describe(
       "Timezone as IANA Time Zone Database name (e.g., America/Los_Angeles). Takes priority over calendar's default timezone. Only used for timezone-naive datetime strings."
     ),
@@ -227,19 +229,21 @@ export const ToolSchemas = {
     description: z.string().optional().describe("Updated description/notes"),
     start: z.string()
       .refine((val) => {
+        const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(val); // All-day event format
         const withTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(val);
         const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
-        return withTimezone || withoutTimezone;
-      }, "Must be ISO 8601 format: '2026-01-01T00:00:00'")
-      .describe("Updated start time: '2024-01-01T10:00:00'")
+        return dateOnly || withTimezone || withoutTimezone;
+      }, "Must be ISO 8601 format: '2024-01-01T10:00:00' for timed events or '2024-01-01' for all-day events")
+      .describe("Updated start time: '2024-01-01T10:00:00' for timed events or '2024-01-01' for all-day events")
       .optional(),
     end: z.string()
       .refine((val) => {
+        const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(val); // All-day event format
         const withTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(val);
         const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
-        return withTimezone || withoutTimezone;
-      }, "Must be ISO 8601 format: '2026-01-01T00:00:00'")
-      .describe("Updated end time: '2024-01-01T11:00:00'")
+        return dateOnly || withTimezone || withoutTimezone;
+      }, "Must be ISO 8601 format: '2024-01-01T11:00:00' for timed events or '2024-01-02' for all-day events")
+      .describe("Updated end time: '2024-01-01T11:00:00' for timed events or '2024-01-02' for all-day events (exclusive)")
       .optional(),
     timeZone: z.string().optional().describe("Updated timezone as IANA Time Zone Database name. If not provided, uses the calendar's default timezone."),
     location: z.string().optional().describe("Updated location"),
