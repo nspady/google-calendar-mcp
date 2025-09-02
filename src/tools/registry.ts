@@ -366,7 +366,7 @@ export const ToolSchemas = {
   
   'get-current-time': z.object({
     timeZone: z.string().optional().describe(
-      "Optional IANA timezone (e.g., 'America/Los_Angeles', 'Europe/London', 'UTC'). If not provided, returns UTC time and system timezone for reference."
+      "Optional IANA timezone (e.g., 'America/Los_Angeles', 'Europe/London', 'UTC'). If not provided, uses the primary Google Calendar's default timezone."
     )
   })
 } as const;
@@ -532,7 +532,7 @@ export class ToolRegistry {
     },
     {
       name: "get-current-time",
-      description: "Get current system time and timezone information.",
+      description: "Get current time in the primary Google Calendar's timezone (or a requested timezone).",
       schema: ToolSchemas['get-current-time'],
       handler: GetCurrentTimeHandler
     }

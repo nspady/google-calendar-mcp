@@ -5,16 +5,14 @@ import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { GetCurrentTimeInput } from "../../tools/registry.js";
 
 export class GetCurrentTimeHandler extends BaseToolHandler {
-    async runTool(args: any, _oauth2Client: OAuth2Client): Promise<CallToolResult> {
+    async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
         // Validate arguments using schema
         const validArgs = args as GetCurrentTimeInput;
         
         const now = new Date();
         
-        // If no timezone provided, return UTC and system timezone info
-        // This is safer for HTTP mode where server timezone may not match user
+        // If no timezone provided, use the primary Google Calendar's default timezone
         const requestedTimeZone = validArgs.timeZone;
-        const systemTimeZone = this.getSystemTimeZone();
         
         let result: any;
         
@@ -40,18 +38,29 @@ export class GetCurrentTimeHandler extends BaseToolHandler {
                 }
             };
         } else {
-            // No timezone requested - provide UTC and system info for reference
+            // No timezone requested - fetch the primary calendar's timezone
+            // If fetching fails (e.g., auth/network), fall back to system timezone
+            let tz = 'UTC';
+            let source: 'calendar' | 'system' = 'calendar';
+            try {
+                tz = await this.getCalendarTimezone(oauth2Client, 'primary');
+            } catch {
+                tz = this.getSystemTimeZone();
+                source = 'system';
+            }
+
             result = {
                 currentTime: {
                     utc: now.toISOString(),
                     timestamp: now.getTime(),
-                    systemTimeZone: {
-                        timeZone: systemTimeZone,
-                        rfc3339: this.formatDateInTimeZone(now, systemTimeZone),
-                        humanReadable: this.formatHumanReadable(now, systemTimeZone),
-                        offset: this.getTimezoneOffset(now, systemTimeZone)
-                    },
-                    note: "System timezone shown. For HTTP mode, specify timeZone parameter for user's local time."
+                    calendarTimeZone: {
+                        timeZone: tz,
+                        rfc3339: this.formatDateInTimeZone(now, tz),
+                        humanReadable: this.formatHumanReadable(now, tz),
+                        offset: this.getTimezoneOffset(now, tz),
+                        calendarId: 'primary',
+                        source
+                    }
                 }
             };
         }

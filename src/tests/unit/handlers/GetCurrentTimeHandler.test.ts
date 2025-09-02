@@ -9,8 +9,10 @@ describe('GetCurrentTimeHandler', () => {
   } as unknown as OAuth2Client;
 
   describe('runTool', () => {
-    it('should return current time without timezone parameter', async () => {
+    it('should return current time without timezone parameter using primary calendar timezone', async () => {
       const handler = new GetCurrentTimeHandler();
+      // Mock calendar timezone to avoid real API calls in unit tests
+      const spy = vi.spyOn(GetCurrentTimeHandler.prototype as any, 'getCalendarTimezone').mockResolvedValue('America/Los_Angeles');
       const result = await handler.runTool({}, mockOAuth2Client);
       
       expect(result.content).toHaveLength(1);
@@ -20,9 +22,12 @@ describe('GetCurrentTimeHandler', () => {
       expect(response.currentTime).toBeDefined();
       expect(response.currentTime.utc).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
       expect(response.currentTime.timestamp).toBeTypeOf('number');
-      expect(response.currentTime.systemTimeZone).toBeDefined();
-      expect(response.currentTime.systemTimeZone.timeZone).toBeTypeOf('string');
-      expect(response.currentTime.note).toContain('HTTP mode');
+      expect(response.currentTime.calendarTimeZone).toBeDefined();
+      expect(response.currentTime.calendarTimeZone.timeZone).toBe('America/Los_Angeles');
+      expect(response.currentTime.calendarTimeZone.calendarId).toBe('primary');
+      expect(response.currentTime).not.toHaveProperty('systemTimeZone');
+      expect(response.currentTime).not.toHaveProperty('note');
+      spy.mockRestore();
     });
 
     it('should return current time with valid timezone parameter', async () => {
@@ -107,18 +112,21 @@ describe('GetCurrentTimeHandler', () => {
   describe('output format', () => {
     it('should include all required fields in response without timezone', async () => {
       const handler = new GetCurrentTimeHandler();
+      const spy = vi.spyOn(GetCurrentTimeHandler.prototype as any, 'getCalendarTimezone').mockResolvedValue('UTC');
       const result = await handler.runTool({}, mockOAuth2Client);
       const response = JSON.parse(result.content[0].text as string);
 
       expect(response.currentTime).toHaveProperty('utc');
       expect(response.currentTime).toHaveProperty('timestamp');
-      expect(response.currentTime).toHaveProperty('systemTimeZone');
-      expect(response.currentTime).toHaveProperty('note');
+      expect(response.currentTime).toHaveProperty('calendarTimeZone');
       
-      expect(response.currentTime.systemTimeZone).toHaveProperty('timeZone');
-      expect(response.currentTime.systemTimeZone).toHaveProperty('rfc3339');
-      expect(response.currentTime.systemTimeZone).toHaveProperty('humanReadable');
-      expect(response.currentTime.systemTimeZone).toHaveProperty('offset');
+      expect(response.currentTime.calendarTimeZone).toHaveProperty('timeZone');
+      expect(response.currentTime.calendarTimeZone).toHaveProperty('rfc3339');
+      expect(response.currentTime.calendarTimeZone).toHaveProperty('humanReadable');
+      expect(response.currentTime.calendarTimeZone).toHaveProperty('offset');
+      expect(response.currentTime.calendarTimeZone).toHaveProperty('calendarId');
+      expect(response.currentTime).not.toHaveProperty('note');
+      spy.mockRestore();
     });
 
     it('should include all required fields in response with timezone', async () => {

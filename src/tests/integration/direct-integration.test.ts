@@ -192,7 +192,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
       }
     });
 
-    it('should get current time without timezone parameter', async () => {
+    it('should get current time without timezone parameter (uses primary calendar timezone)', async () => {
       const startTime = testFactory.startTimer('get-current-time');
       
       try {
@@ -209,8 +209,11 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         expect(response.currentTime).toBeDefined();
         expect(response.currentTime.utc).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
         expect(response.currentTime.timestamp).toBeTypeOf('number');
-        expect(response.currentTime.systemTimeZone).toBeDefined();
-        expect(response.currentTime.note).toContain('HTTP mode');
+        expect(response.currentTime.calendarTimeZone).toBeDefined();
+        expect(response.currentTime.calendarTimeZone.timeZone).toBeTypeOf('string');
+        expect(response.currentTime.calendarTimeZone.calendarId).toBe('primary');
+        expect(response.currentTime).not.toHaveProperty('systemTimeZone');
+        expect(response.currentTime).not.toHaveProperty('note');
       } catch (error) {
         testFactory.endTimer('get-current-time', startTime, false, String(error));
         throw error;
@@ -350,7 +353,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
       it('should create, list, search, update, and delete a single event', async () => {
         // 1. Create event
         const eventData = TestDataFactory.createSingleEvent({
-          summary: 'Integration Test - Single Event Workflow'
+          summary: `Integration Test - Single Event Workflow ${Date.now()}`
         });
         
         const eventId = await createTestEvent(eventData);
@@ -377,7 +380,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
 
       it('should handle all-day events', async () => {
         const allDayEvent = TestDataFactory.createAllDayEvent({
-          summary: 'Integration Test - All Day Event'
+          summary: `Integration Test - All Day Event ${Date.now()}`
         });
         
         const eventId = await createTestEvent(allDayEvent);
@@ -471,7 +474,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
 
       it('should handle events with attendees', async () => {
         const eventWithAttendees = TestDataFactory.createEventWithAttendees({
-          summary: 'Integration Test - Event with Attendees'
+          summary: `Integration Test - Event with Attendees ${Date.now()}`
         });
         
         const eventId = await createTestEvent(eventWithAttendees);
@@ -482,7 +485,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
 
       it('should handle colored events', async () => {
         const coloredEvent = TestDataFactory.createColoredEvent('9', {
-          summary: 'Integration Test - Colored Event'
+          summary: `Integration Test - Colored Event ${Date.now()}`
         });
         
         const eventId = await createTestEvent(coloredEvent);
@@ -502,7 +505,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         
         // Create event data without timezone
         const eventData = TestDataFactory.createSingleEvent({
-          summary: 'Integration Test - Default Timezone Event'
+          summary: `Integration Test - Default Timezone Event ${Date.now()}`
         });
         
         // Remove timezone from the event data to test default behavior
@@ -555,9 +558,10 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
 
     describe('Recurring Event Operations', () => {
       it('should create and manage recurring events', async () => {
-        // Create recurring event
+        // Create recurring event with unique name
+        const timestamp = Date.now();
         const recurringEvent = TestDataFactory.createRecurringEvent({
-          summary: 'Integration Test - Recurring Weekly Meeting'
+          summary: `Integration Test - Recurring Weekly Meeting ${timestamp}`
         });
         
         const eventId = await createTestEvent(recurringEvent);
@@ -572,9 +576,10 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
 
 
       it('should handle update-event with future instances scope (thisAndFollowing)', async () => {
-        // Create a recurring event
+        // Create a recurring event with unique name
+        const timestamp = Date.now();
         const recurringEvent = TestDataFactory.createRecurringEvent({
-          summary: 'Weekly Team Meeting - Future Instances Test',
+          summary: `Weekly Team Meeting - Future Instances Test ${timestamp}`,
           description: 'This is a recurring weekly meeting',
           location: 'Conference Room A'
         });
@@ -611,9 +616,10 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
       });
 
       it('should maintain backward compatibility with existing update-event calls', async () => {
-        // Create a recurring event
+        // Create a recurring event with unique name
+        const timestamp = Date.now();
         const recurringEvent = TestDataFactory.createRecurringEvent({
-          summary: 'Weekly Team Meeting - Backward Compatibility Test'
+          summary: `Weekly Team Meeting - Backward Compatibility Test ${timestamp}`
         });
         
         const eventId = await createTestEvent(recurringEvent);
@@ -806,7 +812,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
       it('should list events with specific fields', async () => {
         // Create an event with various fields
         const eventData = TestDataFactory.createEventWithAttendees({
-          summary: 'Integration Test - Field Filtering',
+          summary: `Integration Test - Field Filtering ${Date.now()}`,
           description: 'Testing field filtering in list-events',
           location: 'Conference Room A'
         });
@@ -846,11 +852,11 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
       it('should filter events by extended properties', async () => {
         // Create two events - one with matching properties, one without
         const matchingEventData = TestDataFactory.createSingleEvent({
-          summary: 'Integration Test - Matching Extended Props'
+          summary: `Integration Test - Matching Extended Props ${Date.now()}`
         });
         
         const nonMatchingEventData = TestDataFactory.createSingleEvent({
-          summary: 'Integration Test - Non-Matching Extended Props'
+          summary: `Integration Test - Non-Matching Extended Props ${Date.now()}`
         });
         
         // Create event with extended properties
@@ -1068,7 +1074,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         const customEventId = `test${timestamp}${randomPart}`.substring(0, 26);
         
         const eventData = TestDataFactory.createSingleEvent({
-          summary: 'Integration Test - Custom Event ID'
+          summary: `Integration Test - Custom Event ID ${Date.now()}`
         });
         
         const startTime = testFactory.startTimer('create-event-custom-id');
@@ -1111,7 +1117,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         const customEventId = `dup${timestamp}${randomPart}`.substring(0, 26);
         
         const eventData = TestDataFactory.createSingleEvent({
-          summary: 'Integration Test - Duplicate ID Test'
+          summary: `Integration Test - Duplicate ID Test ${Date.now()}`
         });
         
         // First create an event with custom ID
@@ -1157,7 +1163,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
 
       it('should create event with transparency and visibility options', async () => {
         const eventData = TestDataFactory.createSingleEvent({
-          summary: 'Integration Test - Transparency and Visibility'
+          summary: `Integration Test - Transparency and Visibility ${Date.now()}`
         });
         
         const startTime = testFactory.startTimer('create-event-transparency-visibility');
@@ -1193,7 +1199,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
 
       it('should create event with extended properties', async () => {
         const eventData = TestDataFactory.createSingleEvent({
-          summary: 'Integration Test - Extended Properties'
+          summary: `Integration Test - Extended Properties ${Date.now()}`
         });
         
         const startTime = testFactory.startTimer('create-event-extended-properties');
@@ -1254,7 +1260,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
 
       it('should create event with conference data', async () => {
         const eventData = TestDataFactory.createSingleEvent({
-          summary: 'Integration Test - Conference Event'
+          summary: `Integration Test - Conference Event ${Date.now()}`
         });
         
         const startTime = testFactory.startTimer('create-event-conference');
@@ -1293,7 +1299,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
 
       it('should create event with source information', async () => {
         const eventData = TestDataFactory.createSingleEvent({
-          summary: 'Integration Test - Event with Source'
+          summary: `Integration Test - Event with Source ${Date.now()}`
         });
         
         const startTime = testFactory.startTimer('create-event-source');
@@ -1328,7 +1334,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
 
       it('should create event with complex attendee details', async () => {
         const eventData = TestDataFactory.createSingleEvent({
-          summary: 'Integration Test - Complex Attendees'
+          summary: `Integration Test - Complex Attendees ${Date.now()}`
         });
         
         const startTime = testFactory.startTimer('create-event-complex-attendees');
@@ -1709,8 +1715,9 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
         
+        const timestamp = Date.now();
         const baseEvent = TestDataFactory.createSingleEvent({
-          summary: 'Team Meeting',
+          summary: `Team Meeting ${timestamp}`,
           location: 'Conference Room A',
           start: TestDataFactory.formatDateTimeRFC3339(fixedStart),
           end: TestDataFactory.formatDateTimeRFC3339(fixedEnd)
@@ -1739,7 +1746,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         // Test 2: Similar title + overlapping time = 70% similarity (warning)
         const similarTitleEvent = {
           ...baseEvent,
-          summary: 'Team Meeting Discussion' // Contains "Team Meeting"
+          summary: `Team Meeting ${timestamp} Discussion` // Contains "Team Meeting"
         };
         
         const similarResult = await client.callTool({
