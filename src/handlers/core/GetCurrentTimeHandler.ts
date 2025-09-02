@@ -40,11 +40,22 @@ export class GetCurrentTimeHandler extends BaseToolHandler {
         } else {
             // No timezone requested - fetch the primary calendar's timezone
             // If fetching fails (e.g., auth/network), fall back to system timezone
-            let tz = 'UTC';
+            let tz: string;
             let source: 'calendar' | 'system' = 'calendar';
+            
             try {
                 tz = await this.getCalendarTimezone(oauth2Client, 'primary');
-            } catch {
+                // If we got UTC back, it might be a fallback, try to detect if it's actually the system timezone
+                if (tz === 'UTC') {
+                    const systemTz = this.getSystemTimeZone();
+                    if (systemTz !== 'UTC') {
+                        // Likely failed to get calendar timezone
+                        tz = systemTz;
+                        source = 'system';
+                    }
+                }
+            } catch (error) {
+                // This shouldn't happen with current implementation, but handle it
                 tz = this.getSystemTimeZone();
                 source = 'system';
             }

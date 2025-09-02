@@ -7,7 +7,6 @@ import {
   StructuredEvent
 } from "../types/structured-responses.js";
 import { calendar_v3 } from "googleapis";
-import { getEventUrl } from "../handlers/utils.js";
 
 /**
  * Creates a structured JSON response for MCP tools
@@ -30,34 +29,58 @@ export function convertConflictsToStructured(
   const result: { conflicts?: ConflictInfo[]; duplicates?: DuplicateInfo[] } = {};
   
   if (conflicts.duplicates.length > 0) {
-    result.duplicates = conflicts.duplicates.map(dup => ({
-      event: {
-        id: dup.event.id || '',
-        title: dup.event.title,
-        start: dup.event.start || '',
-        end: dup.event.end || '',
-        url: dup.event.url,
-        similarity: dup.event.similarity
-      },
-      calendarId: dup.calendarId,
-      suggestion: dup.suggestion
-    }));
+    result.duplicates = conflicts.duplicates.map(dup => {
+      // Get start and end from fullEvent if available
+      let start = '';
+      let end = '';
+      if (dup.fullEvent) {
+        start = dup.fullEvent.start?.dateTime || dup.fullEvent.start?.date || '';
+        end = dup.fullEvent.end?.dateTime || dup.fullEvent.end?.date || '';
+      }
+      
+      return {
+        event: {
+          id: dup.event.id || '',
+          title: dup.event.title,
+          start,
+          end,
+          url: dup.event.url,
+          similarity: dup.event.similarity
+        },
+        calendarId: dup.calendarId || '',
+        suggestion: dup.suggestion
+      };
+    });
   }
   
   if (conflicts.conflicts.length > 0) {
-    result.conflicts = conflicts.conflicts.map(conflict => ({
-      event: {
-        id: conflict.event.id || '',
-        title: conflict.event.title,
-        start: conflict.event.start || '',
-        end: conflict.event.end || '',
-        url: conflict.event.url,
-        similarity: conflict.event.similarity
-      },
-      calendar: conflict.calendar,
-      overlap: conflict.overlap,
-      suggestion: conflict.suggestion
-    }));
+    result.conflicts = conflicts.conflicts.map(conflict => {
+      // Get start and end from either the event object or fullEvent
+      let start = conflict.event.start || '';
+      let end = conflict.event.end || '';
+      if (!start && conflict.fullEvent) {
+        start = conflict.fullEvent.start?.dateTime || conflict.fullEvent.start?.date || '';
+      }
+      if (!end && conflict.fullEvent) {
+        end = conflict.fullEvent.end?.dateTime || conflict.fullEvent.end?.date || '';
+      }
+      
+      return {
+        event: {
+          id: conflict.event.id || '',
+          title: conflict.event.title,
+          start,
+          end,
+          url: conflict.event.url,
+          similarity: conflict.similarity
+        },
+        calendar: conflict.calendar,
+        overlap: conflict.overlap ? {
+          duration: conflict.overlap.duration,
+          percentage: `${conflict.overlap.percentage}%`
+        } : undefined
+      };
+    });
   }
   
   return result;

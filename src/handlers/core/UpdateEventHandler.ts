@@ -4,9 +4,17 @@ import { UpdateEventInput } from "../../tools/registry.js";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
 import { RecurringEventHelpers, RecurringEventError, RECURRING_EVENT_ERRORS } from './RecurringEventHelpers.js';
-import { createEventResponseWithConflicts } from "../utils.js";
 import { ConflictDetectionService } from "../../services/conflict-detection/index.js";
 import { createTimeObject } from "../utils/datetime.js";
+import { 
+    createStructuredResponse, 
+    convertConflictsToStructured,
+    createWarningsArray
+} from "../../utils/response-builder.js";
+import { 
+    UpdateEventResponse,
+    convertGoogleEventToStructured 
+} from "../../types/structured-responses.js";
 
 export class UpdateEventHandler extends BaseToolHandler {
     private conflictDetectionService: ConflictDetectionService;
@@ -61,15 +69,21 @@ export class UpdateEventHandler extends BaseToolHandler {
         // Update the event
         const event = await this.updateEventWithScope(oauth2Client, validArgs);
         
-        // Generate response with conflict warnings
-        const text = createEventResponseWithConflicts(event, validArgs.calendarId, conflicts ?? undefined, "updated");
-        
-        return {
-            content: [{
-                type: "text",
-                text: text
-            }]
+        // Create structured response
+        const response: UpdateEventResponse = {
+            event: convertGoogleEventToStructured(event, validArgs.calendarId)
         };
+        
+        // Add conflict information if present
+        if (conflicts && conflicts.hasConflicts) {
+            const structuredConflicts = convertConflictsToStructured(conflicts);
+            if (structuredConflicts.conflicts) {
+                response.conflicts = structuredConflicts.conflicts;
+            }
+            response.warnings = createWarningsArray(conflicts);
+        }
+        
+        return createStructuredResponse(response);
     }
 
     private async updateEventWithScope(

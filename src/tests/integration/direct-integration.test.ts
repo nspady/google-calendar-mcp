@@ -612,7 +612,9 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         
         expect(TestDataFactory.validateEventResponse(updateResult)).toBe(true);
         const responseText = (updateResult.content as any)[0].text;
-        expect(responseText).toContain('Event updated');
+        const response = JSON.parse(responseText);
+        expect(response.event).toBeDefined();
+        expect(response.event.summary).toBe('Updated Team Meeting - Future Instances');
       });
 
       it('should maintain backward compatibility with existing update-event calls', async () => {
@@ -644,7 +646,9 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         
         expect(TestDataFactory.validateEventResponse(updateResult)).toBe(true);
         const responseText = (updateResult.content as any)[0].text;
-        expect(responseText).toContain('Event updated');
+        const response = JSON.parse(responseText);
+        expect(response.event).toBeDefined();
+        expect(response.event.summary).toBe('Updated Weekly Meeting - All Instances');
         
         // Verify all instances were updated
         await verifyEventInSearch('Updated Weekly Meeting - All Instances');
@@ -779,7 +783,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         expect(TestDataFactory.validateEventResponse(updateResult)).toBe(true);
         const updateResponse = JSON.parse((updateResult.content as any)[0].text);
         expect(updateResponse.event).toBeDefined();
-        expect(updateResponse.event.summary).toBe('Updated Complex Meeting');
+        expect(updateResponse.event.summary).toBe('Updated Complex Meeting - All Fields');
         
         // Verify the update
         await verifyEventInSearch('Updated Complex Meeting - All Fields');
@@ -2144,7 +2148,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         expect(duplicateResponse.warnings).toBeDefined();
         expect(duplicateResponse.duplicates).toBeDefined();
         expect(duplicateResponse.duplicates.length).toBeGreaterThan(0);
-        expect((duplicateResult.content as any)[0].text).toContain('95% similar');
+        expect(duplicateResponse.duplicates[0].event.similarity).toBe(0.95);
         const duplicateId = extractEventId(duplicateResult);
         if (duplicateId) createdEventIds.push(duplicateId);
       });
@@ -2228,9 +2232,11 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         
         // Should detect a conflict (100% overlap)
         const responseText = (result1.content as any)[0].text;
-        expect(responseText).toContain('SCHEDULING CONFLICTS DETECTED');
-        expect(responseText).toContain('100% of your event');
-        const overlappingId = extractEventId(result1);
+        const response1 = JSON.parse(responseText);
+        expect(response1.conflicts).toBeDefined();
+        expect(response1.conflicts.length).toBeGreaterThan(0);
+        expect(response1.conflicts[0].overlap.percentage).toBe('100%');
+        const overlappingId = response1.event?.id;
         if (overlappingId) createdEventIds.push(overlappingId);
         
         // Second conflict check with different event
@@ -2251,8 +2257,14 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         
         // Should also detect a conflict
         const responseText2 = (result2.content as any)[0].text;
-        expect(responseText2).toContain('SCHEDULING CONFLICTS DETECTED');
-        expect(responseText2).toContain('100% of your event');
+        const response2 = JSON.parse(responseText2);
+        expect(response2.conflicts).toBeDefined();
+        expect(response2.conflicts.length).toBeGreaterThan(0);
+        // Check that at least one conflict has 100% overlap
+        const has100PercentOverlap = response2.conflicts.some((c: any) => 
+          c.overlap && c.overlap.percentage === '100%'
+        );
+        expect(has100PercentOverlap).toBe(true);
         const anotherId = extractEventId(result2);
         if (anotherId) createdEventIds.push(anotherId);
       });
