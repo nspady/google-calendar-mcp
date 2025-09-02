@@ -256,7 +256,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
       try {
         // First create an event
         const eventData = TestDataFactory.createSingleEvent({
-          summary: 'Test Get Event By ID'
+          summary: `Test Get Event By ID ${Date.now()}`
         });
         
         const eventId = await createTestEvent(eventData);
@@ -313,7 +313,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
       try {
         // First create an event with extended data
         const eventData = TestDataFactory.createColoredEvent('9', {
-          summary: 'Test Get Event With Fields',
+          summary: `Test Get Event With Fields ${Date.now()}`,
           description: 'Testing field filtering',
           location: 'Test Location'
         });
@@ -401,7 +401,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           name: 'create-event',
           arguments: {
             calendarId: TEST_CALENDAR_ID,
-            summary: 'All-Day Event Timezone Test',
+            summary: `All-Day Event Timezone Test ${Date.now()}`,
             description: 'Testing all-day event display in different timezones',
             start: startDate,
             end: endDate
@@ -689,7 +689,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
       it('should reject non-"all" scopes for single (non-recurring) events', async () => {
         // Create a single (non-recurring) event
         const singleEvent = TestDataFactory.createSingleEvent({
-          summary: 'Single Event - Scope Test'
+          summary: `Single Event - Scope Test ${Date.now()}`
         });
         
         const eventId = await createTestEvent(singleEvent);
@@ -1871,12 +1871,13 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         }
         
         // Create first meeting 9-10am
+        const timestamp = Date.now();
         const firstStart = new Date(baseDate);
         const firstEnd = new Date(firstStart);
         firstEnd.setHours(10, 0, 0, 0);
         
         const firstMeeting = TestDataFactory.createSingleEvent({
-          summary: 'Morning Standup',
+          summary: `Morning Standup ${timestamp}`,
           description: 'Daily team sync',
           location: 'Room A',
           start: TestDataFactory.formatDateTimeRFC3339(firstStart),
@@ -1897,7 +1898,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         secondEnd.setHours(11, 0, 0, 0);
         
         const secondMeeting = TestDataFactory.createSingleEvent({
-          summary: 'Project Review',
+          summary: `Project Review ${timestamp}`,
           description: 'Weekly project status update',
           location: 'Room B',
           start: TestDataFactory.formatDateTimeRFC3339(secondStart),
@@ -2003,8 +2004,9 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
         
+        const timestamp = Date.now();
         const baseEvent = TestDataFactory.createSingleEvent({
-          summary: 'Quarterly Planning',
+          summary: `Quarterly Planning ${timestamp}`,
           start: TestDataFactory.formatDateTimeRFC3339(fixedStart),
           end: TestDataFactory.formatDateTimeRFC3339(fixedEnd)
         });
@@ -2019,7 +2021,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         // Test with custom threshold of 0.5 for similar title at same time
         const similarEvent = {
           ...baseEvent,
-          summary: 'Quarterly Planning Meeting'  // Similar but not identical title
+          summary: `Quarterly Planning ${timestamp} Meeting`  // Similar but not identical title
         };
         
         const lowThresholdResult = await client.callTool({
