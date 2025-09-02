@@ -286,7 +286,44 @@ export const ToolSchemas = {
     ),
     calendarsToCheck: z.array(z.string()).optional().describe(
       "List of calendar IDs to check for conflicts (defaults to just the target calendar)"
-    )
+    ),
+    conferenceData: z.object({
+      createRequest: z.object({
+        requestId: z.string().describe("Client-generated unique ID for this request to ensure idempotency"),
+        conferenceSolutionKey: z.object({
+          type: z.enum(["hangoutsMeet", "eventHangout", "eventNamedHangout", "addOn"]).describe("Conference solution type")
+        }).describe("Conference solution to create")
+      }).describe("Request to generate a new conference for this event")
+    }).optional().describe("Conference properties for the event. Used to add or update Google Meet links."),
+    transparency: z.enum(["opaque", "transparent"]).optional().describe(
+      "Whether the event blocks time on the calendar. 'opaque' means busy, 'transparent' means available"
+    ),
+    visibility: z.enum(["default", "public", "private", "confidential"]).optional().describe(
+      "Visibility of the event"
+    ),
+    guestsCanInviteOthers: z.boolean().optional().describe(
+      "Whether attendees other than the organizer can invite others"
+    ),
+    guestsCanModify: z.boolean().optional().describe(
+      "Whether attendees other than the organizer can modify the event"
+    ),
+    guestsCanSeeOtherGuests: z.boolean().optional().describe(
+      "Whether attendees other than the organizer can see who the event's attendees are"
+    ),
+    anyoneCanAddSelf: z.boolean().optional().describe(
+      "Whether anyone can add themselves to the event"
+    ),
+    extendedProperties: z.object({
+      private: z.record(z.string()).optional().describe("Properties that are private to the creator's app"),
+      shared: z.record(z.string()).optional().describe("Properties that are shared between all apps")
+    }).partial().optional().describe("Extended properties for the event"),
+    attachments: z.array(z.object({
+      fileUrl: z.string().url().describe("URL link to the attachment"),
+      title: z.string().describe("Title of the attachment"),
+      mimeType: z.string().optional().describe("MIME type of the attachment"),
+      iconLink: z.string().optional().describe("URL link to the attachment's icon"),
+      fileId: z.string().optional().describe("ID of the attached Google Drive file")
+    })).optional().describe("File attachments for the event")
   }).refine(
     (data) => {
       // Require originalStartTime when modificationScope is 'thisEventOnly'

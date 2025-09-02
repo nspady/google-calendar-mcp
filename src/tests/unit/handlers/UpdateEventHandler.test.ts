@@ -34,6 +34,15 @@ vi.mock('../../../handlers/core/RecurringEventHelpers.js', () => ({
       if (args.attendees) body.attendees = args.attendees;
       if (args.colorId) body.colorId = args.colorId;
       if (args.reminders) body.reminders = args.reminders;
+      if (args.conferenceData) body.conferenceData = args.conferenceData;
+      if (args.transparency) body.transparency = args.transparency;
+      if (args.visibility) body.visibility = args.visibility;
+      if (args.guestsCanInviteOthers !== undefined) body.guestsCanInviteOthers = args.guestsCanInviteOthers;
+      if (args.guestsCanModify !== undefined) body.guestsCanModify = args.guestsCanModify;
+      if (args.guestsCanSeeOtherGuests !== undefined) body.guestsCanSeeOtherGuests = args.guestsCanSeeOtherGuests;
+      if (args.anyoneCanAddSelf !== undefined) body.anyoneCanAddSelf = args.anyoneCanAddSelf;
+      if (args.extendedProperties) body.extendedProperties = args.extendedProperties;
+      if (args.attachments) body.attachments = args.attachments;
       return body;
     })
   })),
@@ -258,6 +267,91 @@ describe('UpdateEventHandler', () => {
             ]
           }
         })
+      });
+
+      expect(result.content[0].text).toContain('Event updated successfully!');
+    });
+
+    it('should update guest permissions', async () => {
+      const mockUpdatedEvent = {
+        id: 'event123',
+        summary: 'Team Meeting',
+        guestsCanInviteOthers: false,
+        guestsCanModify: true,
+        guestsCanSeeOtherGuests: false
+      };
+
+      mockCalendar.events.get.mockResolvedValue({ data: { recurrence: null } });
+      mockCalendar.events.patch.mockResolvedValue({ data: mockUpdatedEvent });
+
+      const args = {
+        calendarId: 'primary',
+        eventId: 'event123',
+        guestsCanInviteOthers: false,
+        guestsCanModify: true,
+        guestsCanSeeOtherGuests: false,
+        anyoneCanAddSelf: true
+      };
+
+      const result = await handler.runTool(args, mockOAuth2Client);
+
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+        calendarId: 'primary',
+        eventId: 'event123',
+        requestBody: expect.objectContaining({
+          guestsCanInviteOthers: false,
+          guestsCanModify: true,
+          guestsCanSeeOtherGuests: false,
+          anyoneCanAddSelf: true
+        })
+      });
+
+      expect(result.content[0].text).toContain('Event updated successfully!');
+    });
+
+    it('should update event with conference data', async () => {
+      const mockUpdatedEvent = {
+        id: 'event123',
+        summary: 'Video Meeting',
+        conferenceData: {
+          entryPoints: [{ uri: 'https://meet.google.com/abc-defg-hij' }]
+        }
+      };
+
+      mockCalendar.events.get.mockResolvedValue({ data: { recurrence: null } });
+      mockCalendar.events.patch.mockResolvedValue({ data: mockUpdatedEvent });
+
+      const args = {
+        calendarId: 'primary',
+        eventId: 'event123',
+        summary: 'Video Meeting',
+        conferenceData: {
+          createRequest: {
+            requestId: 'unique-request-456',
+            conferenceSolutionKey: {
+              type: 'hangoutsMeet' as const
+            }
+          }
+        }
+      };
+
+      const result = await handler.runTool(args, mockOAuth2Client);
+
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+        calendarId: 'primary',
+        eventId: 'event123',
+        requestBody: expect.objectContaining({
+          summary: 'Video Meeting',
+          conferenceData: {
+            createRequest: {
+              requestId: 'unique-request-456',
+              conferenceSolutionKey: {
+                type: 'hangoutsMeet'
+              }
+            }
+          }
+        }),
+        conferenceDataVersion: 1
       });
 
       expect(result.content[0].text).toContain('Event updated successfully!');
