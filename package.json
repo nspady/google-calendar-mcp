@@ -52,6 +52,7 @@
     "esbuild": "^0.25.0",
     "google-auth-library": "^9.15.0",
     "googleapis": "^144.0.0",
+    "lru-cache": "^11.1.0",
     "open": "^7.4.2",
     "zod": "^3.22.4",
     "zod-to-json-schema": "^3.24.5"

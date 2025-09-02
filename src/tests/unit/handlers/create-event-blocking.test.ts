@@ -60,31 +60,10 @@ describe('CreateEventHandler Blocking Logic', () => {
       location: 'The Coffee Shop'
     };
 
-    const result = await handler.runTool(args, mockOAuth2Client);
-    const response = result.content[0].text;
-
-    // Verify the response format - now includes similarity percentage
-    expect(response).toContain('⚠️ DUPLICATE EVENT DETECTED (100% similar)!');
-    
-    // Should show similarity percentage in the header
-    expect(response).toContain('100% similar');
-    
-    // Should show the duplicate suggestion
-    expect(response).toContain('This appears to be a duplicate. Consider updating the existing event instead.');
-    
-    // Should show full event details
-    expect(response).toContain('Existing event details:');
-    expect(response).toContain('Event: Lunch with Josh');
-    expect(response).toContain('Event ID: existing-lunch-123');
-    expect(response).toContain('Description: Monthly catch-up lunch');
-    expect(response).toContain('Location: The Coffee Shop');
-    expect(response).toContain('Guests: Josh (accepted)');
-    
-    // Should include the view link
-    expect(response).toContain('View: https://calendar.google.com/calendar/event?eid=existing-lunch-123');
-    
-    // Should include instructions to override
-    expect(response).toContain('To create anyway, set allowDuplicates to true.');
+    // Now it should throw an error instead of returning a text message
+    await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow(
+      'Duplicate event detected (100% similar). Event "Lunch with Josh" already exists. To create anyway, set allowDuplicates to true.'
+    );
   });
 
   it('should use centralized threshold configuration', () => {

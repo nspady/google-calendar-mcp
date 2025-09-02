@@ -191,8 +191,10 @@ Personal (cal2)
 
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
-      expect((result.content[0] as any).text).toContain('Event created successfully!');
-      expect((result.content[0] as any).text).toContain('calendar.google.com');
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.event).toBeDefined();
+      expect(response.event.id).toBe('eventId123');
+      expect(response.event.summary).toBe('Team Meeting');
     });
 
     it('should use calendar default timezone when timeZone is not provided', async () => {
@@ -301,10 +303,13 @@ Personal (cal2)
         orderBy: 'startTime'
       });
 
-      // Should return text content with events
+      // Should return structured JSON with events
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
-      expect((result.content[0] as any).text).toContain('Found');
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.events).toHaveLength(1);
+      expect(response.totalCount).toBe(1);
+      expect(response.events[0].id).toBe('event1');
     });
   });
 
