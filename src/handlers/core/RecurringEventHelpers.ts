@@ -122,6 +122,15 @@ export class RecurringEventHelpers {
     if (args.attendees !== undefined && args.attendees !== null) requestBody.attendees = args.attendees;
     if (args.reminders !== undefined && args.reminders !== null) requestBody.reminders = args.reminders;
     if (args.recurrence !== undefined && args.recurrence !== null) requestBody.recurrence = args.recurrence;
+    if (args.conferenceData !== undefined && args.conferenceData !== null) requestBody.conferenceData = args.conferenceData;
+    if (args.transparency !== undefined && args.transparency !== null) requestBody.transparency = args.transparency;
+    if (args.visibility !== undefined && args.visibility !== null) requestBody.visibility = args.visibility;
+    if (args.guestsCanInviteOthers !== undefined && args.guestsCanInviteOthers !== null) requestBody.guestsCanInviteOthers = args.guestsCanInviteOthers;
+    if (args.guestsCanModify !== undefined && args.guestsCanModify !== null) requestBody.guestsCanModify = args.guestsCanModify;
+    if (args.guestsCanSeeOtherGuests !== undefined && args.guestsCanSeeOtherGuests !== null) requestBody.guestsCanSeeOtherGuests = args.guestsCanSeeOtherGuests;
+    if (args.anyoneCanAddSelf !== undefined && args.anyoneCanAddSelf !== null) requestBody.anyoneCanAddSelf = args.anyoneCanAddSelf;
+    if (args.extendedProperties !== undefined && args.extendedProperties !== null) requestBody.extendedProperties = args.extendedProperties;
+    if (args.attachments !== undefined && args.attachments !== null) requestBody.attachments = args.attachments;
 
     // Handle time changes
     let timeChanged = false;
