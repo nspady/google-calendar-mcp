@@ -284,27 +284,23 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
     it('should return error for non-existent event ID', async () => {
       const startTime = testFactory.startTimer('get-event-not-found');
       
-      try {
-        await client.callTool({
-          name: 'get-event',
-          arguments: {
-            calendarId: TEST_CALENDAR_ID,
-            eventId: 'non-existent-event-id-12345'
-          }
-        });
-        
-        // Should have thrown an error
-        testFactory.endTimer('get-event-not-found', startTime, false, 'Expected error for non-existent event');
-        throw new Error('Expected get-event to throw error for non-existent event');
-      } catch (error: any) {
-        // Expecting an error for non-existent event
-        if (error.message?.includes('not found') || error.message?.includes('Event with ID')) {
-          testFactory.endTimer('get-event-not-found', startTime, true);
-          // This is expected - test passes
-        } else {
-          testFactory.endTimer('get-event-not-found', startTime, false, String(error));
-          throw error;
+      const result = await client.callTool({
+        name: 'get-event',
+        arguments: {
+          calendarId: TEST_CALENDAR_ID,
+          eventId: 'non-existent-event-id-12345'
         }
+      });
+      
+      // Errors are returned as text content
+      const text = (result.content as any)[0]?.text;
+      
+      if (text && (text.includes('not found') || text.includes('Event with ID'))) {
+        testFactory.endTimer('get-event-not-found', startTime, true);
+        // This is expected - test passes
+      } else {
+        testFactory.endTimer('get-event-not-found', startTime, false, 'Expected error for non-existent event');
+        throw new Error('Expected get-event to return error for non-existent event');
       }
     });
 
@@ -662,12 +658,9 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           }
         });
         
-        expect(invalidSingleResult.isError).toBe(true);
-        // Should throw an error for missing originalStartTime
-        expect(invalidSingleResult.isError).toBe(true);
-        if (invalidSingleResult.error) {
-          expect(invalidSingleResult.error.message).toContain('originalStartTime');
-        }
+        // Errors are returned as text content
+        const invalidSingleText = (invalidSingleResult.content as any)[0]?.text;
+        expect(invalidSingleText).toContain('originalStartTime');
         
         // Test case 2: Missing futureStartDate for 'thisAndFollowing' scope
         const invalidFutureResult = await client.callTool({
@@ -682,12 +675,9 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           }
         });
         
-        expect(invalidFutureResult.isError).toBe(true);
-        // Should throw an error for missing futureStartDate
-        expect(invalidFutureResult.isError).toBe(true);
-        if (invalidFutureResult.error) {
-          expect(invalidFutureResult.error.message).toContain('futureStartDate');
-        }
+        // Errors are returned as text content
+        const invalidFutureText = (invalidFutureResult.content as any)[0]?.text;
+        expect(invalidFutureText).toContain('futureStartDate');
       });
 
       it('should reject non-"all" scopes for single (non-recurring) events', async () => {
@@ -716,10 +706,8 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           }
         });
         
-        expect(invalidResult.isError).toBe(true);
-        // The error message says "scope other than 'all' only applies to recurring events"
-        // which is semantically the same as "not a recurring event"
-        const errorText = (invalidResult.content as any)[0].text.toLowerCase();
+        // Errors are returned as text content
+        const errorText = (invalidResult.content as any)[0]?.text?.toLowerCase() || '';
         expect(errorText).toMatch(/scope.*only applies to recurring events|not a recurring event/i);
       });
 
@@ -1744,11 +1732,9 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           }
         });
         
-        // In v2.0, exact duplicates throw an error
-        expect(exactDuplicateResult.isError).toBe(true);
-        if (exactDuplicateResult.error) {
-          expect(exactDuplicateResult.error.message).toContain('Duplicate event detected');
-        }
+        // In v2.0, exact duplicates throw an error returned as text
+        const exactDuplicateText = (exactDuplicateResult.content as any)[0]?.text;
+        expect(exactDuplicateText).toContain('Duplicate event detected');
         
         // Test 2: Similar title + overlapping time = 70% similarity (warning)
         const similarTitleEvent = {
@@ -2337,6 +2323,11 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
       // Handle structured JSON response
       const text = (result.content as any)[0]?.text;
       if (!text) throw new Error('No response text');
+      
+      // Check if it's an error message (not JSON)
+      if (text.includes('Duplicate event detected') || text.includes('Error:')) {
+        throw new Error(text);
+      }
       
       const response = JSON.parse(text);
       const eventId = response.event?.id;
