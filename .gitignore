@@ -9,3 +9,6 @@ coverage/
 settings.local.json
 CLAUDE.md
 .env
+# Local Google OAuth credentials (do not commit)
+client_secret_*.json
+gcp-oauth*.json
