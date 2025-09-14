@@ -12,3 +12,9 @@ CLAUDE.md
 # Local Google OAuth credentials (do not commit)
 client_secret_*.json
 gcp-oauth*.json
+
+# macOS
+.DS_Store
+
+# local backups
+*.bak
