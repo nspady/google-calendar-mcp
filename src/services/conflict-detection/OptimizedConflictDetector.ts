@@ -65,10 +65,10 @@ export class OptimizedConflictDetector {
     }
     
     const fingerprint = this.generateFingerprint({
-      title: event.summary,
+      title: event.summary || '',
       startTime: event.start.dateTime || event.start.date || '',
       endTime: event.end.dateTime || event.end.date || '',
-      location: event.location
+      location: event.location || undefined
     });
     
     return this.eventFingerprints.has(fingerprint);
@@ -115,34 +115,12 @@ export class OptimizedConflictDetector {
       return detailedResult;
     }
     
-    // Parallel fetch events from all calendars
-    const timeMin = event.start?.dateTime || event.start?.date;
-    const timeMax = event.end?.dateTime || event.end?.date;
-    
-    if (!timeMin || !timeMax) {
-      return { hasConflicts: false, conflicts: [], duplicates: [] };
-    }
-    
-    const fetchResult = await this.parallelExecutor.fetchEventsFromCalendars(
+    const result = await this.runFullConflictCheck(
       oauth2Client,
-      calendarsToCheck,
-      {
-        timeMin,
-        timeMax,
-        singleEvents: true,
-        orderBy: 'startTime'
-      }
-    );
-    
-    // Process results in parallel
-    const result = await this.processEventsForConflicts(
       event,
-      fetchResult.successful,
+      calendarsToCheck,
       options.duplicateThreshold || 0.7
     );
-    
-    // Update fingerprints with found events
-    this.updateFingerprints(fetchResult.successful);
     
     // Cache the result
     this.cacheResult(cacheKey, result);
@@ -180,19 +158,22 @@ export class OptimizedConflictDetector {
         const overlap = this.calculateOverlap(targetEvent, existingEvent);
         if (overlap > 0) {
           conflicts.push({
+            type: 'overlap' as const,
+            calendar: calendarId,
             event: {
-              id: existingEvent.id,
+              id: existingEvent.id || '',
               title: existingEvent.summary || 'Untitled',
-              start: existingEvent.start?.dateTime || existingEvent.start?.date,
-              end: existingEvent.end?.dateTime || existingEvent.end?.date,
-              url: existingEvent.htmlLink
+              start: existingEvent.start?.dateTime || existingEvent.start?.date || undefined,
+              end: existingEvent.end?.dateTime || existingEvent.end?.date || undefined,
+              url: existingEvent.htmlLink || undefined
             },
-            calendarId,
             overlap: {
-              minutes: Math.round(overlap / 60000),
-              percentage: this.calculateOverlapPercentage(targetEvent, existingEvent, overlap)
+              duration: `${Math.round(overlap / 60000)} minutes`,
+              percentage: this.calculateOverlapPercentage(targetEvent, existingEvent, overlap),
+              startTime: existingEvent.start?.dateTime || existingEvent.start?.date || '',
+              endTime: existingEvent.end?.dateTime || existingEvent.end?.date || ''
             }
-          });
+          } as ConflictInfo);
         }
         
         // Check for duplicates using similarity
@@ -200,18 +181,16 @@ export class OptimizedConflictDetector {
         if (similarity >= duplicateThreshold) {
           duplicates.push({
             event: {
-              id: existingEvent.id,
+              id: existingEvent.id || '',
               title: existingEvent.summary || 'Untitled',
-              start: existingEvent.start?.dateTime || existingEvent.start?.date,
-              end: existingEvent.end?.dateTime || existingEvent.end?.date,
-              url: existingEvent.htmlLink,
+              url: existingEvent.htmlLink || undefined,
               similarity
             },
             calendarId,
-            suggestion: similarity >= 0.95 
+            suggestion: similarity >= 0.95
               ? 'This appears to be an exact duplicate'
               : 'This event is very similar'
-          });
+          } as DuplicateInfo);
         }
       }
     }
@@ -243,14 +222,14 @@ export class OptimizedConflictDetector {
    */
   private calculateOverlapPercentage(
     event1: calendar_v3.Schema$Event,
-    event2: calendar_v3.Schema$Event,
+    _event2: calendar_v3.Schema$Event,
     overlapMs: number
-  ): string {
+  ): number {
     const duration1 = new Date(event1.end?.dateTime || event1.end?.date || '').getTime() -
                       new Date(event1.start?.dateTime || event1.start?.date || '').getTime();
     
     const percentage = Math.round((overlapMs / duration1) * 100);
-    return `${percentage}%`;
+    return percentage;
   }
   
   /**
@@ -383,7 +362,9 @@ export class OptimizedConflictDetector {
     // Enforce max cache size
     if (this.recentChecks.size >= this.maxCacheSize) {
       const oldestKey = this.recentChecks.keys().next().value;
-      this.recentChecks.delete(oldestKey);
+      if (oldestKey) {
+        this.recentChecks.delete(oldestKey);
+      }
     }
     
     this.recentChecks.set(key, {
@@ -404,7 +385,7 @@ export class OptimizedConflictDetector {
             title: event.summary,
             startTime: event.start.dateTime || event.start.date || '',
             endTime: event.end.dateTime || event.end.date || '',
-            location: event.location
+            location: event.location || undefined
           });
           this.eventFingerprints.add(fingerprint);
         }
@@ -425,7 +406,45 @@ export class OptimizedConflictDetector {
       this.lastFingerprintClean = Date.now();
     }
   }
-  
+
+  /**
+   * Run the full conflict detection flow
+   */
+  private async runFullConflictCheck(
+    oauth2Client: OAuth2Client,
+    event: calendar_v3.Schema$Event,
+    calendarsToCheck: string[],
+    duplicateThreshold: number
+  ): Promise<ConflictCheckResult> {
+    const timeMin = event.start?.dateTime || event.start?.date;
+    const timeMax = event.end?.dateTime || event.end?.date;
+
+    if (!timeMin || !timeMax) {
+      return { hasConflicts: false, conflicts: [], duplicates: [] };
+    }
+
+    const fetchResult = await this.parallelExecutor.fetchEventsFromCalendars(
+      oauth2Client,
+      calendarsToCheck,
+      {
+        timeMin,
+        timeMax,
+        singleEvents: true,
+        orderBy: 'startTime'
+      }
+    );
+
+    const result = await this.processEventsForConflicts(
+      event,
+      fetchResult.successful,
+      duplicateThreshold
+    );
+
+    this.updateFingerprints(fetchResult.successful);
+
+    return result;
+  }
+
   /**
    * Perform detailed conflict check
    */
@@ -435,17 +454,11 @@ export class OptimizedConflictDetector {
     calendarsToCheck: string[],
     duplicateThreshold?: number
   ): Promise<ConflictCheckResult> {
-    // This would do a more thorough check when fingerprint matches
-    // For now, delegate to regular check
-    return this.checkConflictsOptimized(
+    return this.runFullConflictCheck(
       oauth2Client,
       event,
-      calendarsToCheck[0],
       calendarsToCheck,
-      { 
-        duplicateThreshold,
-        skipCache: true 
-      }
+      duplicateThreshold ?? 0.7
     );
   }
 }
