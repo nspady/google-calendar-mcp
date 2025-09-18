@@ -5,6 +5,7 @@ A Model Context Protocol (MCP) server that provides Google Calendar integration 
 ## Features
 
 - **Multi-Calendar Support**: List events from multiple calendars simultaneously
+- **Multi-Account Support**: Manage multiple Google accounts with custom IDs
 - **Event Management**: Create, update, delete, and search calendar events
 - **Recurring Events**: Advanced modification capabilities for recurring events
 - **Free/Busy Queries**: Check availability across calendars
@@ -171,10 +172,107 @@ Along with the normal capabilities you would expect for a calendar integration y
 **Environment Variables:**
 - `GOOGLE_OAUTH_CREDENTIALS` - Path to OAuth credentials file
 - `GOOGLE_CALENDAR_MCP_TOKEN_PATH` - Custom token storage location (optional)
+- `GOOGLE_ACCOUNT_MODE` - Account ID to use (default: "normal")
 
 **Claude Desktop Config Location:**
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+
+## Multi-Account Support
+
+The server supports multiple Google accounts, allowing you to authenticate and manage different accounts separately.
+
+### Setting Up Multiple Accounts
+
+#### Using the Same OAuth Credentials
+If all your accounts are personal Google accounts, you can use the same OAuth credentials file:
+
+```bash
+# Authenticate work account
+GOOGLE_ACCOUNT_MODE=work npm run auth
+# Browser opens - log in with your work Google account
+
+# Authenticate personal account
+GOOGLE_ACCOUNT_MODE=personal npm run auth  
+# Browser opens - log in with your personal Google account
+```
+
+#### Using Different OAuth Credentials
+If you need different OAuth apps (e.g., company OAuth for work, personal OAuth for personal):
+
+1. **Authenticate each account with its own credentials:**
+   ```bash
+   # Work account with company OAuth credentials
+   GOOGLE_OAUTH_CREDENTIALS="/path/to/work-oauth.json" \
+   GOOGLE_ACCOUNT_MODE=work \
+   npm run auth
+   
+   # Personal account with personal OAuth credentials
+   GOOGLE_OAUTH_CREDENTIALS="/path/to/personal-oauth.json" \
+   GOOGLE_ACCOUNT_MODE=personal \
+   npm run auth
+   ```
+
+2. **Configure Claude Desktop with multiple accounts:**
+   ```json
+   {
+     "mcpServers": {
+       "google-calendar-work": {
+         "command": "npx",
+         "args": ["@cocal/google-calendar-mcp"],
+         "env": {
+           "GOOGLE_OAUTH_CREDENTIALS": "/path/to/work-oauth.json",
+           "GOOGLE_ACCOUNT_MODE": "work"
+         }
+       },
+       "google-calendar-personal": {
+         "command": "npx",
+         "args": ["@cocal/google-calendar-mcp"],
+         "env": {
+           "GOOGLE_OAUTH_CREDENTIALS": "/path/to/personal-oauth.json",
+           "GOOGLE_ACCOUNT_MODE": "personal"
+         }
+       }
+     }
+   }
+   ```
+
+3. **List available accounts:**
+   ```bash
+   node scripts/account-manager.js list
+   ```
+
+### Understanding OAuth Credentials vs User Tokens
+
+- **OAuth Credentials** (`gcp-oauth.keys.json`): These authenticate your *application* to Google. You get these from Google Cloud Console.
+- **User Tokens** (stored in `~/.config/google-calendar-mcp/tokens.json`): These authenticate specific *Google user accounts* after login.
+
+You can use:
+- **Same OAuth credentials** for multiple personal accounts (the app is the same, users are different)
+- **Different OAuth credentials** when required (e.g., company policy requires using their OAuth app for work accounts)
+
+### Account IDs
+
+Account IDs can contain lowercase letters, numbers, dashes, and underscores. Examples:
+- `work`, `personal`, `client-abc`, `project-2024`, `dev-team`
+
+### Managing Accounts
+
+```bash
+# Check status of all accounts
+node scripts/account-manager.js status
+
+# Clear tokens for a specific account
+node scripts/account-manager.js clear work
+
+# Re-authenticate an account
+node scripts/account-manager.js auth work
+
+# Switch between accounts at runtime
+GOOGLE_ACCOUNT_MODE=personal npm start
+```
+
+All account tokens are stored in `~/.config/google-calendar-mcp/tokens.json` with separate credentials for each account.
 
 
 ## Security
