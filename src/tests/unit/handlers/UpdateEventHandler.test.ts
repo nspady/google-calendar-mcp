@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UpdateEventHandler } from '../../../handlers/core/UpdateEventHandler.js';
 import { OAuth2Client } from 'google-auth-library';
+import type { UpdateEventInput } from '../../../tools/registry.js';
+import type { RecurringEventHelpers } from '../../../handlers/core/RecurringEventHelpers.js';
 
 // Mock the googleapis module
 vi.mock('googleapis', () => ({
@@ -25,15 +27,24 @@ vi.mock('../../../handlers/core/RecurringEventHelpers.js', () => ({
     getCalendar: vi.fn(() => calendar),
     buildUpdateRequestBody: vi.fn((args, defaultTimeZone) => {
       const body: any = {};
-      if (args.summary) body.summary = args.summary;
-      if (args.description) body.description = args.description;
-      if (args.location) body.location = args.location;
+      if (args.summary !== undefined && args.summary !== null) body.summary = args.summary;
+      if (args.description !== undefined && args.description !== null) body.description = args.description;
+      if (args.location !== undefined && args.location !== null) body.location = args.location;
       const tz = args.timeZone || defaultTimeZone;
       if (args.start) body.start = { dateTime: args.start, timeZone: tz };
       if (args.end) body.end = { dateTime: args.end, timeZone: tz };
-      if (args.attendees) body.attendees = args.attendees;
-      if (args.colorId) body.colorId = args.colorId;
-      if (args.reminders) body.reminders = args.reminders;
+      if (args.attendees !== undefined && args.attendees !== null) body.attendees = args.attendees;
+      if (args.colorId !== undefined && args.colorId !== null) body.colorId = args.colorId;
+      if (args.reminders !== undefined && args.reminders !== null) body.reminders = args.reminders;
+      if (args.conferenceData !== undefined && args.conferenceData !== null) body.conferenceData = args.conferenceData;
+      if (args.transparency !== undefined && args.transparency !== null) body.transparency = args.transparency;
+      if (args.visibility !== undefined && args.visibility !== null) body.visibility = args.visibility;
+      if (args.guestsCanInviteOthers !== undefined) body.guestsCanInviteOthers = args.guestsCanInviteOthers;
+      if (args.guestsCanModify !== undefined) body.guestsCanModify = args.guestsCanModify;
+      if (args.guestsCanSeeOtherGuests !== undefined) body.guestsCanSeeOtherGuests = args.guestsCanSeeOtherGuests;
+      if (args.anyoneCanAddSelf !== undefined) body.anyoneCanAddSelf = args.anyoneCanAddSelf;
+      if (args.extendedProperties !== undefined && args.extendedProperties !== null) body.extendedProperties = args.extendedProperties;
+      if (args.attachments !== undefined && args.attachments !== null) body.attachments = args.attachments;
       return body;
     })
   })),
@@ -62,7 +73,8 @@ describe('UpdateEventHandler', () => {
     mockCalendar = {
       events: {
         patch: vi.fn(),
-        get: vi.fn()
+        get: vi.fn(),
+        insert: vi.fn()
       },
       calendars: {
         get: vi.fn()
@@ -263,6 +275,91 @@ describe('UpdateEventHandler', () => {
       expect(result.content[0].text).toContain('Event updated successfully!');
     });
 
+    it('should update guest permissions', async () => {
+      const mockUpdatedEvent = {
+        id: 'event123',
+        summary: 'Team Meeting',
+        guestsCanInviteOthers: false,
+        guestsCanModify: true,
+        guestsCanSeeOtherGuests: false
+      };
+
+      mockCalendar.events.get.mockResolvedValue({ data: { recurrence: null } });
+      mockCalendar.events.patch.mockResolvedValue({ data: mockUpdatedEvent });
+
+      const args = {
+        calendarId: 'primary',
+        eventId: 'event123',
+        guestsCanInviteOthers: false,
+        guestsCanModify: true,
+        guestsCanSeeOtherGuests: false,
+        anyoneCanAddSelf: true
+      };
+
+      const result = await handler.runTool(args, mockOAuth2Client);
+
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+        calendarId: 'primary',
+        eventId: 'event123',
+        requestBody: expect.objectContaining({
+          guestsCanInviteOthers: false,
+          guestsCanModify: true,
+          guestsCanSeeOtherGuests: false,
+          anyoneCanAddSelf: true
+        })
+      });
+
+      expect(result.content[0].text).toContain('Event updated successfully!');
+    });
+
+    it('should update event with conference data', async () => {
+      const mockUpdatedEvent = {
+        id: 'event123',
+        summary: 'Video Meeting',
+        conferenceData: {
+          entryPoints: [{ uri: 'https://meet.google.com/abc-defg-hij' }]
+        }
+      };
+
+      mockCalendar.events.get.mockResolvedValue({ data: { recurrence: null } });
+      mockCalendar.events.patch.mockResolvedValue({ data: mockUpdatedEvent });
+
+      const args = {
+        calendarId: 'primary',
+        eventId: 'event123',
+        summary: 'Video Meeting',
+        conferenceData: {
+          createRequest: {
+            requestId: 'unique-request-456',
+            conferenceSolutionKey: {
+              type: 'hangoutsMeet' as const
+            }
+          }
+        }
+      };
+
+      const result = await handler.runTool(args, mockOAuth2Client);
+
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+        calendarId: 'primary',
+        eventId: 'event123',
+        requestBody: expect.objectContaining({
+          summary: 'Video Meeting',
+          conferenceData: {
+            createRequest: {
+              requestId: 'unique-request-456',
+              conferenceSolutionKey: {
+                type: 'hangoutsMeet'
+              }
+            }
+          }
+        }),
+        conferenceDataVersion: 1
+      });
+
+      expect(result.content[0].text).toContain('Event updated successfully!');
+    });
+
     it('should update color ID', async () => {
       const mockUpdatedEvent = {
         id: 'event123',
@@ -336,6 +433,112 @@ describe('UpdateEventHandler', () => {
       });
 
       expect(result.content[0].text).toContain('Event updated successfully!');
+    });
+  });
+
+  describe('Attachments and conference data handling', () => {
+    it('should set supportsAttachments when clearing attachments', async () => {
+      const mockUpdatedEvent = {
+        id: 'event123',
+        summary: 'Meeting'
+      };
+
+      mockCalendar.events.get.mockResolvedValue({ data: { recurrence: null } });
+      mockCalendar.events.patch.mockResolvedValue({ data: mockUpdatedEvent });
+
+      const args = {
+        calendarId: 'primary',
+        eventId: 'event123',
+        attachments: []
+      };
+
+      await handler.runTool(args, mockOAuth2Client);
+
+      const patchCall = mockCalendar.events.patch.mock.calls[0][0];
+      expect(patchCall.requestBody.attachments).toEqual([]);
+      expect(patchCall.supportsAttachments).toBe(true);
+    });
+
+    it('should set supportsAttachments when duplicating attachments for future instances', async () => {
+      const originalEvent = {
+        id: 'recurring123',
+        recurrence: ['RRULE:FREQ=WEEKLY'],
+        start: { dateTime: '2025-01-01T10:00:00Z' },
+        end: { dateTime: '2025-01-01T11:00:00Z' }
+      };
+
+      mockCalendar.events.get.mockResolvedValue({ data: originalEvent });
+      mockCalendar.events.patch.mockResolvedValue({ data: {} });
+      mockCalendar.events.insert.mockResolvedValue({ data: { id: 'newEvent' } });
+
+      const helpersStub = {
+        getCalendar: () => mockCalendar,
+        buildUpdateRequestBody: vi.fn().mockReturnValue({}),
+        cleanEventForDuplication: vi.fn().mockReturnValue({
+          attachments: [{ fileId: 'file1', fileUrl: 'https://drive.google.com/file1' }],
+          recurrence: originalEvent.recurrence
+        }),
+        calculateEndTime: vi.fn().mockReturnValue('2025-02-01T11:00:00Z'),
+        calculateUntilDate: vi.fn().mockReturnValue('20250131T100000Z'),
+        updateRecurrenceWithUntil: vi.fn().mockReturnValue(['RRULE:FREQ=WEEKLY;UNTIL=20250131T100000Z'])
+      } as unknown as RecurringEventHelpers;
+
+      const args = {
+        calendarId: 'primary',
+        eventId: 'recurring123',
+        futureStartDate: '2025-02-01T10:00:00-08:00',
+        timeZone: 'America/Los_Angeles'
+      } as UpdateEventInput;
+
+      await (handler as any).updateFutureInstances(helpersStub, args, 'America/Los_Angeles');
+
+      const insertCall = mockCalendar.events.insert.mock.calls[0][0];
+      expect(insertCall.supportsAttachments).toBe(true);
+      expect(insertCall.requestBody.attachments).toEqual([
+        { fileId: 'file1', fileUrl: 'https://drive.google.com/file1' }
+      ]);
+    });
+
+    it('should set conferenceDataVersion when duplicating conference data for future instances', async () => {
+      const originalEvent = {
+        id: 'recurring123',
+        recurrence: ['RRULE:FREQ=WEEKLY'],
+        start: { dateTime: '2025-01-01T10:00:00Z' },
+        end: { dateTime: '2025-01-01T11:00:00Z' },
+        conferenceData: {
+          entryPoints: [{ entryPointType: 'video', uri: 'https://meet.google.com/abc-defg-hij' }],
+          conferenceId: 'abc-defg-hij'
+        }
+      };
+
+      mockCalendar.events.get.mockResolvedValue({ data: originalEvent });
+      mockCalendar.events.patch.mockResolvedValue({ data: {} });
+      mockCalendar.events.insert.mockResolvedValue({ data: { id: 'newEvent' } });
+
+      const helpersStub = {
+        getCalendar: () => mockCalendar,
+        buildUpdateRequestBody: vi.fn().mockReturnValue({}),
+        cleanEventForDuplication: vi.fn().mockReturnValue({
+          conferenceData: originalEvent.conferenceData,
+          recurrence: originalEvent.recurrence
+        }),
+        calculateEndTime: vi.fn().mockReturnValue('2025-02-01T11:00:00Z'),
+        calculateUntilDate: vi.fn().mockReturnValue('20250131T100000Z'),
+        updateRecurrenceWithUntil: vi.fn().mockReturnValue(['RRULE:FREQ=WEEKLY;UNTIL=20250131T100000Z'])
+      } as unknown as RecurringEventHelpers;
+
+      const args = {
+        calendarId: 'primary',
+        eventId: 'recurring123',
+        futureStartDate: '2025-02-01T10:00:00-08:00',
+        timeZone: 'America/Los_Angeles'
+      } as UpdateEventInput;
+
+      await (handler as any).updateFutureInstances(helpersStub, args, 'America/Los_Angeles');
+
+      const insertCall = mockCalendar.events.insert.mock.calls[0][0];
+      expect(insertCall.conferenceDataVersion).toBe(1);
+      expect(insertCall.requestBody.conferenceData).toEqual(originalEvent.conferenceData);
     });
   });
 
