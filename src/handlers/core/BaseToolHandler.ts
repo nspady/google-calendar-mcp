@@ -36,9 +36,26 @@ export abstract class BaseToolHandler {
             }
             
             if (status === 429) {
+                const errorMessage = errorData?.error?.message || '';
+                
+                // Provide specific guidance for quota-related rate limits
+                if (errorMessage.includes('User Rate Limit Exceeded')) {
+                    throw new McpError(
+                        ErrorCode.InvalidRequest,
+                        `Rate limit exceeded. This may be due to missing quota project configuration.
+
+Ensure your OAuth credentials include project_id information:
+1. Check that your gcp-oauth.keys.json file contains project_id
+2. Re-download credentials from Google Cloud Console if needed
+3. The file should have format: {"installed": {"project_id": "your-project-id", ...}}
+
+Original error: ${errorMessage}`
+                    );
+                }
+                
                 throw new McpError(
                     ErrorCode.InternalError,
-                    'Rate limit exceeded. Please try again later.'
+                    `Rate limit exceeded. Please try again later. ${errorMessage}`
                 );
             }
             
@@ -71,11 +88,45 @@ export abstract class BaseToolHandler {
     }
 
     protected getCalendar(auth: OAuth2Client): calendar_v3.Calendar {
-        return google.calendar({ 
+        // Try to get project ID from credentials file for quota project header
+        let quotaProjectId: string | undefined;
+        
+        try {
+            // Read credentials file to extract project ID
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Get credentials file path (same logic as in auth/utils.ts)
+            const credentialsPath = process.env.GOOGLE_OAUTH_CREDENTIALS || 
+                                  path.join(process.cwd(), 'gcp-oauth.keys.json');
+            
+            if (fs.existsSync(credentialsPath)) {
+                const credentialsContent = fs.readFileSync(credentialsPath, 'utf-8');
+                const credentials = JSON.parse(credentialsContent);
+                
+                // Extract project_id from installed format or direct format
+                if (credentials.installed?.project_id) {
+                    quotaProjectId = credentials.installed.project_id;
+                } else if (credentials.project_id) {
+                    quotaProjectId = credentials.project_id;
+                }
+            }
+        } catch (error) {
+            // If we can't read project ID, continue without it (backward compatibility)
+        }
+
+        const config: any = { 
             version: 'v3', 
             auth,
             timeout: 3000 // 3 second timeout for API calls
-        });
+        };
+        
+        // Add quota project ID if available
+        if (quotaProjectId) {
+            config.quotaProjectId = quotaProjectId;
+        }
+        
+        return google.calendar(config);
     }
 
     protected async withTimeout<T>(promise: Promise<T>, timeoutMs: number = 30000): Promise<T> {
