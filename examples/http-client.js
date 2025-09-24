@@ -101,8 +101,8 @@ async function main() {
       const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
       
       // Use standard RFC 3339 format with milliseconds (now properly supported)
-      const timeMin = now.toISOString();
-      const timeMax = nextWeek.toISOString();
+      const timeMin = now.toISOString().split('.')[0] + 'Z';
+      const timeMax = nextWeek.toISOString().split('.')[0] + 'Z';
       
       console.log(`📅 Fetching events from ${timeMin} to ${timeMax}`);
       
