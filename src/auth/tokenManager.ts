@@ -6,15 +6,15 @@ import { mkdir } from 'fs/promises';
 import { dirname } from 'path';
 
 // Interface for multi-account token storage
+// Now supports arbitrary account IDs
 interface MultiAccountTokens {
-  normal?: Credentials;
-  test?: Credentials;
+  [accountId: string]: Credentials;
 }
 
 export class TokenManager {
   private oauth2Client: OAuth2Client;
   private tokenPath: string;
-  private accountMode: 'normal' | 'test';
+  private accountMode: string;
 
   constructor(oauth2Client: OAuth2Client) {
     this.oauth2Client = oauth2Client;
@@ -29,12 +29,12 @@ export class TokenManager {
   }
 
   // Method to get current account mode
-  public getAccountMode(): 'normal' | 'test' {
+  public getAccountMode(): string {
     return this.accountMode;
   }
 
-  // Method to switch account mode (useful for testing)
-  public setAccountMode(mode: 'normal' | 'test'): void {
+  // Method to switch account mode (supports arbitrary account IDs)
+  public setAccountMode(mode: string): void {
     this.accountMode = mode;
   }
 
@@ -256,7 +256,7 @@ export class TokenManager {
     }
   }
 
-  async validateTokens(accountMode?: 'normal' | 'test'): Promise<boolean> {
+  async validateTokens(accountMode?: string): Promise<boolean> {
     // For unit tests that don't need real authentication, they should mock at the handler level
     // Integration tests always need real tokens
 
@@ -340,8 +340,8 @@ export class TokenManager {
     }
   }
 
-  // Method to switch to a different account (useful for runtime switching)
-  async switchAccount(newMode: 'normal' | 'test'): Promise<boolean> {
+  // Method to switch to a different account (supports arbitrary account IDs)
+  async switchAccount(newMode: string): Promise<boolean> {
     this.accountMode = newMode;
     return this.loadSavedTokens();
   }
