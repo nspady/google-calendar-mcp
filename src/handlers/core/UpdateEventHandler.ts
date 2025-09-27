@@ -143,11 +143,17 @@ export class UpdateEventHandler extends BaseToolHandler {
 
         const calendar = helpers.getCalendar();
         const instanceId = helpers.formatInstanceId(args.eventId, args.originalStartTime);
-        
+
+        const requestBody = helpers.buildUpdateRequestBody(args, defaultTimeZone);
+        const conferenceDataVersion = requestBody.conferenceData !== undefined ? 1 : undefined;
+        const supportsAttachments = requestBody.attachments !== undefined ? true : undefined;
+
         const response = await calendar.events.patch({
             calendarId: args.calendarId,
             eventId: instanceId,
-            requestBody: helpers.buildUpdateRequestBody(args, defaultTimeZone)
+            requestBody,
+            ...(conferenceDataVersion && { conferenceDataVersion }),
+            ...(supportsAttachments && { supportsAttachments })
         });
 
         if (!response.data) throw new Error('Failed to update event instance');
@@ -160,11 +166,17 @@ export class UpdateEventHandler extends BaseToolHandler {
         defaultTimeZone: string
     ): Promise<calendar_v3.Schema$Event> {
         const calendar = helpers.getCalendar();
-        
+
+        const requestBody = helpers.buildUpdateRequestBody(args, defaultTimeZone);
+        const conferenceDataVersion = requestBody.conferenceData !== undefined ? 1 : undefined;
+        const supportsAttachments = requestBody.attachments !== undefined ? true : undefined;
+
         const response = await calendar.events.patch({
             calendarId: args.calendarId,
             eventId: args.eventId,
-            requestBody: helpers.buildUpdateRequestBody(args, defaultTimeZone)
+            requestBody,
+            ...(conferenceDataVersion && { conferenceDataVersion }),
+            ...(supportsAttachments && { supportsAttachments })
         });
 
         if (!response.data) throw new Error('Failed to update event');
@@ -230,9 +242,14 @@ export class UpdateEventHandler extends BaseToolHandler {
             }
         };
 
+        const conferenceDataVersion = newEvent.conferenceData !== undefined ? 1 : undefined;
+        const supportsAttachments = newEvent.attachments !== undefined ? true : undefined;
+
         const response = await calendar.events.insert({
             calendarId: args.calendarId,
-            requestBody: newEvent
+            requestBody: newEvent,
+            ...(conferenceDataVersion && { conferenceDataVersion }),
+            ...(supportsAttachments && { supportsAttachments })
         });
 
         if (!response.data) throw new Error('Failed to create new recurring event');
