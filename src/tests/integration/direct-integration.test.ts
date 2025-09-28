@@ -207,11 +207,10 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         
         const response = JSON.parse((result.content as any)[0].text);
         expect(response.currentTime).toBeDefined();
-        expect(response.currentTime.utc).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
-        expect(response.currentTime.timestamp).toBeTypeOf('number');
-        expect(response.currentTime.calendarTimeZone).toBeDefined();
-        expect(response.currentTime.calendarTimeZone.timeZone).toBeTypeOf('string');
-        expect(response.currentTime.calendarTimeZone.calendarId).toBe('primary');
+        expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+        expect(response.timezone).toBeTypeOf('string');
+        expect(response.offset).toBeDefined();
+        expect(response.isDST).toBeTypeOf('boolean');
       } catch (error) {
         testFactory.endTimer('get-current-time', startTime, false, String(error));
         throw error;
@@ -235,13 +234,11 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         
         const response = JSON.parse((result.content as any)[0].text);
         expect(response.currentTime).toBeDefined();
-        expect(response.currentTime.utc).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
-        expect(response.currentTime.timestamp).toBeTypeOf('number');
-        expect(response.currentTime.requestedTimeZone).toBeDefined();
-        expect(response.currentTime.requestedTimeZone.timeZone).toBe('America/Los_Angeles');
-        expect(response.currentTime.requestedTimeZone.rfc3339).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
-        expect(response.currentTime).not.toHaveProperty('systemTimeZone');
-        expect(response.currentTime).not.toHaveProperty('note');
+        expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+        expect(response.timezone).toBe('America/Los_Angeles');
+        expect(response.offset).toBeDefined();
+        expect(response.offset).toMatch(/^[+-]\d{2}:\d{2}$/);
+        expect(response.isDST).toBeTypeOf('boolean');
       } catch (error) {
         testFactory.endTimer('get-current-time-with-timezone', startTime, false, String(error));
         throw error;
