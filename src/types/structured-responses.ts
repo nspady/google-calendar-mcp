@@ -1,11 +1,17 @@
 import { calendar_v3 } from 'googleapis';
 
+/**
+ * Represents a date/time value in Google Calendar API format
+ */
 export interface DateTime {
   dateTime?: string;
   date?: string;
   timeZone?: string;
 }
 
+/**
+ * Represents an event attendee with their response status and details
+ */
 export interface Attendee {
   email: string;
   displayName?: string;
@@ -18,6 +24,9 @@ export interface Attendee {
   additionalGuests?: number;
 }
 
+/**
+ * Conference/meeting information for an event (e.g., Google Meet, Zoom)
+ */
 export interface ConferenceData {
   conferenceId?: string;
   conferenceSolution?: {
@@ -47,16 +56,25 @@ export interface ConferenceData {
   };
 }
 
+/**
+ * Custom key-value pairs for storing additional event metadata
+ */
 export interface ExtendedProperties {
   private?: Record<string, string>;
   shared?: Record<string, string>;
 }
 
+/**
+ * Event reminder configuration
+ */
 export interface Reminder {
   method: 'email' | 'popup';
   minutes: number;
 }
 
+/**
+ * Complete structured representation of a Google Calendar event
+ */
 export interface StructuredEvent {
   id: string;
   summary?: string;
@@ -115,6 +133,9 @@ export interface StructuredEvent {
   calendarId?: string;
 }
 
+/**
+ * Information about a scheduling conflict with another event
+ */
 export interface ConflictInfo {
   event: {
     id: string;
@@ -132,6 +153,9 @@ export interface ConflictInfo {
   suggestion?: string;
 }
 
+/**
+ * Information about a potential duplicate event
+ */
 export interface DuplicateInfo {
   event: {
     id: string;
@@ -145,12 +169,18 @@ export interface DuplicateInfo {
   suggestion: string;
 }
 
+/**
+ * Response format for listing calendar events
+ */
 export interface ListEventsResponse {
   events: StructuredEvent[];
   totalCount: number;
   calendars?: string[];
 }
 
+/**
+ * Response format for searching calendar events
+ */
 export interface SearchEventsResponse {
   events: StructuredEvent[];
   totalCount: number;
@@ -162,10 +192,16 @@ export interface SearchEventsResponse {
   };
 }
 
+/**
+ * Response format for getting a single event by ID
+ */
 export interface GetEventResponse {
   event: StructuredEvent;
 }
 
+/**
+ * Response format for creating a new event
+ */
 export interface CreateEventResponse {
   event: StructuredEvent;
   conflicts?: ConflictInfo[];
@@ -173,12 +209,18 @@ export interface CreateEventResponse {
   warnings?: string[];
 }
 
+/**
+ * Response format for updating an existing event
+ */
 export interface UpdateEventResponse {
   event: StructuredEvent;
   conflicts?: ConflictInfo[];
   warnings?: string[];
 }
 
+/**
+ * Response format for deleting an event
+ */
 export interface DeleteEventResponse {
   success: boolean;
   eventId: string;
@@ -186,6 +228,9 @@ export interface DeleteEventResponse {
   message?: string;
 }
 
+/**
+ * Detailed information about a calendar
+ */
 export interface CalendarInfo {
   id: string;
   summary?: string;
@@ -213,26 +258,41 @@ export interface CalendarInfo {
   };
 }
 
+/**
+ * Response format for listing available calendars
+ */
 export interface ListCalendarsResponse {
   calendars: CalendarInfo[];
   totalCount: number;
 }
 
+/**
+ * Color scheme definition with background and foreground colors
+ */
 export interface ColorDefinition {
   background: string;
   foreground: string;
 }
 
+/**
+ * Response format for available calendar and event colors
+ */
 export interface ListColorsResponse {
   event: Record<string, ColorDefinition>;
   calendar: Record<string, ColorDefinition>;
 }
 
+/**
+ * Represents a busy time period in free/busy queries
+ */
 export interface BusySlot {
   start: string;
   end: string;
 }
 
+/**
+ * Response format for free/busy time queries
+ */
 export interface FreeBusyResponse {
   timeMin: string;
   timeMax: string;
@@ -245,6 +305,9 @@ export interface FreeBusyResponse {
   }>;
 }
 
+/**
+ * Response format for getting the current time in a specific timezone
+ */
 export interface GetCurrentTimeResponse {
   currentTime: string;
   timezone: string;
@@ -252,6 +315,12 @@ export interface GetCurrentTimeResponse {
   isDST?: boolean;
 }
 
+/**
+ * Converts a Google Calendar API event to our structured format
+ * @param event - The Google Calendar API event object
+ * @param calendarId - Optional calendar ID to include in the response
+ * @returns Structured event representation
+ */
 export function convertGoogleEventToStructured(
   event: calendar_v3.Schema$Event,
   calendarId?: string
@@ -259,83 +328,83 @@ export function convertGoogleEventToStructured(
   return {
     id: event.id || '',
     summary: event.summary,
-    description: event.description ?? undefined,
-    location: event.location ?? undefined,
+    description: event.description,
+    location: event.location,
     start: {
-      dateTime: event.start?.dateTime ?? undefined,
-      date: event.start?.date ?? undefined,
-      timeZone: event.start?.timeZone ?? undefined,
+      dateTime: event.start?.dateTime,
+      date: event.start?.date,
+      timeZone: event.start?.timeZone,
     },
     end: {
-      dateTime: event.end?.dateTime ?? undefined,
-      date: event.end?.date ?? undefined,
-      timeZone: event.end?.timeZone ?? undefined,
+      dateTime: event.end?.dateTime,
+      date: event.end?.date,
+      timeZone: event.end?.timeZone,
     },
-    status: event.status ?? undefined,
-    htmlLink: event.htmlLink ?? undefined,
-    created: event.created ?? undefined,
-    updated: event.updated ?? undefined,
-    colorId: event.colorId ?? undefined,
+    status: event.status,
+    htmlLink: event.htmlLink,
+    created: event.created,
+    updated: event.updated,
+    colorId: event.colorId,
     creator: event.creator ? {
-      email: event.creator.email ?? undefined,
-      displayName: event.creator.displayName ?? undefined,
-      self: event.creator.self ?? undefined,
+      email: event.creator.email,
+      displayName: event.creator.displayName,
+      self: event.creator.self,
     } : undefined,
     organizer: event.organizer ? {
-      email: event.organizer.email ?? undefined,
-      displayName: event.organizer.displayName ?? undefined,
-      self: event.organizer.self ?? undefined,
+      email: event.organizer.email,
+      displayName: event.organizer.displayName,
+      self: event.organizer.self,
     } : undefined,
     attendees: event.attendees?.map(a => ({
       email: a.email || '',
-      displayName: a.displayName ?? undefined,
-      responseStatus: a.responseStatus as any ?? undefined,
-      optional: a.optional ?? undefined,
-      organizer: a.organizer ?? undefined,
-      self: a.self ?? undefined,
-      resource: a.resource ?? undefined,
-      comment: a.comment ?? undefined,
-      additionalGuests: a.additionalGuests ?? undefined,
+      displayName: a.displayName,
+      responseStatus: a.responseStatus as any,
+      optional: a.optional,
+      organizer: a.organizer,
+      self: a.self,
+      resource: a.resource,
+      comment: a.comment,
+      additionalGuests: a.additionalGuests,
     })),
-    recurrence: event.recurrence ?? undefined,
-    recurringEventId: event.recurringEventId ?? undefined,
+    recurrence: event.recurrence,
+    recurringEventId: event.recurringEventId,
     originalStartTime: event.originalStartTime ? {
-      dateTime: event.originalStartTime.dateTime ?? undefined,
-      date: event.originalStartTime.date ?? undefined,
-      timeZone: event.originalStartTime.timeZone ?? undefined,
+      dateTime: event.originalStartTime.dateTime,
+      date: event.originalStartTime.date,
+      timeZone: event.originalStartTime.timeZone,
     } : undefined,
-    transparency: event.transparency as any ?? undefined,
-    visibility: event.visibility as any ?? undefined,
-    iCalUID: event.iCalUID ?? undefined,
-    sequence: event.sequence ?? undefined,
+    transparency: event.transparency as any,
+    visibility: event.visibility as any,
+    iCalUID: event.iCalUID,
+    sequence: event.sequence,
     reminders: event.reminders ? {
-      useDefault: event.reminders.useDefault ?? undefined,
+      useDefault: event.reminders.useDefault,
       overrides: event.reminders.overrides?.map(r => ({
-        method: r.method as any ?? 'popup',
+        method: (r.method as any) || 'popup',
         minutes: r.minutes || 0,
       })),
     } : undefined,
     source: event.source ? {
-      url: event.source.url ?? undefined,
-      title: event.source.title ?? undefined,
+      url: event.source.url,
+      title: event.source.title,
     } : undefined,
     attachments: event.attachments?.map(a => ({
-      fileUrl: a.fileUrl ?? undefined,
-      title: a.title ?? undefined,
-      mimeType: a.mimeType ?? undefined,
-      iconLink: a.iconLink ?? undefined,
-      fileId: a.fileId ?? undefined,
+      fileUrl: a.fileUrl,
+      title: a.title,
+      mimeType: a.mimeType,
+      iconLink: a.iconLink,
+      fileId: a.fileId,
     })),
-    eventType: event.eventType as any ?? undefined,
-    conferenceData: event.conferenceData as ConferenceData ?? undefined,
-    extendedProperties: event.extendedProperties as ExtendedProperties ?? undefined,
-    hangoutLink: event.hangoutLink ?? undefined,
-    anyoneCanAddSelf: event.anyoneCanAddSelf ?? undefined,
-    guestsCanInviteOthers: event.guestsCanInviteOthers ?? undefined,
-    guestsCanModify: event.guestsCanModify ?? undefined,
-    guestsCanSeeOtherGuests: event.guestsCanSeeOtherGuests ?? undefined,
-    privateCopy: event.privateCopy ?? undefined,
-    locked: event.locked ?? undefined,
-    calendarId: calendarId ?? undefined,
+    eventType: event.eventType as any,
+    conferenceData: event.conferenceData as ConferenceData,
+    extendedProperties: event.extendedProperties as ExtendedProperties,
+    hangoutLink: event.hangoutLink,
+    anyoneCanAddSelf: event.anyoneCanAddSelf,
+    guestsCanInviteOthers: event.guestsCanInviteOthers,
+    guestsCanModify: event.guestsCanModify,
+    guestsCanSeeOtherGuests: event.guestsCanSeeOtherGuests,
+    privateCopy: event.privateCopy,
+    locked: event.locked,
+    calendarId: calendarId,
   };
 }

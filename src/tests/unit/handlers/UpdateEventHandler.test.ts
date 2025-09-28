@@ -316,7 +316,12 @@ describe('UpdateEventHandler', () => {
         })
       });
 
-      expect(result.content[0].text).toContain('Event updated successfully!');
+      const response = JSON.parse(result.content[0].text as string);
+      expect(response).toHaveProperty('event');
+      expect(response.event.id).toBe('event123');
+      expect(response.event.guestsCanInviteOthers).toBe(false);
+      expect(response.event.guestsCanModify).toBe(true);
+      expect(response.event.guestsCanSeeOtherGuests).toBe(false);
     });
 
     it('should update event with conference data', async () => {
@@ -364,7 +369,12 @@ describe('UpdateEventHandler', () => {
         conferenceDataVersion: 1
       });
 
-      expect(result.content[0].text).toContain('Event updated successfully!');
+      const response = JSON.parse(result.content[0].text as string);
+      expect(response).toHaveProperty('event');
+      expect(response.event.id).toBe('event123');
+      expect(response.event.summary).toBe('Video Meeting');
+      expect(response.event.conferenceData).toBeDefined();
+      expect(response.event.conferenceData.entryPoints).toBeDefined();
     });
 
     it('should update color ID', async () => {
