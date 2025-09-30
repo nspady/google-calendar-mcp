@@ -3,11 +3,12 @@ import { OAuth2Client } from "google-auth-library";
 import { CreateEventInput } from "../../tools/registry.js";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
-import { createEventResponseWithConflicts, formatConflictWarnings } from "../utils.js";
 import { createTimeObject } from "../utils/datetime.js";
 import { validateEventId } from "../../utils/event-id-validator.js";
 import { ConflictDetectionService } from "../../services/conflict-detection/index.js";
 import { CONFLICT_DETECTION_CONFIG } from "../../services/conflict-detection/config.js";
+import { createStructuredResponse, convertConflictsToStructured, createWarningsArray } from "../../utils/response-builder.js";
+import { CreateEventResponse, convertGoogleEventToStructured, DuplicateInfo } from "../../types/structured-responses.js";
 
 export class CreateEventHandler extends BaseToolHandler {
     private conflictDetectionService: ConflictDetectionService;
@@ -50,42 +51,41 @@ export class CreateEventHandler extends BaseToolHandler {
         );
         
         if (exactDuplicate && validArgs.allowDuplicates !== true) {
-            
-            // Format the duplicate details
-            const duplicateDetails = formatConflictWarnings({
-                hasConflicts: true,
-                duplicates: [exactDuplicate],
-                conflicts: []
-            });
-            
-            // Remove the "POTENTIAL DUPLICATES DETECTED" header since we're blocking
-            const cleanedDetails = duplicateDetails.replace('⚠️ POTENTIAL DUPLICATES DETECTED:', '').trim();
-            
-            const similarityPercentage = Math.round(exactDuplicate.event.similarity * 100);
-            let blockMessage = `⚠️ DUPLICATE EVENT DETECTED (${similarityPercentage}% similar)!\n\n`;
-            blockMessage += cleanedDetails;
-            blockMessage += `\n\nThis event appears to be a duplicate. To create anyway, set allowDuplicates to true.`;
-            
-            return {
-                content: [{
-                    type: "text",
-                    text: blockMessage
-                }]
+            // Create a duplicate error response
+            const duplicateInfo: DuplicateInfo = {
+                event: {
+                    id: exactDuplicate.event.id || '',
+                    title: exactDuplicate.event.title,
+                    start: exactDuplicate.event.start || '',
+                    end: exactDuplicate.event.end || '',
+                    url: exactDuplicate.event.url,
+                    similarity: exactDuplicate.event.similarity
+                },
+                calendarId: exactDuplicate.calendarId,
+                suggestion: exactDuplicate.suggestion
             };
+            
+            // Throw an error that will be handled by MCP SDK
+            throw new Error(
+                `Duplicate event detected (${Math.round(exactDuplicate.event.similarity * 100)}% similar). ` +
+                `Event "${exactDuplicate.event.title}" already exists. ` +
+                `To create anyway, set allowDuplicates to true.`
+            );
         }
         
         // Create the event
         const event = await this.createEvent(oauth2Client, validArgs);
         
-        // Generate response with conflict warnings
-        const text = createEventResponseWithConflicts(event, validArgs.calendarId, conflicts, "created");
-        
-        return {
-            content: [{
-                type: "text",
-                text: text
-            }]
+        // Generate structured response with conflict warnings
+        const structuredConflicts = convertConflictsToStructured(conflicts);
+        const response: CreateEventResponse = {
+            event: convertGoogleEventToStructured(event, validArgs.calendarId),
+            conflicts: structuredConflicts.conflicts,
+            duplicates: structuredConflicts.duplicates,
+            warnings: createWarningsArray(conflicts)
         };
+        
+        return createStructuredResponse(response);
     }
 
     private async createEvent(

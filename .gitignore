@@ -7,5 +7,4 @@ coverage/
 .nyc_output/
 coverage/
 settings.local.json
-CLAUDE.md
 .env

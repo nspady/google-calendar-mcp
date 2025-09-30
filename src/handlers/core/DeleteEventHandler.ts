@@ -2,18 +2,22 @@ import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { DeleteEventInput } from "../../tools/registry.js";
-import { z } from 'zod';
+import { DeleteEventResponse } from "../../types/structured-responses.js";
+import { createStructuredResponse } from "../../utils/response-builder.js";
 
 export class DeleteEventHandler extends BaseToolHandler {
     async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
         const validArgs = args as DeleteEventInput;
         await this.deleteEvent(oauth2Client, validArgs);
-        return {
-            content: [{
-                type: "text",
-                text: "Event deleted successfully",
-            }],
+
+        const response: DeleteEventResponse = {
+            success: true,
+            eventId: validArgs.eventId,
+            calendarId: validArgs.calendarId,
+            message: "Event deleted successfully"
         };
+
+        return createStructuredResponse(response);
     }
 
     private async deleteEvent(

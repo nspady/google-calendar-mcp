@@ -117,30 +117,31 @@ describe('Google Calendar MCP Server', () => {
       const result = await handler.runTool({}, mockOAuth2Client);
 
       expect(mockCalendarApi.calendarList.list).toHaveBeenCalled();
-      expect(result).toEqual({
-        content: [
-          {
-            type: 'text',
-            text: `Work Calendar (PRIMARY) (cal1)
-  Timezone: America/New_York
-  Kind: calendar#calendarListEntry
-  Access Role: owner
-  Selected: Yes
-  Hidden: No
-  Background Color: #0D7377
-  Default Reminders: popup (15min before), email (60min before)
-  Description: Work-related events and meetings
 
-Personal (cal2)
-  Timezone: America/Los_Angeles
-  Kind: calendar#calendarListEntry
-  Access Role: reader
-  Selected: Yes
-  Hidden: No
-  Background Color: #D50000
-  Default Reminders: None`,
-          },
-        ],
+      // Parse the JSON response
+      const response = JSON.parse((result.content as any)[0].text);
+
+      expect(response.totalCount).toBe(2);
+      expect(response.calendars).toHaveLength(2);
+      expect(response.calendars[0]).toMatchObject({
+        id: 'cal1',
+        summary: 'Work Calendar',
+        description: 'Work-related events and meetings',
+        timeZone: 'America/New_York',
+        backgroundColor: '#0D7377',
+        accessRole: 'owner',
+        primary: true,
+        selected: true,
+        hidden: false
+      });
+      expect(response.calendars[0].defaultReminders).toHaveLength(2);
+      expect(response.calendars[1]).toMatchObject({
+        id: 'cal2',
+        summary: 'Personal',
+        timeZone: 'America/Los_Angeles',
+        backgroundColor: '#D50000',
+        accessRole: 'reader',
+        primary: false
       });
     });
 
@@ -191,8 +192,10 @@ Personal (cal2)
 
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
-      expect((result.content[0] as any).text).toContain('Event created successfully!');
-      expect((result.content[0] as any).text).toContain('calendar.google.com');
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.event).toBeDefined();
+      expect(response.event.id).toBe('eventId123');
+      expect(response.event.summary).toBe('Team Meeting');
     });
 
     it('should use calendar default timezone when timeZone is not provided', async () => {
@@ -301,10 +304,13 @@ Personal (cal2)
         orderBy: 'startTime'
       });
 
-      // Should return text content with events
+      // Should return structured JSON with events
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
-      expect((result.content[0] as any).text).toContain('Found');
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.events).toHaveLength(1);
+      expect(response.totalCount).toBe(1);
+      expect(response.events[0].id).toBe('event1');
     });
   });
 

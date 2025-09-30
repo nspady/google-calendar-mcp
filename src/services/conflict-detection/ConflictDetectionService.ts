@@ -1,10 +1,10 @@
 import { OAuth2Client } from "google-auth-library";
 import { google, calendar_v3 } from "googleapis";
-import { 
-  ConflictCheckResult, 
-  ConflictInfo, 
-  DuplicateInfo, 
-  ConflictDetectionOptions 
+import {
+  ConflictCheckResult,
+  InternalConflictInfo,
+  InternalDuplicateInfo,
+  ConflictDetectionOptions
 } from "./types.js";
 import { EventSimilarityChecker } from "./EventSimilarityChecker.js";
 import { ConflictAnalyzer } from "./ConflictAnalyzer.js";
@@ -180,8 +180,8 @@ export class ConflictDetectionService {
     existingEvents: calendar_v3.Schema$Event[],
     calendarId: string,
     threshold: number
-  ): DuplicateInfo[] {
-    const duplicates: DuplicateInfo[] = [];
+  ): InternalDuplicateInfo[] {
+    const duplicates: InternalDuplicateInfo[] = [];
 
 
     for (const existingEvent of existingEvents) {
@@ -223,8 +223,8 @@ export class ConflictDetectionService {
     existingEvents: calendar_v3.Schema$Event[],
     calendarId: string,
     includeDeclinedEvents: boolean
-  ): ConflictInfo[] {
-    const conflicts: ConflictInfo[] = [];
+  ): InternalConflictInfo[] {
+    const conflicts: InternalConflictInfo[] = [];
     const overlappingEvents = this.conflictAnalyzer.findOverlappingEvents(existingEvents, newEvent);
 
     for (const conflictingEvent of overlappingEvents) {
@@ -276,8 +276,8 @@ export class ConflictDetectionService {
     oauth2Client: OAuth2Client,
     eventToCheck: calendar_v3.Schema$Event,
     calendarsToCheck: string[]
-  ): Promise<ConflictInfo[]> {
-    const conflicts: ConflictInfo[] = [];
+  ): Promise<InternalConflictInfo[]> {
+    const conflicts: InternalConflictInfo[] = [];
     
     if (!eventToCheck.start || !eventToCheck.end) return conflicts;
     

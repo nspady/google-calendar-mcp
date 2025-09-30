@@ -2,16 +2,39 @@ import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from "googleapis";
+import { createStructuredResponse } from "../../utils/response-builder.js";
+import { ListColorsResponse } from "../../types/structured-responses.js";
 
 export class ListColorsHandler extends BaseToolHandler {
     async runTool(_: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
         const colors = await this.listColors(oauth2Client);
-        return {
-            content: [{
-                type: "text",
-                text: `Available event colors:\n${this.formatColorList(colors)}`,
-            }],
+        
+        const response: ListColorsResponse = {
+            event: {},
+            calendar: {}
         };
+        
+        // Convert event colors
+        if (colors.event) {
+            for (const [id, color] of Object.entries(colors.event)) {
+                response.event[id] = {
+                    background: color.background || '',
+                    foreground: color.foreground || ''
+                };
+            }
+        }
+        
+        // Convert calendar colors
+        if (colors.calendar) {
+            for (const [id, color] of Object.entries(colors.calendar)) {
+                response.calendar[id] = {
+                    background: color.background || '',
+                    foreground: color.foreground || ''
+                };
+            }
+        }
+        
+        return createStructuredResponse(response);
     }
 
     private async listColors(client: OAuth2Client): Promise<calendar_v3.Schema$Colors> {
