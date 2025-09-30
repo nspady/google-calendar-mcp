@@ -153,18 +153,21 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
 
     it('should list calendars including test calendar', async () => {
       const startTime = testFactory.startTimer('list-calendars');
-      
+
       try {
         const result = await client.callTool({
           name: 'list-calendars',
           arguments: {}
         });
-        
+
         testFactory.endTimer('list-calendars', startTime, true);
-        
+
         expect(TestDataFactory.validateEventResponse(result)).toBe(true);
-        // Just verify we get a valid response with calendar information, not a specific calendar
-        expect((result.content as any)[0].text).toMatch(/calendar/i);
+        const response = JSON.parse((result.content as any)[0].text);
+        expect(response.calendars).toBeDefined();
+        expect(Array.isArray(response.calendars)).toBe(true);
+        expect(response.totalCount).toBeDefined();
+        expect(typeof response.totalCount).toBe('number');
       } catch (error) {
         testFactory.endTimer('list-calendars', startTime, false, String(error));
         throw error;
@@ -1045,7 +1048,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
     describe('Free/Busy Queries', () => {
       it('should check availability for test calendar', async () => {
         const startTime = testFactory.startTimer('get-freebusy');
-        
+
         try {
           const timeRanges = TestDataFactory.getTimeRanges();
           const result = await client.callTool({
@@ -1057,9 +1060,15 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
               timeZone: 'America/Los_Angeles'
             }
           });
-          
+
           testFactory.endTimer('get-freebusy', startTime, true);
           expect(TestDataFactory.validateEventResponse(result)).toBe(true);
+
+          const response = JSON.parse((result.content as any)[0].text);
+          expect(response.timeMin).toBeDefined();
+          expect(response.timeMax).toBeDefined();
+          expect(response.calendars).toBeDefined();
+          expect(typeof response.calendars).toBe('object');
         } catch (error) {
           testFactory.endTimer('get-freebusy', startTime, false, String(error));
           throw error;
