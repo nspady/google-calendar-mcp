@@ -1,7 +1,7 @@
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { ConflictCheckResult } from "../services/conflict-detection/types.js";
-import { 
-  ConflictInfo, 
+import {
+  ConflictInfo,
   DuplicateInfo,
   convertGoogleEventToStructured,
   StructuredEvent
