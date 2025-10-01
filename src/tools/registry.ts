@@ -186,6 +186,10 @@ export const ToolSchemas = {
     }).optional().describe(
       "Conference properties for the event. Use createRequest to add a new conference."
     ),
+    // ⬇️ 新增：布尔参数，帮你自动生成 Google Meet
+    autoCreateMeet: z.boolean().optional().default(false).describe(
+      "If true, automatically generate a Google Meet link for this event"
+    ),
     extendedProperties: z.object({
       private: z.record(z.string()).optional().describe(
         "Properties private to the application. Keys can have max 44 chars, values max 1024 chars."
