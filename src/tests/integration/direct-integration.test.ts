@@ -2457,3 +2457,93 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
     });
   }
 });
+/**
+ * Integration Tests for gcloud Authentication Support
+ *
+ * These tests verify that the server correctly handles Application Default Credentials (ADC)
+ * from gcloud CLI alongside the existing OAuth authentication flow.
+ *
+ * Test Scenarios (T007-T012):
+ * 1. Fresh ADC authentication (gcloud auth application-default login)
+ * 2. Explicit gcloud selection via GOOGLE_AUTH_METHOD=gcloud
+ * 3. Explicit OAuth selection via GOOGLE_AUTH_METHOD=oauth
+ * 4. Auto-detection fallback when ADC unavailable
+ * 5. Error handling for missing scopes
+ * 6. Invalid environment variable handling
+ */
+describe('Google Calendar MCP - gcloud Authentication Integration Tests', () => {
+  // These tests will fail until implementation is complete
+  // They validate the authentication method selection and ADC support
+
+  describe('Scenario 1: Fresh gcloud Auth (T007)', () => {
+    it('should authenticate using ADC without OAuth prompt', async () => {
+      // This test will fail until ADC detection is implemented
+      // Mock: ADC credentials exist, no OAuth tokens
+      // Expected: Server uses ADC, logs "Application Default Credentials"
+      expect(true).toBe(false); // Placeholder - will fail
+    });
+
+    it('should perform calendar operations with ADC credentials', async () => {
+      // This test will fail until implementation is complete
+      // Expected: Can list, create, update, delete events using ADC auth
+      expect(true).toBe(false); // Placeholder - will fail
+    });
+  });
+
+  describe('Scenario 2: Explicit gcloud Selection (T008)', () => {
+    it('should use ADC when GOOGLE_AUTH_METHOD=gcloud', async () => {
+      // This test will fail until auth method selection is implemented
+      // Mock: GOOGLE_AUTH_METHOD=gcloud, both ADC and OAuth available
+      // Expected: ADC takes precedence, stderr logs method selection
+      expect(true).toBe(false); // Placeholder - will fail
+    });
+  });
+
+  describe('Scenario 3: Explicit OAuth Selection (T009)', () => {
+    it('should use OAuth when GOOGLE_AUTH_METHOD=oauth', async () => {
+      // This test will fail until auth method selection is implemented
+      // Mock: GOOGLE_AUTH_METHOD=oauth, both ADC and OAuth available
+      // Expected: OAuth used, stderr confirms selection
+      expect(true).toBe(false); // Placeholder - will fail
+    });
+  });
+
+  describe('Scenario 4: ADC Fallback (T010)', () => {
+    it('should fallback to OAuth when ADC unavailable', async () => {
+      // This test will fail until fallback logic is implemented
+      // Mock: No ADC credentials, OAuth tokens available, no GOOGLE_AUTH_METHOD
+      // Expected: Fallback to OAuth without errors
+      expect(true).toBe(false); // Placeholder - will fail
+    });
+
+    it('should not log ADC-related errors during fallback', async () => {
+      // This test will fail until error handling is implemented
+      // Expected: Clean fallback without ADC error messages
+      expect(true).toBe(false); // Placeholder - will fail
+    });
+  });
+
+  describe('Scenario 5: Missing Scopes Error (T011)', () => {
+    it('should error with clear message when ADC lacks Calendar scopes', async () => {
+      // This test will fail until scope validation is implemented
+      // Mock: ADC with insufficient scopes, GOOGLE_AUTH_METHOD=gcloud
+      // Expected: Clear error with required scopes listed and gcloud command to fix
+      expect(true).toBe(false); // Placeholder - will fail
+    });
+
+    it('should include gcloud command in error message', async () => {
+      // This test will fail until error messages are implemented
+      // Expected: Error includes "gcloud auth application-default login --scopes=..."
+      expect(true).toBe(false); // Placeholder - will fail
+    });
+  });
+
+  describe('Scenario 6: Invalid Environment Variable (T012)', () => {
+    it('should warn and proceed with auto-detection for invalid GOOGLE_AUTH_METHOD', async () => {
+      // This test will fail until env var validation is implemented
+      // Mock: GOOGLE_AUTH_METHOD=invalid_value
+      // Expected: Warning logged, auto-detection proceeds normally
+      expect(true).toBe(false); // Placeholder - will fail
+    });
+  });
+});
