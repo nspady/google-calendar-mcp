@@ -23,7 +23,10 @@ A Model Context Protocol (MCP) server that provides Google Calendar integration 
 1. Go to the [Google Cloud Console](https://console.cloud.google.com)
 2. Create a new project or select an existing one.
 3. Enable the [Google Calendar API](https://console.cloud.google.com/apis/library/calendar-json.googleapis.com) for your project. Ensure that the right project is selected from the top bar before enabling the API.
-4. Create OAuth 2.0 credentials:
+4. **Choose your authentication method:**
+
+#### Option A: OAuth (Default)
+Create OAuth 2.0 credentials:
    - Go to Credentials
    - Click "Create Credentials" > "OAuth client ID"
    - Choose "User data" for the type of data that the app will be accessing
@@ -35,6 +38,25 @@ A Model Context Protocol (MCP) server that provides Google Calendar integration 
    - Add your email address as a test user under the [Audience screen](https://console.cloud.google.com/auth/audience)
       - Note: it might take a few minutes for the test user to be added. The OAuth consent will not allow you to proceed until the test user has propagated.
       - Note about test mode: While an app is in test mode the auth tokens will expire after 1 week and need to be refreshed (see Re-authentication section below).
+
+#### Option B: gcloud CLI (Application Default Credentials)
+If you have the Google Cloud SDK installed, you can use Application Default Credentials:
+
+```bash
+gcloud auth application-default login --scopes=https://www.googleapis.com/auth/calendar,https://www.googleapis.com/auth/calendar.events
+```
+
+This method:
+- Doesn't require creating OAuth credentials in Google Cloud Console
+- Ideal for developers already using gcloud
+- Works with both user credentials and service accounts
+- Can be forced via `GOOGLE_AUTH_METHOD=gcloud` environment variable
+
+**Auto-detection behavior:**
+- If gcloud credentials are available, they will be used automatically
+- Otherwise, falls back to OAuth credentials
+- Set `GOOGLE_AUTH_METHOD=oauth` to force OAuth even when gcloud is available
+- Set `GOOGLE_AUTH_METHOD=gcloud` to force gcloud (error if unavailable)
 
 ### Installation
 
@@ -171,6 +193,7 @@ Along with the normal capabilities you would expect for a calendar integration y
 **Environment Variables:**
 - `GOOGLE_OAUTH_CREDENTIALS` - Path to OAuth credentials file
 - `GOOGLE_CALENDAR_MCP_TOKEN_PATH` - Custom token storage location (optional)
+- `GOOGLE_AUTH_METHOD` - Authentication method preference: `gcloud`, `oauth`, or unset for auto-detection (optional)
 
 **Claude Desktop Config Location:**
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`

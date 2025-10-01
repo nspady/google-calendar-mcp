@@ -3,9 +3,10 @@ import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 
 // Import authentication components
-import { initializeOAuth2Client } from './auth/client.js';
+import { initializeOAuth2Client, selectAuthMethod } from './auth/client.js';
 import { AuthServer } from './auth/server.js';
 import { TokenManager } from './auth/tokenManager.js';
+import { CredentialSource } from './auth/types.js';
 
 // Import tool registry
 import { ToolRegistry } from './tools/registry.js';
@@ -23,6 +24,7 @@ export class GoogleCalendarMcpServer {
   private tokenManager!: TokenManager;
   private authServer!: AuthServer;
   private config: ServerConfig;
+  private credentialSource?: CredentialSource;
 
   constructor(config: ServerConfig) {
     this.config = config;
@@ -33,8 +35,25 @@ export class GoogleCalendarMcpServer {
   }
 
   async initialize(): Promise<void> {
-    // 1. Initialize Authentication (but don't block on it)
-    this.oauth2Client = await initializeOAuth2Client();
+    // 1. Initialize Authentication with method selection
+    const requiredScopes = [
+      'https://www.googleapis.com/auth/calendar',
+      'https://www.googleapis.com/auth/calendar.events'
+    ];
+
+    try {
+      this.credentialSource = await selectAuthMethod(requiredScopes);
+      this.oauth2Client = this.credentialSource.oauth2Client;
+
+      // Log selected authentication method
+      process.stderr.write(`Using ${this.credentialSource.source}\n`);
+
+    } catch (error) {
+      // If selectAuthMethod fails, fall back to traditional OAuth flow
+      // This maintains backward compatibility for users without gcloud setup
+      this.oauth2Client = await initializeOAuth2Client();
+    }
+
     this.tokenManager = new TokenManager(this.oauth2Client);
     this.authServer = new AuthServer(this.oauth2Client);
 
