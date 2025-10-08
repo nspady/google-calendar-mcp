@@ -41,7 +41,7 @@ class ClaudeMCPClient {
   async sendMessage(prompt: string): Promise<LLMResponse> {
     // Get available tools from MCP server
     const availableTools = await this.mcpClient.listTools();
-    const model = 'claude-3-5-haiku-20241022';
+    const model = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-5-20250929';
     
     // Convert MCP tools to Claude format
     const claudeTools = availableTools.tools.map(tool => ({
@@ -53,7 +53,7 @@ class ClaudeMCPClient {
     // Send to Claude
     const message = await this.anthropic.messages.create({
       model,
-      max_tokens: 1500,
+      max_tokens: 2500,
       tools: claudeTools,
       messages: [{
         role: 'user' as const,
