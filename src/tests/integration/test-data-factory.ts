@@ -241,7 +241,17 @@ export class TestDataFactory {
     const text = response.content[0]?.text;
     if (!text) return null;
     
-    // Look for various event ID patterns in the response
+    // Try to parse as JSON first (v2.0 structured response)
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed.event?.id) {
+        return parsed.event.id;
+      }
+    } catch {
+      // Fall back to legacy text parsing
+    }
+    
+    // Look for various event ID patterns in the response (legacy)
     // Google Calendar event IDs can contain letters, numbers, underscores, and special characters
     const patterns = [
       /Event created: .* \(([^)]+)\)/, // Legacy format - Match anything within parentheses after "Event created:"

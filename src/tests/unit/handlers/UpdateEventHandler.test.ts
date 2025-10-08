@@ -118,8 +118,9 @@ describe('UpdateEventHandler', () => {
       });
 
       expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toContain('Event updated successfully!');
-      expect(result.content[0].text).toContain('Updated Meeting');
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.event).toBeDefined();
+      expect(response.event.summary).toBe('Updated Meeting');
     });
 
     it('should update event description and location', async () => {
@@ -153,7 +154,10 @@ describe('UpdateEventHandler', () => {
         })
       });
 
-      expect(result.content[0].text).toContain('Event updated successfully!');
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.event).toBeDefined();
+      expect(response.event.description).toBe('New description');
+      expect(response.event.location).toBe('Conference Room B');
     });
 
     it('should update event times', async () => {
@@ -186,7 +190,8 @@ describe('UpdateEventHandler', () => {
         })
       });
 
-      expect(result.content[0].text).toContain('Event updated successfully!');
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.event).toBeDefined();
     });
 
     it('should update attendees', async () => {
@@ -225,7 +230,8 @@ describe('UpdateEventHandler', () => {
         })
       });
 
-      expect(result.content[0].text).toContain('Event updated successfully!');
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.event).toBeDefined();
     });
 
     it('should update reminders', async () => {
@@ -272,7 +278,8 @@ describe('UpdateEventHandler', () => {
         })
       });
 
-      expect(result.content[0].text).toContain('Event updated successfully!');
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.event).toBeDefined();
     });
 
     it('should update guest permissions', async () => {
@@ -309,7 +316,12 @@ describe('UpdateEventHandler', () => {
         })
       });
 
-      expect(result.content[0].text).toContain('Event updated successfully!');
+      const response = JSON.parse(result.content[0].text as string);
+      expect(response).toHaveProperty('event');
+      expect(response.event.id).toBe('event123');
+      expect(response.event.guestsCanInviteOthers).toBe(false);
+      expect(response.event.guestsCanModify).toBe(true);
+      expect(response.event.guestsCanSeeOtherGuests).toBe(false);
     });
 
     it('should update event with conference data', async () => {
@@ -357,7 +369,12 @@ describe('UpdateEventHandler', () => {
         conferenceDataVersion: 1
       });
 
-      expect(result.content[0].text).toContain('Event updated successfully!');
+      const response = JSON.parse(result.content[0].text as string);
+      expect(response).toHaveProperty('event');
+      expect(response.event.id).toBe('event123');
+      expect(response.event.summary).toBe('Video Meeting');
+      expect(response.event.conferenceData).toBeDefined();
+      expect(response.event.conferenceData.entryPoints).toBeDefined();
     });
 
     it('should update color ID', async () => {
@@ -386,7 +403,8 @@ describe('UpdateEventHandler', () => {
         })
       });
 
-      expect(result.content[0].text).toContain('Event updated successfully!');
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.event).toBeDefined();
     });
 
     it('should update multiple fields at once', async () => {
@@ -432,7 +450,8 @@ describe('UpdateEventHandler', () => {
         })
       });
 
-      expect(result.content[0].text).toContain('Event updated successfully!');
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.event).toBeDefined();
     });
   });
 

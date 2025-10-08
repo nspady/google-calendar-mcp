@@ -3,37 +3,32 @@ import { OAuth2Client } from "google-auth-library";
 import { SearchEventsInput } from "../../tools/registry.js";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
-import { formatEventWithDetails } from "../utils.js";
 import { convertToRFC3339 } from "../utils/datetime.js";
 import { buildListFieldMask } from "../../utils/field-mask-builder.js";
+import { createStructuredResponse, convertEventsToStructured } from "../../utils/response-builder.js";
+import { SearchEventsResponse } from "../../types/structured-responses.js";
 
 export class SearchEventsHandler extends BaseToolHandler {
     async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
         const validArgs = args as SearchEventsInput;
         const events = await this.searchEvents(oauth2Client, validArgs);
         
-        if (events.length === 0) {
-            return {
-                content: [{
-                    type: "text",
-                    text: "No events found matching your search criteria."
-                }]
+        const response: SearchEventsResponse = {
+            events: convertEventsToStructured(events, validArgs.calendarId),
+            totalCount: events.length,
+            query: validArgs.query,
+            calendarId: validArgs.calendarId
+        };
+        
+        if (validArgs.timeMin || validArgs.timeMax) {
+            const timezone = validArgs.timeZone || await this.getCalendarTimezone(oauth2Client, validArgs.calendarId);
+            response.timeRange = {
+                start: validArgs.timeMin ? convertToRFC3339(validArgs.timeMin, timezone) : '',
+                end: validArgs.timeMax ? convertToRFC3339(validArgs.timeMax, timezone) : ''
             };
         }
         
-        let text = `Found ${events.length} event(s) matching your search:\n\n`;
-        
-        events.forEach((event, index) => {
-            const eventDetails = formatEventWithDetails(event, validArgs.calendarId);
-            text += `${index + 1}. ${eventDetails}\n\n`;
-        });
-        
-        return {
-            content: [{
-                type: "text",
-                text: text.trim()
-            }]
-        };
+        return createStructuredResponse(response);
     }
 
     private async searchEvents(

@@ -2,10 +2,11 @@ import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
-import { formatEventWithDetails } from "../utils.js";
 import { BatchRequestHandler } from "./BatchRequestHandler.js";
 import { convertToRFC3339 } from "../utils/datetime.js";
 import { buildListFieldMask } from "../../utils/field-mask-builder.js";
+import { createStructuredResponse } from "../../utils/response-builder.js";
+import { ListEventsResponse, StructuredEvent, convertGoogleEventToStructured } from "../../types/structured-responses.js";
 
 // Extended event type to include calendar ID for tracking source
 interface ExtendedEvent extends calendar_v3.Schema$Event {
@@ -42,45 +43,18 @@ export class ListEventsHandler extends BaseToolHandler {
             sharedExtendedProperty: validArgs.sharedExtendedProperty
         });
         
-        if (allEvents.length === 0) {
-            return {
-                content: [{
-                    type: "text",
-                    text: `No events found in ${calendarIds.length} calendar(s).`
-                }]
-            };
-        }
+        // Convert extended events to structured format
+        const structuredEvents: StructuredEvent[] = allEvents.map(event => 
+            convertGoogleEventToStructured(event, event.calendarId)
+        );
         
-        let text = calendarIds.length === 1 
-            ? `Found ${allEvents.length} event(s):\n\n`
-            : `Found ${allEvents.length} event(s) across ${calendarIds.length} calendars:\n\n`;
-        
-        if (calendarIds.length === 1) {
-            // Single calendar - simple list
-            allEvents.forEach((event, index) => {
-                const eventDetails = formatEventWithDetails(event, event.calendarId);
-                text += `${index + 1}. ${eventDetails}\n\n`;
-            });
-        } else {
-            // Multiple calendars - group by calendar
-            const grouped = this.groupEventsByCalendar(allEvents);
-            
-            for (const [calendarId, events] of Object.entries(grouped)) {
-                text += `Calendar: ${calendarId}\n\n`;
-                events.forEach((event, index) => {
-                    const eventDetails = formatEventWithDetails(event, event.calendarId);
-                    text += `${index + 1}. ${eventDetails}\n\n`;
-                });
-                text += "\n";
-            }
-        }
-        
-        return {
-            content: [{
-                type: "text",
-                text: text.trim()
-            }]
+        const response: ListEventsResponse = {
+            events: structuredEvents,
+            totalCount: allEvents.length,
+            calendars: calendarIds.length > 1 ? calendarIds : undefined
         };
+        
+        return createStructuredResponse(response);
     }
 
     private async fetchEvents(

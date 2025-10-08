@@ -91,8 +91,10 @@ describe('CreateEventHandler', () => {
       expect(mockCalendar.events.insert.mock.calls[0][0].requestBody.id).toBeUndefined();
 
       expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toContain('Event created successfully!');
-      expect(result.content[0].text).toContain('Test Event');
+      const response = JSON.parse(result.content[0].text);
+      expect(response.event).toBeDefined();
+      expect(response.event.id).toBe('generated-id-123');
+      expect(response.event.summary).toBe('Test Event');
     });
 
     it('should create event with all basic optional fields', async () => {
@@ -144,7 +146,9 @@ describe('CreateEventHandler', () => {
         })
       });
 
-      expect(result.content[0].text).toContain('Event created successfully!');
+      const response = JSON.parse(result.content[0].text);
+      expect(response.event).toBeDefined();
+      expect(response.event.id).toBeDefined();
     });
   });
 
@@ -180,7 +184,9 @@ describe('CreateEventHandler', () => {
         })
       });
 
-      expect(result.content[0].text).toContain('Event created successfully!');
+      const response = JSON.parse(result.content[0].text);
+      expect(response.event).toBeDefined();
+      expect(response.event.id).toBeDefined();
     });
 
     it('should validate event ID before making API call', async () => {

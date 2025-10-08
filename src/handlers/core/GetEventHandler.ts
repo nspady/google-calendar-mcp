@@ -2,8 +2,9 @@ import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
-import { formatEventWithDetails } from "../utils.js";
 import { buildSingleEventFieldMask } from "../../utils/field-mask-builder.js";
+import { createStructuredResponse } from "../../utils/response-builder.js";
+import { GetEventResponse, convertGoogleEventToStructured } from "../../types/structured-responses.js";
 
 interface GetEventArgs {
     calendarId: string;
@@ -19,22 +20,14 @@ export class GetEventHandler extends BaseToolHandler {
             const event = await this.getEvent(oauth2Client, validArgs);
             
             if (!event) {
-                return {
-                    content: [{
-                        type: "text",
-                        text: `Event with ID '${validArgs.eventId}' not found in calendar '${validArgs.calendarId}'.`
-                    }]
-                };
+                throw new Error(`Event with ID '${validArgs.eventId}' not found in calendar '${validArgs.calendarId}'.`);
             }
             
-            const eventDetails = formatEventWithDetails(event, validArgs.calendarId);
-            
-            return {
-                content: [{
-                    type: "text",
-                    text: `Event Details:\n\n${eventDetails}`
-                }]
+            const response: GetEventResponse = {
+                event: convertGoogleEventToStructured(event, validArgs.calendarId)
             };
+            
+            return createStructuredResponse(response);
         } catch (error) {
             throw this.handleGoogleApiError(error);
         }

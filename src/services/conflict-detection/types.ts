@@ -1,6 +1,10 @@
 import { calendar_v3 } from "googleapis";
 
-export interface ConflictInfo {
+/**
+ * Internal conflict info used by the conflict detection service.
+ * Contains additional internal fields not exposed in public API responses.
+ */
+export interface InternalConflictInfo {
   type: 'overlap' | 'duplicate';
   calendar: string;
   event: {
@@ -20,7 +24,11 @@ export interface ConflictInfo {
   similarity?: number;
 }
 
-export interface DuplicateInfo {
+/**
+ * Internal duplicate info used by the conflict detection service.
+ * Contains additional internal fields not exposed in public API responses.
+ */
+export interface InternalDuplicateInfo {
   event: {
     id: string;
     title: string;
@@ -34,8 +42,8 @@ export interface DuplicateInfo {
 
 export interface ConflictCheckResult {
   hasConflicts: boolean;
-  conflicts: ConflictInfo[];
-  duplicates: DuplicateInfo[];
+  conflicts: InternalConflictInfo[];
+  duplicates: InternalDuplicateInfo[];
 }
 
 export interface EventTimeRange {
