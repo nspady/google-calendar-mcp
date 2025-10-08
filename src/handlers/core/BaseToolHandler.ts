@@ -12,7 +12,7 @@ export abstract class BaseToolHandler {
         if (error instanceof GaxiosError) {
             const status = error.response?.status;
             const errorData = error.response?.data;
-            
+
             // Handle specific Google API errors with appropriate MCP error codes
             if (errorData?.error === 'invalid_grant') {
                 throw new McpError(
@@ -20,42 +20,76 @@ export abstract class BaseToolHandler {
                     'Authentication token is invalid or expired. Please re-run the authentication process (e.g., `npm run auth`).'
                 );
             }
-            
+
+            if (status === 400) {
+                // Extract detailed error information for Bad Request
+                const errorMessage = errorData?.error?.message;
+                const errorDetails = errorData?.error?.errors?.map((e: any) =>
+                    `${e.message || e.reason}${e.location ? ` (${e.location})` : ''}`
+                ).join('; ');
+
+                // Also include raw error data for debugging if details are missing
+                let fullMessage: string;
+                if (errorDetails) {
+                    fullMessage = `Bad Request: ${errorMessage || 'Invalid request parameters'}. Details: ${errorDetails}`;
+                } else if (errorMessage) {
+                    fullMessage = `Bad Request: ${errorMessage}`;
+                } else {
+                    // Include stringified error data for debugging
+                    const errorStr = JSON.stringify(errorData, null, 2);
+                    fullMessage = `Bad Request: Invalid request parameters. Raw error: ${errorStr}`;
+                }
+
+                throw new McpError(
+                    ErrorCode.InvalidRequest,
+                    fullMessage
+                );
+            }
+
             if (status === 403) {
                 throw new McpError(
                     ErrorCode.InvalidRequest,
                     `Access denied: ${errorData?.error?.message || 'Insufficient permissions'}`
                 );
             }
-            
+
             if (status === 404) {
                 throw new McpError(
                     ErrorCode.InvalidRequest,
                     `Resource not found: ${errorData?.error?.message || 'The requested calendar or event does not exist'}`
                 );
             }
-            
+
             if (status === 429) {
                 throw new McpError(
                     ErrorCode.InternalError,
                     'Rate limit exceeded. Please try again later.'
                 );
             }
-            
+
             if (status && status >= 500) {
                 throw new McpError(
                     ErrorCode.InternalError,
                     `Google API server error: ${errorData?.error?.message || error.message}`
                 );
             }
-            
-            // Generic Google API error
+
+            // Generic Google API error with detailed information
+            const errorMessage = errorData?.error?.message || error.message;
+            const errorDetails = errorData?.error?.errors?.map((e: any) =>
+                `${e.message || e.reason}${e.location ? ` (${e.location})` : ''}`
+            ).join('; ');
+
+            const fullMessage = errorDetails
+                ? `Google API error: ${errorMessage}. Details: ${errorDetails}`
+                : `Google API error: ${errorMessage}`;
+
             throw new McpError(
                 ErrorCode.InvalidRequest,
-                `Google API error: ${errorData?.error?.message || error.message}`
+                fullMessage
             );
         }
-        
+
         // Handle non-Google API errors
         if (error instanceof Error) {
             throw new McpError(
@@ -63,7 +97,7 @@ export abstract class BaseToolHandler {
                 `Internal error: ${error.message}`
             );
         }
-        
+
         throw new McpError(
             ErrorCode.InternalError,
             'An unknown error occurred'

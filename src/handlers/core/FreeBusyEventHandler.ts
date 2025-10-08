@@ -7,6 +7,7 @@ import { FreeBusyResponse } from '../../types/structured-responses.js';
 import { createStructuredResponse } from '../../utils/response-builder.js';
 import { McpError } from '@modelcontextprotocol/sdk/types.js';
 import { ErrorCode } from '@modelcontextprotocol/sdk/types.js';
+import { convertToRFC3339 } from '../utils/datetime.js';
 
 export class FreeBusyEventHandler extends BaseToolHandler {
   async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
@@ -36,15 +37,50 @@ export class FreeBusyEventHandler extends BaseToolHandler {
   ): Promise<GoogleFreeBusyResponse> {
     try {
       const calendar = this.getCalendar(client);
+
+      // Determine timezone with correct precedence:
+      // 1. Explicit timeZone parameter (highest priority)
+      // 2. Primary calendar's default timezone (fallback)
+      // 3. UTC if calendar timezone retrieval fails
+      let timezone: string;
+      if (args.timeZone) {
+        timezone = args.timeZone;
+      } else {
+        try {
+          timezone = await this.getCalendarTimezone(client, 'primary');
+        } catch (error) {
+          // If we can't get the primary calendar's timezone, fall back to UTC
+          // This can happen if the user doesn't have access to 'primary' calendar
+          timezone = 'UTC';
+        }
+      }
+
+      // Convert time boundaries to RFC3339 format for Google Calendar API
+      // This handles both timezone-aware and timezone-naive datetime strings
+      const timeMin = convertToRFC3339(args.timeMin, timezone);
+      const timeMax = convertToRFC3339(args.timeMax, timezone);
+
+      // Build request body
+      // Note: The timeZone parameter affects the response format, not request interpretation
+      // Since timeMin/timeMax are in RFC3339 (with timezone), they're unambiguous
+      // But we include timeZone so busy periods in the response use consistent timezone
+      const requestBody: any = {
+        timeMin,
+        timeMax,
+        items: args.calendars,
+        timeZone: timezone, // Always include to ensure response consistency
+      };
+
+      // Only add optional expansion fields if provided
+      if (args.groupExpansionMax !== undefined) {
+        requestBody.groupExpansionMax = args.groupExpansionMax;
+      }
+      if (args.calendarExpansionMax !== undefined) {
+        requestBody.calendarExpansionMax = args.calendarExpansionMax;
+      }
+
       const response = await calendar.freebusy.query({
-        requestBody: {
-          timeMin: args.timeMin,
-          timeMax: args.timeMax,
-          timeZone: args.timeZone,
-          groupExpansionMax: args.groupExpansionMax,
-          calendarExpansionMax: args.calendarExpansionMax,
-          items: args.calendars,
-        },
+        requestBody,
       });
       return response.data as GoogleFreeBusyResponse;
     } catch (error) {
