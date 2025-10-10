@@ -16,48 +16,74 @@ import { DeleteEventHandler } from "../handlers/core/DeleteEventHandler.js";
 import { FreeBusyEventHandler } from "../handlers/core/FreeBusyEventHandler.js";
 import { GetCurrentTimeHandler } from "../handlers/core/GetCurrentTimeHandler.js";
 
+// Define shared schema fields for reuse
+const timeMinSchema = z.string()
+  .refine((val) => {
+    const withTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(val);
+    const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
+    return withTimezone || withoutTimezone;
+  }, "Must be ISO 8601 format: '2026-01-01T00:00:00'")
+  .describe("Start time boundary. Preferred: '2024-01-01T00:00:00' (uses timeZone parameter or calendar timezone). Also accepts: '2024-01-01T00:00:00Z' or '2024-01-01T00:00:00-08:00'.")
+  .optional();
+
+const timeMaxSchema = z.string()
+  .refine((val) => {
+    const withTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(val);
+    const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
+    return withTimezone || withoutTimezone;
+  }, "Must be ISO 8601 format: '2026-01-01T00:00:00'")
+  .describe("End time boundary. Preferred: '2024-01-01T23:59:59' (uses timeZone parameter or calendar timezone). Also accepts: '2024-01-01T23:59:59Z' or '2024-01-01T23:59:59-08:00'.")
+  .optional();
+
+const timeZoneSchema = z.string().optional().describe(
+  "Timezone as IANA Time Zone Database name (e.g., America/Los_Angeles). Takes priority over calendar's default timezone. Only used for timezone-naive datetime strings."
+);
+
+const fieldsSchema = z.array(z.enum(ALLOWED_EVENT_FIELDS)).optional().describe(
+  "Optional array of additional event fields to retrieve. Available fields are strictly validated. Default fields (id, summary, start, end, status, htmlLink, location, attendees) are always included."
+);
+
+const privateExtendedPropertySchema = z
+  .array(z.string().regex(/^[^=]+=[^=]+$/, "Must be in key=value format"))
+  .optional()
+  .describe(
+    "Filter by private extended properties (key=value). Matches events that have all specified properties."
+  );
+
+const sharedExtendedPropertySchema = z
+  .array(z.string().regex(/^[^=]+=[^=]+$/, "Must be in key=value format"))
+  .optional()
+  .describe(
+    "Filter by shared extended properties (key=value). Matches events that have all specified properties."
+  );
+
 // Define all tool schemas with TypeScript inference
 export const ToolSchemas = {
   'list-calendars': z.object({}),
-  
+
   'list-events': z.object({
-    calendarId: z.string().describe(
-      "ID of the calendar(s) to list events from. Accepts either a single calendar ID string or an array of calendar IDs (passed as JSON string like '[\"cal1\", \"cal2\"]')"
-    ),
-    timeMin: z.string()
-      .refine((val) => {
-        const withTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(val);
-        const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
-        return withTimezone || withoutTimezone;
-      }, "Must be ISO 8601 format: '2026-01-01T00:00:00'")
-      .describe("Start time boundary. Preferred: '2024-01-01T00:00:00' (uses timeZone parameter or calendar timezone). Also accepts: '2024-01-01T00:00:00Z' or '2024-01-01T00:00:00-08:00'.")
-      .optional(),
-    timeMax: z.string()
-      .refine((val) => {
-        const withTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(val);
-        const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
-        return withTimezone || withoutTimezone;
-      }, "Must be ISO 8601 format: '2026-01-01T00:00:00'")
-      .describe("End time boundary. Preferred: '2024-01-01T23:59:59' (uses timeZone parameter or calendar timezone). Also accepts: '2024-01-01T23:59:59Z' or '2024-01-01T23:59:59-08:00'.")
-      .optional(),
-    timeZone: z.string().optional().describe(
-      "Timezone as IANA Time Zone Database name (e.g., America/Los_Angeles). Takes priority over calendar's default timezone. Only used for timezone-naive datetime strings."
-    ),
-    fields: z.array(z.enum(ALLOWED_EVENT_FIELDS)).optional().describe(
-      "Optional array of additional event fields to retrieve. Available fields are strictly validated. Default fields (id, summary, start, end, status, htmlLink, location, attendees) are always included."
-    ),
-    privateExtendedProperty: z
-      .array(z.string().regex(/^[^=]+=[^=]+$/, "Must be in key=value format"))
-      .optional()
-      .describe(
-        "Filter by private extended properties (key=value). Matches events that have all specified properties."
-      ),
-    sharedExtendedProperty: z
-      .array(z.string().regex(/^[^=]+=[^=]+$/, "Must be in key=value format"))
-      .optional()
-      .describe(
-        "Filter by shared extended properties (key=value). Matches events that have all specified properties."
-      )
+    calendarId: z.union([
+      z.string(),
+      z.array(z.string().min(1))
+        .min(1, "At least one calendar ID is required")
+        .max(50, "Maximum 50 calendars allowed per request")
+        .refine(
+          (arr) => new Set(arr).size === arr.length,
+          "Duplicate calendar IDs are not allowed"
+        )
+    ]).transform((val) => {
+      // Convert arrays to JSON strings for backward compatibility with handler
+      if (Array.isArray(val)) {
+        return JSON.stringify(val);
+      }
+      return val;
+    }),
+    timeMin: timeMinSchema,
+    timeMax: timeMaxSchema,
+    timeZone: timeZoneSchema,
+    fields: fieldsSchema,
+    privateExtendedProperty: privateExtendedPropertySchema,
+    sharedExtendedProperty: sharedExtendedPropertySchema
   }),
   
   'search-events': z.object({
@@ -431,6 +457,7 @@ interface ToolDefinition {
   schema: z.ZodType<any>;
   handler: new () => BaseToolHandler;
   handlerFunction?: (args: any) => Promise<any>;
+  customInputSchema?: any; // Custom schema shape for MCP registration (overrides extractSchemaShape)
 }
 
 
@@ -469,24 +496,26 @@ export class ToolRegistry {
       description: "List events from one or more calendars.",
       schema: ToolSchemas['list-events'],
       handler: ListEventsHandler,
+      // Custom schema for MCP registration (string-only for OpenAI compatibility)
+      customInputSchema: {
+        calendarId: z.string().describe(
+          "ID of the calendar(s) to list events from. Accepts a single calendar ID string, an array of calendar IDs, or a JSON string like '[\"cal1\", \"cal2\"]'"
+        ),
+        timeMin: timeMinSchema,
+        timeMax: timeMaxSchema,
+        timeZone: timeZoneSchema,
+        fields: fieldsSchema,
+        privateExtendedProperty: privateExtendedPropertySchema,
+        sharedExtendedProperty: sharedExtendedPropertySchema
+      },
       handlerFunction: async (args: ListEventsInput & { calendarId: string | string[] }) => {
-        // Validate and preprocess calendarId input for multi-calendar support
         let processedCalendarId: string | string[] = args.calendarId;
-        
-        // Handle case where calendarId is passed as a JSON string
+
+        // Handle case where calendarId is passed as a JSON string (backwards compatibility)
         if (typeof args.calendarId === 'string' && args.calendarId.trim().startsWith('[') && args.calendarId.trim().endsWith(']')) {
           try {
             const parsed = JSON.parse(args.calendarId);
             if (Array.isArray(parsed) && parsed.every(id => typeof id === 'string' && id.length > 0)) {
-              if (parsed.length === 0) {
-                throw new Error("At least one calendar ID is required");
-              }
-              if (parsed.length > 50) {
-                throw new Error("Maximum 50 calendars allowed per request");
-              }
-              if (new Set(parsed).size !== parsed.length) {
-                throw new Error("Duplicate calendar IDs are not allowed");
-              }
               processedCalendarId = parsed;
             } else {
               throw new Error('JSON string must contain an array of non-empty strings');
@@ -497,8 +526,8 @@ export class ToolRegistry {
             );
           }
         }
-        
-        // Additional validation for arrays
+
+        // Validate arrays (whether from direct input or parsed JSON)
         if (Array.isArray(processedCalendarId)) {
           if (processedCalendarId.length === 0) {
             throw new Error("At least one calendar ID is required");
@@ -506,14 +535,11 @@ export class ToolRegistry {
           if (processedCalendarId.length > 50) {
             throw new Error("Maximum 50 calendars allowed per request");
           }
-          if (!processedCalendarId.every(id => typeof id === 'string' && id.length > 0)) {
-            throw new Error("All calendar IDs must be non-empty strings");
-          }
           if (new Set(processedCalendarId).size !== processedCalendarId.length) {
             throw new Error("Duplicate calendar IDs are not allowed");
           }
         }
-        
+
         return {
           calendarId: processedCalendarId,
           timeMin: args.timeMin,
@@ -577,7 +603,9 @@ export class ToolRegistry {
 
   static getToolsWithSchemas() {
     return this.tools.map(tool => {
-      const jsonSchema = zodToJsonSchema(tool.schema);
+      const jsonSchema = tool.customInputSchema
+        ? zodToJsonSchema(z.object(tool.customInputSchema))
+        : zodToJsonSchema(tool.schema);
       return {
         name: tool.name,
         description: tool.description,
@@ -599,7 +627,7 @@ export class ToolRegistry {
         tool.name,
         {
           description: tool.description,
-          inputSchema: this.extractSchemaShape(tool.schema)
+          inputSchema: tool.customInputSchema || this.extractSchemaShape(tool.schema)
         },
         async (args: any) => {
           // Validate input using our Zod schema

@@ -372,15 +372,16 @@ describe('ListEventsArgumentsSchema JSON String Handling', () => {
   });
 
   it('should handle regular array calendarId', () => {
-    // Arrays are no longer directly supported - they must be JSON strings
+    // Arrays are now supported via preprocessing
     const input = {
       calendarId: ['primary', 'secondary@gmail.com'],
       timeMin: '2024-01-01T00:00:00Z',
       timeMax: '2024-01-02T00:00:00Z'
     };
 
-    // This should now throw because arrays aren't accepted directly
-    expect(() => ListEventsArgumentsSchema.parse(input)).toThrow();
+    // The preprocess function converts the array to a JSON string
+    const result = ListEventsArgumentsSchema.parse(input);
+    expect(result.calendarId).toBe('["primary","secondary@gmail.com"]');
   });
 
   it('should reject invalid JSON string', () => {
