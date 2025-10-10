@@ -41,19 +41,16 @@ INIT_RESPONSE=$(curl -s -X POST "$SERVER_URL" \
   -H "mcp-session-id: $SESSION_ID" \
   -d "$INIT_REQUEST")
 
-echo "Raw response:"
-echo "$INIT_RESPONSE"
-echo ""
-
 # Try to parse as JSON, if that fails, check if it's SSE format
 if echo "$INIT_RESPONSE" | jq '.' >/dev/null 2>&1; then
-  echo "✅ JSON response:"
-  echo "$INIT_RESPONSE" | jq '.'
+  # Direct JSON response - extract and parse the nested content
+  echo "$INIT_RESPONSE" | jq -r '.result.content[0].text // empty' | jq '.' 2>/dev/null || echo "$INIT_RESPONSE" | jq '.'
 elif echo "$INIT_RESPONSE" | grep -q "^data:"; then
-  echo "📡 SSE response detected, extracting JSON:"
-  echo "$INIT_RESPONSE" | grep "^data:" | sed 's/^data: //' | jq '.'
+  # SSE format - extract data and parse nested content
+  echo "$INIT_RESPONSE" | grep "^data:" | sed 's/^data: //' | jq -r '.result.content[0].text // empty' | jq '.' 2>/dev/null
 else
   echo "❌ Unknown response format"
+  echo "$INIT_RESPONSE"
 fi
 
 # Check if initialization was successful
@@ -79,19 +76,16 @@ TOOLS_RESPONSE=$(curl -s -X POST "$SERVER_URL" \
   -H "mcp-session-id: $SESSION_ID" \
   -d "$LIST_TOOLS_REQUEST")
 
-echo "Raw response:"
-echo "$TOOLS_RESPONSE"
-echo ""
-
 # Parse response appropriately
 if echo "$TOOLS_RESPONSE" | jq '.' >/dev/null 2>&1; then
-  echo "✅ JSON response:"
-  echo "$TOOLS_RESPONSE" | jq '.'
+  # Direct JSON - show the full tools list response (not nested content)
+  echo "$TOOLS_RESPONSE" | jq '.result.tools[] | {name, description}'
 elif echo "$TOOLS_RESPONSE" | grep -q "^data:"; then
-  echo "📡 SSE response detected, extracting JSON:"
-  echo "$TOOLS_RESPONSE" | grep "^data:" | sed 's/^data: //' | jq '.'
+  # SSE format
+  echo "$TOOLS_RESPONSE" | grep "^data:" | sed 's/^data: //' | jq '.result.tools[] | {name, description}'
 else
   echo "❌ List tools failed - unknown format"
+  echo "$TOOLS_RESPONSE"
 fi
 
 # Test 4: Call list-calendars tool
@@ -113,21 +107,16 @@ CALENDARS_RESPONSE=$(curl -s -X POST "$SERVER_URL" \
   -H "mcp-session-id: $SESSION_ID" \
   -d "$LIST_CALENDARS_REQUEST")
 
-echo "Raw response:"
-echo "$CALENDARS_RESPONSE"
-echo ""
-
 # Parse response appropriately
 if echo "$CALENDARS_RESPONSE" | jq '.' >/dev/null 2>&1; then
-  echo "✅ JSON response:"
-  echo "$CALENDARS_RESPONSE" | jq '.' | head -20
-  echo "..."
+  # Extract the nested JSON from content[0].text and parse it
+  echo "$CALENDARS_RESPONSE" | jq -r '.result.content[0].text' | jq '.calendars[] | {id, summary, timeZone, accessRole}'
 elif echo "$CALENDARS_RESPONSE" | grep -q "^data:"; then
-  echo "📡 SSE response detected, extracting JSON:"
-  echo "$CALENDARS_RESPONSE" | grep "^data:" | sed 's/^data: //' | jq '.' | head -20
-  echo "..."
+  # SSE format - extract data, then nested content
+  echo "$CALENDARS_RESPONSE" | grep "^data:" | sed 's/^data: //' | jq -r '.result.content[0].text' | jq '.calendars[] | {id, summary, timeZone, accessRole}'
 else
   echo "❌ List calendars failed - unknown format"
+  echo "$CALENDARS_RESPONSE"
 fi
 
 # Test 5: Call list-colors tool
@@ -149,19 +138,26 @@ COLORS_RESPONSE=$(curl -s -X POST "$SERVER_URL" \
   -H "mcp-session-id: $SESSION_ID" \
   -d "$LIST_COLORS_REQUEST")
 
-echo "Raw response:"
-echo "$COLORS_RESPONSE"
-echo ""
-
 # Parse response appropriately
 if echo "$COLORS_RESPONSE" | jq '.' >/dev/null 2>&1; then
-  echo "✅ JSON response:"
-  echo "$COLORS_RESPONSE" | jq '.'
+  # Extract nested JSON and display color summary
+  echo "$COLORS_RESPONSE" | jq -r '.result.content[0].text' | jq '{
+    eventColors: .event | length,
+    calendarColors: .calendar | length,
+    sampleEventColor: .event["1"],
+    sampleCalendarColor: .calendar["1"]
+  }'
 elif echo "$COLORS_RESPONSE" | grep -q "^data:"; then
-  echo "📡 SSE response detected, extracting JSON:"
-  echo "$COLORS_RESPONSE" | grep "^data:" | sed 's/^data: //' | jq '.'
+  # SSE format
+  echo "$COLORS_RESPONSE" | grep "^data:" | sed 's/^data: //' | jq -r '.result.content[0].text' | jq '{
+    eventColors: .event | length,
+    calendarColors: .calendar | length,
+    sampleEventColor: .event["1"],
+    sampleCalendarColor: .calendar["1"]
+  }'
 else
   echo "❌ List colors failed - unknown format"
+  echo "$COLORS_RESPONSE"
 fi
 
 echo -e "\n✅ HTTP testing completed!"

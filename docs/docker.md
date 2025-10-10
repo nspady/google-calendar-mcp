@@ -5,20 +5,25 @@ Simple, production-ready Docker setup for the Google Calendar MCP Server. Follow
 ## Quick Start 
 
 ```bash
-# 1. Place OAuth credentials in project root 
-# * optional if you have already place the file in the root of this project folder
+# 1. Place OAuth credentials in project root
+# * optional if you have already placed the file in the root of this project folder
 cp /path/to/your/gcp-oauth.keys.json ./gcp-oauth.keys.json
 
-# 2. Copy example .env file to configure environment variables (optional)
+# Ensure the file has correct permissions for Docker to read
+chmod 644 ./gcp-oauth.keys.json
+
+# 2. Configure environment (optional - uses stdio mode by default)
+# The .env.example file contains all defaults. Copy if customization needed:
 cp .env.example .env
 
 # 3. Build and start the server
 docker compose up -d
 
 # 4. Authenticate (one-time setup)
-# This will show the authentication URL that needs to be 
-# visited to give authorization to the applicaiton. 
+# This will show the authentication URL that needs to be
+# visited to give authorization to the application.
 # Visit the URL and complete the OAuth process.
+# Note: This runs the built auth-server.js (build happens during docker build)
 docker compose exec calendar-mcp npm run auth
 # Note: This step only needs to be done once unless the app is in testing mode
 # in which case the tokens expire after 7 days 
@@ -27,6 +32,8 @@ docker compose exec calendar-mcp npm run auth
 ```
 
 ## Two Modes
+
+The server supports two transport modes: **stdio** (for local Claude Desktop) and **HTTP** (for remote/web access).
 
 ### stdio Mode (Recommended for Claude Desktop)
 **Direct process integration for Claude Desktop:**
@@ -40,10 +47,14 @@ cd google-calendar-mcp
 # Place your OAuth credentials in the project root
 cp /path/to/your/gcp-oauth.keys.json ./gcp-oauth.keys.json
 
+# Ensure the file has correct permissions for Docker to read
+chmod 644 ./gcp-oauth.keys.json
+
 # Build and start the container
 docker compose up -d
 
 # Authenticate (one-time setup)
+# Note: This runs the built auth-server.js (build happens during docker build)
 docker compose exec calendar-mcp npm run auth
 ```
 
@@ -62,7 +73,7 @@ Add to your Claude Desktop config file:
         "run", "--rm", "-i",
         "--mount", "type=bind,src=/absolute/path/to/your/gcp-oauth.keys.json,dst=/app/gcp-oauth.keys.json",
         "--mount", "type=volume,src=google-calendar-mcp_calendar-tokens,dst=/home/nodejs/.config/google-calendar-mcp",
-        "google-calendar-mcp-calendar-mcp"
+        "calendar-mcp"
       ]
     }
   }
@@ -86,13 +97,16 @@ cd google-calendar-mcp
 # Place your OAuth credentials in the project root
 cp /path/to/your/gcp-oauth.keys.json ./gcp-oauth.keys.json
 
+# Ensure the file has correct permissions for Docker to read
+chmod 644 ./gcp-oauth.keys.json
+
 # Configure for HTTP mode
+# Copy .env.example which has defaults (TRANSPORT=stdio, HOST=0.0.0.0, PORT=3000)
 cp .env.example .env
-# Edit .env to set:
-echo "TRANSPORT=http" >> .env
-echo "HOST=0.0.0.0" >> .env
-echo "PORT=3000" >> .env
-echo "GOOGLE_OAUTH_CREDENTIALS=./gcp-oauth.keys.json" >> .env
+
+# Change TRANSPORT to http (other defaults are already correct)
+# Update TRANSPORT=stdio to TRANSPORT=http in .env
+
 ```
 
 #### Step 2: Start and Authenticate
@@ -101,6 +115,7 @@ echo "GOOGLE_OAUTH_CREDENTIALS=./gcp-oauth.keys.json" >> .env
 docker compose up -d
 
 # Authenticate (one-time setup)
+# Note: This runs the built auth-server.js (build happens during docker build)
 docker compose exec calendar-mcp npm run auth
 # This will show authentication URLs (visit the displayed URL)
 # This step only needs to be done once unless the app is in testing mode
@@ -108,7 +123,7 @@ docker compose exec calendar-mcp npm run auth
 
 # Verify server is running
 curl http://localhost:3000/health
-# Should return: {"status":"healthy","server":"google-calendar-mcp","version":"1.3.0"}
+# Should return: {"status":"healthy","server":"google-calendar-mcp","timestamp":"YYYY-MM-DDT00:00:00.000"}
 ```
 
 #### Step 3: Test with cURL Example
@@ -138,3 +153,17 @@ Add to your Claude Desktop config file:
 ```
 
 **Note**: HTTP mode requires the container to be running (`docker compose up -d`)
+
+## Development: Updating Code
+
+If you modify the source code and want to see your changes reflected in the Docker container:
+
+```bash
+# Rebuild the Docker image and restart the container
+docker compose build && docker compose up -d
+
+# Verify changes are applied (check timestamp updates)
+curl http://localhost:3000/health
+```
+
+**Why rebuild?** The Docker image contains a built snapshot of your code. Changes to source files won't appear until you rebuild the image with `docker compose build`.

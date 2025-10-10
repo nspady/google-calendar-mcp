@@ -10,12 +10,17 @@ import { calendar_v3 } from "googleapis";
 
 /**
  * Creates a structured JSON response for MCP tools
+ *
+ * Note: We use compact JSON (no pretty-printing) because MCP clients
+ * are expected to parse and display the JSON themselves. Pretty-printing
+ * with escaped newlines (\n) creates poor display in clients that show
+ * the raw text.
  */
 export function createStructuredResponse<T>(data: T): CallToolResult {
   return {
     content: [{
       type: "text",
-      text: JSON.stringify(data, null, 2)
+      text: JSON.stringify(data)
     }]
   };
 }
