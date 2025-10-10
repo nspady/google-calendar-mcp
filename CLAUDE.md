@@ -213,5 +213,18 @@ The codebase uses a structured response format for tool outputs. Recent commits 
 ## Deployment
 
 - **npx**: `npx @cocal/google-calendar-mcp` (requires `GOOGLE_OAUTH_CREDENTIALS` env var)
-- **Docker**: See `docs/docker.md` for Docker deployment with both stdio and HTTP modes
-- **Claude Desktop Config**: See README.md for configuration examples
+- **Docker**: See `docs/docker.md` for Docker deployment with stdio and HTTP modes
+- **Claude Desktop Config**: See README.md for local stdio configuration
+
+### Deployment Modes
+
+**Local Development (Claude Desktop):**
+- Use **stdio mode** (default)
+- No server or domain required
+- Direct process communication
+- See README.md for setup
+
+**Key Differences:**
+- **stdio**: For Claude Desktop only, local machine
+- **HTTP**: For testing, development, debugging (local only)
+

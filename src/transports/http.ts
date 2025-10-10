@@ -19,14 +19,14 @@ export class HttpTransportHandler {
   async connect(): Promise<void> {
     const port = this.config.port || 3000;
     const host = this.config.host || '127.0.0.1';
-    
+
     // Configure transport for stateless mode to allow multiple initialization cycles
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined // Stateless mode - allows multiple initializations
     });
 
     await this.server.connect(transport);
-    
+
     // Create HTTP server to handle the StreamableHTTP transport
     const httpServer = http.createServer(async (req, res) => {
       // Validate Origin header to prevent DNS rebinding attacks (MCP spec requirement)
@@ -34,10 +34,10 @@ export class HttpTransportHandler {
       const allowedOrigins = [
         'http://localhost',
         'http://127.0.0.1',
-        'https://localhost', 
+        'https://localhost',
         'https://127.0.0.1'
       ];
-      
+
       // For requests with Origin header, validate it
       if (origin && !allowedOrigins.some(allowed => origin.startsWith(allowed))) {
         res.writeHead(403, { 'Content-Type': 'application/json' });
@@ -90,7 +90,6 @@ export class HttpTransportHandler {
         res.end(JSON.stringify({
           status: 'healthy',
           server: 'google-calendar-mcp',
-          version: '1.3.0',
           timestamp: new Date().toISOString()
         }));
         return;

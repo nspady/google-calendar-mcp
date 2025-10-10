@@ -9,10 +9,7 @@ services:
     
     # Environment configuration via .env file
     env_file: .env
-    
-    # Keep container running for exec commands (stdio mode)
-    command: ["tail", "-f", "/dev/null"]
-    
+
     # OAuth credentials and token storage
     volumes:
       - ./gcp-oauth.keys.json:/app/gcp-oauth.keys.json:ro
