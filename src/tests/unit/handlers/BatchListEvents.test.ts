@@ -80,16 +80,16 @@ describe('Batch List Events Functionality', () => {
     });
 
     it('should accept actual array of calendar IDs (not JSON string)', () => {
-      // In the new schema, arrays are not directly supported - they must be JSON strings
+      // Arrays are now directly supported and converted to JSON strings
       const input = {
         calendarId: ['primary', 'work@example.com', 'personal@example.com'],
         timeMin: '2024-01-01T00:00:00Z'
       };
 
       const result = ListEventsArgumentsSchema.safeParse(input);
-      // Arrays are no longer accepted directly
-      expect(result.success).toBe(false);
-      expect(result.error?.issues[0].message).toContain('Expected string');
+      expect(result.success).toBe(true);
+      // The transform converts arrays to JSON strings
+      expect(result.data?.calendarId).toBe('["primary","work@example.com","personal@example.com"]');
     });
 
     it('should handle malformed JSON string gracefully', () => {
