@@ -36,7 +36,10 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm ci
+          # Force reinstall optional dependencies (fixes rollup platform binaries on Linux)
+          npm install --force @rollup/rollup-linux-x64-gnu 2>/dev/null || true
 
       - name: Run tests
         run: npm test
