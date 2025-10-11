@@ -1,5 +1,6 @@
 import * as path from 'path';
 import * as os from 'os';
+import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 import { getSecureTokenPath as getSharedSecureTokenPath, getLegacyTokenPath as getSharedLegacyTokenPath, getAccountMode as getSharedAccountMode } from './paths.js';
 
@@ -59,6 +60,48 @@ export interface OAuthCredentials {
   client_id: string;
   client_secret: string;
   redirect_uris: string[];
+}
+
+// Interface for credentials file with project_id
+export interface OAuthCredentialsWithProject {
+  installed?: {
+    project_id?: string;
+    client_id?: string;
+    client_secret?: string;
+    redirect_uris?: string[];
+  };
+  project_id?: string;
+  client_id?: string;
+  client_secret?: string;
+  redirect_uris?: string[];
+}
+
+// Get project ID from OAuth credentials file
+// Returns undefined if credentials file doesn't exist, is invalid, or missing project_id
+export function getCredentialsProjectId(): string | undefined {
+  try {
+    // Use existing helper to get credentials file path
+    const credentialsPath = getKeysFilePath();
+
+    if (!fs.existsSync(credentialsPath)) {
+      return undefined;
+    }
+
+    const credentialsContent = fs.readFileSync(credentialsPath, 'utf-8');
+    const credentials: OAuthCredentialsWithProject = JSON.parse(credentialsContent);
+
+    // Extract project_id from installed format or direct format
+    if (credentials.installed?.project_id) {
+      return credentials.installed.project_id;
+    } else if (credentials.project_id) {
+      return credentials.project_id;
+    }
+
+    return undefined;
+  } catch (error) {
+    // If we can't read project ID, return undefined (backward compatibility)
+    return undefined;
+  }
 }
 
 // Generate helpful error message for missing credentials

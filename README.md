@@ -203,6 +203,12 @@ Along with the normal capabilities you would expect for a calendar integration y
    - Perform manual authentication per the below steps
    - Use a Chromium-based browser to open the authentication URL. Test app authentication may not be supported on some non-Chromium browsers.
 
+5. **"User Rate Limit Exceeded" errors**
+   - This typically occurs when your OAuth credentials are missing project information
+   - Ensure your `gcp-oauth.keys.json` file includes `project_id`
+   - Re-download credentials from Google Cloud Console if needed
+   - The file should have format: `{"installed": {"project_id": "your-project-id", ...}}`
+
 ### Manual Authentication
 For re-authentication or troubleshooting:
 ```bash

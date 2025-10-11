@@ -3,6 +3,7 @@ import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { GaxiosError } from 'gaxios';
 import { calendar_v3, google } from "googleapis";
+import { getCredentialsProjectId } from "../../auth/utils.js";
 
 
 export abstract class BaseToolHandler {
@@ -61,9 +62,26 @@ export abstract class BaseToolHandler {
             }
 
             if (status === 429) {
+                const errorMessage = errorData?.error?.message || '';
+
+                // Provide specific guidance for quota-related rate limits
+                if (errorMessage.includes('User Rate Limit Exceeded')) {
+                    throw new McpError(
+                        ErrorCode.InvalidRequest,
+                        `Rate limit exceeded. This may be due to missing quota project configuration.
+
+Ensure your OAuth credentials include project_id information:
+1. Check that your gcp-oauth.keys.json file contains project_id
+2. Re-download credentials from Google Cloud Console if needed
+3. The file should have format: {"installed": {"project_id": "your-project-id", ...}}
+
+Original error: ${errorMessage}`
+                    );
+                }
+
                 throw new McpError(
                     ErrorCode.InternalError,
-                    'Rate limit exceeded. Please try again later.'
+                    `Rate limit exceeded. Please try again later. ${errorMessage}`
                 );
             }
 
@@ -105,11 +123,21 @@ export abstract class BaseToolHandler {
     }
 
     protected getCalendar(auth: OAuth2Client): calendar_v3.Calendar {
-        return google.calendar({ 
-            version: 'v3', 
+        // Try to get project ID from credentials file for quota project header
+        const quotaProjectId = getCredentialsProjectId();
+
+        const config: any = {
+            version: 'v3',
             auth,
             timeout: 3000 // 3 second timeout for API calls
-        });
+        };
+
+        // Add quota project ID if available
+        if (quotaProjectId) {
+            config.quotaProjectId = quotaProjectId;
+        }
+
+        return google.calendar(config);
     }
 
     protected async withTimeout<T>(promise: Promise<T>, timeoutMs: number = 30000): Promise<T> {
