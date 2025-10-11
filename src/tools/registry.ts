@@ -71,13 +71,7 @@ export const ToolSchemas = {
           (arr) => new Set(arr).size === arr.length,
           "Duplicate calendar IDs are not allowed"
         )
-    ]).transform((val) => {
-      // Convert arrays to JSON strings for backward compatibility with handler
-      if (Array.isArray(val)) {
-        return JSON.stringify(val);
-      }
-      return val;
-    }),
+    ]),
     timeMin: timeMinSchema,
     timeMax: timeMaxSchema,
     timeZone: timeZoneSchema,
@@ -497,9 +491,10 @@ export class ToolRegistry {
       schema: ToolSchemas['list-events'],
       handler: ListEventsHandler,
       // Custom schema for MCP registration (string-only for OpenAI compatibility)
+      // Note: Runtime validation accepts native arrays too, but schema advertises string for broader client compatibility
       customInputSchema: {
         calendarId: z.string().describe(
-          "ID of the calendar(s) to list events from. Accepts a single calendar ID string, an array of calendar IDs, or a JSON string like '[\"cal1\", \"cal2\"]'"
+          "Calendar ID(s) to query. Single ID: 'primary'. Multiple IDs: JSON array string '[\"cal1\", \"cal2\"]' (single or double quotes supported)"
         ),
         timeMin: timeMinSchema,
         timeMax: timeMaxSchema,
@@ -511,34 +506,52 @@ export class ToolRegistry {
       handlerFunction: async (args: ListEventsInput & { calendarId: string | string[] }) => {
         let processedCalendarId: string | string[] = args.calendarId;
 
-        // Handle case where calendarId is passed as a JSON string (backwards compatibility)
-        if (typeof args.calendarId === 'string' && args.calendarId.trim().startsWith('[') && args.calendarId.trim().endsWith(']')) {
+        // If it's already an array (native array format), keep as-is (already validated by schema)
+        if (Array.isArray(args.calendarId)) {
+          processedCalendarId = args.calendarId;
+        }
+        // Handle JSON string format (double or single-quoted)
+        else if (typeof args.calendarId === 'string' && args.calendarId.trim().startsWith('[') && args.calendarId.trim().endsWith(']')) {
           try {
-            const parsed = JSON.parse(args.calendarId);
-            if (Array.isArray(parsed) && parsed.every(id => typeof id === 'string' && id.length > 0)) {
-              processedCalendarId = parsed;
-            } else {
-              throw new Error('JSON string must contain an array of non-empty strings');
+            let jsonString = args.calendarId.trim();
+
+            // Normalize single-quoted JSON-like strings to valid JSON (Python/shell style)
+            // Only replace single quotes that are string delimiters (after '[', ',', or before ']', ',')
+            // This avoids breaking calendar IDs with apostrophes like "John's Calendar"
+            if (jsonString.includes("'")) {
+              jsonString = jsonString
+                .replace(/\[\s*'/g, '["')           // [' -> ["
+                .replace(/'\s*,\s*'/g, '", "')      // ', ' -> ", "
+                .replace(/'\s*\]/g, '"]');          // '] -> "]
             }
+
+            const parsed = JSON.parse(jsonString);
+
+            // Validate parsed result
+            if (!Array.isArray(parsed)) {
+              throw new Error('JSON string must contain an array');
+            }
+            if (!parsed.every(id => typeof id === 'string' && id.length > 0)) {
+              throw new Error('Array must contain only non-empty strings');
+            }
+            if (parsed.length === 0) {
+              throw new Error("At least one calendar ID is required");
+            }
+            if (parsed.length > 50) {
+              throw new Error("Maximum 50 calendars allowed");
+            }
+            if (new Set(parsed).size !== parsed.length) {
+              throw new Error("Duplicate calendar IDs are not allowed");
+            }
+
+            processedCalendarId = parsed;
           } catch (error) {
             throw new Error(
               `Invalid JSON format for calendarId: ${error instanceof Error ? error.message : 'Unknown parsing error'}`
             );
           }
         }
-
-        // Validate arrays (whether from direct input or parsed JSON)
-        if (Array.isArray(processedCalendarId)) {
-          if (processedCalendarId.length === 0) {
-            throw new Error("At least one calendar ID is required");
-          }
-          if (processedCalendarId.length > 50) {
-            throw new Error("Maximum 50 calendars allowed per request");
-          }
-          if (new Set(processedCalendarId).size !== processedCalendarId.length) {
-            throw new Error("Duplicate calendar IDs are not allowed");
-          }
-        }
+        // Otherwise it's a single string calendar ID - keep as-is
 
         return {
           calendarId: processedCalendarId,
