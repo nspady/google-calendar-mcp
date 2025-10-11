@@ -88,8 +88,8 @@ describe('Batch List Events Functionality', () => {
 
       const result = ListEventsArgumentsSchema.safeParse(input);
       expect(result.success).toBe(true);
-      // The transform converts arrays to JSON strings
-      expect(result.data?.calendarId).toBe('["primary","work@example.com","personal@example.com"]');
+      // Arrays are now kept as arrays (not transformed to JSON strings)
+      expect(result.data?.calendarId).toEqual(['primary', 'work@example.com', 'personal@example.com']);
     });
 
     it('should handle malformed JSON string gracefully', () => {

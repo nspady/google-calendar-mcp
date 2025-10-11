@@ -71,13 +71,7 @@ export const ToolSchemas = {
           (arr) => new Set(arr).size === arr.length,
           "Duplicate calendar IDs are not allowed"
         )
-    ]).transform((val) => {
-      // Convert arrays to JSON strings for backward compatibility with handler
-      if (Array.isArray(val)) {
-        return JSON.stringify(val);
-      }
-      return val;
-    }),
+    ]),
     timeMin: timeMinSchema,
     timeMax: timeMaxSchema,
     timeZone: timeZoneSchema,
@@ -511,11 +505,25 @@ export class ToolRegistry {
       handlerFunction: async (args: ListEventsInput & { calendarId: string | string[] }) => {
         let processedCalendarId: string | string[] = args.calendarId;
 
+        // If it's already an array (native array format), keep it as-is (already validated by schema)
+        if (Array.isArray(args.calendarId)) {
+          processedCalendarId = args.calendarId;
+        }
         // Handle case where calendarId is passed as a JSON string (backwards compatibility)
-        if (typeof args.calendarId === 'string' && args.calendarId.trim().startsWith('[') && args.calendarId.trim().endsWith(']')) {
+        else if (typeof args.calendarId === 'string' && args.calendarId.trim().startsWith('[') && args.calendarId.trim().endsWith(']')) {
           try {
             const parsed = JSON.parse(args.calendarId);
             if (Array.isArray(parsed) && parsed.every(id => typeof id === 'string' && id.length > 0)) {
+              // Validate array constraints (schema doesn't validate JSON strings)
+              if (parsed.length === 0) {
+                throw new Error("At least one calendar ID is required");
+              }
+              if (parsed.length > 50) {
+                throw new Error("Maximum 50 calendars allowed per request");
+              }
+              if (new Set(parsed).size !== parsed.length) {
+                throw new Error("Duplicate calendar IDs are not allowed");
+              }
               processedCalendarId = parsed;
             } else {
               throw new Error('JSON string must contain an array of non-empty strings');
@@ -526,19 +534,7 @@ export class ToolRegistry {
             );
           }
         }
-
-        // Validate arrays (whether from direct input or parsed JSON)
-        if (Array.isArray(processedCalendarId)) {
-          if (processedCalendarId.length === 0) {
-            throw new Error("At least one calendar ID is required");
-          }
-          if (processedCalendarId.length > 50) {
-            throw new Error("Maximum 50 calendars allowed per request");
-          }
-          if (new Set(processedCalendarId).size !== processedCalendarId.length) {
-            throw new Error("Duplicate calendar IDs are not allowed");
-          }
-        }
+        // Otherwise it's a single string calendar ID - leave as-is
 
         return {
           calendarId: processedCalendarId,

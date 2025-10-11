@@ -379,9 +379,9 @@ describe('ListEventsArgumentsSchema JSON String Handling', () => {
       timeMax: '2024-01-02T00:00:00Z'
     };
 
-    // The preprocess function converts the array to a JSON string
+    // Arrays are now kept as arrays (not transformed to JSON strings)
     const result = ListEventsArgumentsSchema.parse(input);
-    expect(result.calendarId).toBe('["primary","secondary@gmail.com"]');
+    expect(result.calendarId).toEqual(['primary', 'secondary@gmail.com']);
   });
 
   it('should reject invalid JSON string', () => {
