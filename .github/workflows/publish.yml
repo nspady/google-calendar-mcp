@@ -1,122 +1,61 @@
-name: Publish to NPM
+name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to publish (e.g., patch, minor, major)'
-        required: true
-        default: 'patch'
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
 
 jobs:
-  publish:
+  release-please:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write
-    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: googleapis/release-please-action@v4
+        id: release
         with:
-          fetch-depth: 0
+          release-type: node
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4.0.2
+      # Only run the following steps if a release was created
+      - uses: actions/checkout@v4
+        if: ${{ steps.release.outputs.release_created }}
+
+      - uses: actions/setup-node@v4
+        if: ${{ steps.release.outputs.release_created }}
         with:
           node-version: '18'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
+        if: ${{ steps.release.outputs.release_created }}
         run: |
           npm ci
           # Force reinstall optional dependencies (fixes rollup platform binaries on Linux)
           npm install --force @rollup/rollup-linux-x64-gnu 2>/dev/null || true
 
       - name: Run tests
+        if: ${{ steps.release.outputs.release_created }}
         run: npm test
 
       - name: Build project
+        if: ${{ steps.release.outputs.release_created }}
         run: npm run build
 
-      - name: Bump version (if triggered manually)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Publish to NPM
+        if: ${{ steps.release.outputs.release_created }}
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          npm version ${{ github.event.inputs.version }}
-          git push origin HEAD:${{ github.ref_name }}
-          git push --tags
+          VERSION="${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }}.${{ steps.release.outputs.patch }}"
 
-      - name: Get package version
-        id: package-version
-        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-
-      - name: Check if version exists on npm
-        id: check-version
-        run: |
-          PACKAGE_NAME=$(node -p "require('./package.json').name")
-          VERSION="${{ steps.package-version.outputs.version }}"
-          
-          if npm view "$PACKAGE_NAME@$VERSION" version >/dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "Version $VERSION already exists on npm"
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "Version $VERSION does not exist on npm, proceeding with publish"
-          fi
-
-      - name: Publish to NPM with appropriate tag
-        if: steps.check-version.outputs.exists == 'false'
-        run: |
-          PACKAGE_VERSION="${{ steps.package-version.outputs.version }}"
-          
           # Check if this is a prerelease version (contains -, like v1.3.0-beta.0)
-          if [[ "$PACKAGE_VERSION" == *"-"* ]]; then
-            echo "Publishing prerelease version $PACKAGE_VERSION with beta tag"
+          if [[ "$VERSION" == *"-"* ]]; then
+            echo "Publishing prerelease version $VERSION with beta tag"
             npm publish --provenance --access public --tag beta
           else
-            echo "Publishing stable version $PACKAGE_VERSION with latest tag"
+            echo "Publishing stable version $VERSION with latest tag"
             npm publish --provenance --access public
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Skip publish (version exists)
-        if: steps.check-version.outputs.exists == 'true'
-        run: |
-          echo "⚠️  Version ${{ steps.package-version.outputs.version }} already exists on npm, skipping publish"
-          echo "If you intended to publish a new version, please bump the version number first"
-
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/') && steps.check-version.outputs.exists == 'false'
-        uses: softprops/action-gh-release@v2
-        with:
-          name: Release ${{ github.ref_name }}
-          body: |
-            ## Changes in this Release
-            
-            - Package published to npm as `@cocal/google-calendar-mcp@${{ steps.package-version.outputs.version }}`
-            - Can be installed with: `npx @cocal/google-calendar-mcp@${{ steps.package-version.outputs.version }}`
-            
-            ### Installation
-            ```bash
-            # Install globally
-            npm install -g @cocal/google-calendar-mcp@${{ steps.package-version.outputs.version }}
-            
-            # Run directly with npx
-            npx @cocal/google-calendar-mcp@${{ steps.package-version.outputs.version }}
-            ```
-            
-            See the [CHANGELOG](CHANGELOG.md) for detailed changes.
-          draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
-          generate_release_notes: true
