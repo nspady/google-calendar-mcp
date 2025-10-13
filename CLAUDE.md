@@ -194,6 +194,10 @@ npm run dev test:integration:direct
 
 The codebase uses a structured response format for tool outputs. Recent commits (see git status) show migration to structured outputs using types from `src/types/structured-responses.ts`. When updating handlers, ensure responses conform to these structured formats.
 
+### MCP Structure
+
+MCP tools return errors as successful responses with error content, not as thrown exceptions. Integration tests must validate result.content[0].text for error messages, while unit tests of handlers directly can still catch thrown McpError exceptions before the MCP transport layer wraps them.
+
 ## Code Quality
 
 - **TypeScript**: Strict mode, avoid `any` types

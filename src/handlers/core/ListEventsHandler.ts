@@ -27,13 +27,16 @@ export class ListEventsHandler extends BaseToolHandler {
     async runTool(args: ListEventsArgs, oauth2Client: OAuth2Client): Promise<CallToolResult> {
         // MCP SDK has already validated the arguments against the tool schema
         const validArgs = args;
-        
+
         // Normalize calendarId to always be an array for consistent processing
         // The Zod schema transform has already handled JSON string parsing if needed
-        const calendarIds = Array.isArray(validArgs.calendarId) 
-            ? validArgs.calendarId 
+        const calendarNamesOrIds = Array.isArray(validArgs.calendarId)
+            ? validArgs.calendarId
             : [validArgs.calendarId];
-        
+
+        // Resolve calendar names to IDs (if any names were provided)
+        const calendarIds = await this.resolveCalendarIds(oauth2Client, calendarNamesOrIds);
+
         const allEvents = await this.fetchEvents(oauth2Client, calendarIds, {
             timeMin: validArgs.timeMin,
             timeMax: validArgs.timeMax,
@@ -42,18 +45,18 @@ export class ListEventsHandler extends BaseToolHandler {
             privateExtendedProperty: validArgs.privateExtendedProperty,
             sharedExtendedProperty: validArgs.sharedExtendedProperty
         });
-        
+
         // Convert extended events to structured format
-        const structuredEvents: StructuredEvent[] = allEvents.map(event => 
+        const structuredEvents: StructuredEvent[] = allEvents.map(event =>
             convertGoogleEventToStructured(event, event.calendarId)
         );
-        
+
         const response: ListEventsResponse = {
             events: structuredEvents,
             totalCount: allEvents.length,
             calendars: calendarIds.length > 1 ? calendarIds : undefined
         };
-        
+
         return createStructuredResponse(response);
     }
 

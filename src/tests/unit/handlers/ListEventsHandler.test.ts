@@ -45,6 +45,15 @@ describe('ListEventsHandler JSON String Handling', () => {
       calendarList: {
         get: vi.fn().mockResolvedValue({
           data: { timeZone: 'UTC' }
+        }),
+        list: vi.fn().mockResolvedValue({
+          data: {
+            items: [
+              { id: 'primary', summary: 'Primary Calendar' },
+              { id: 'work@example.com', summary: 'Work Calendar' },
+              { id: 'personal@example.com', summary: 'Personal Calendar' }
+            ]
+          }
         })
       }
     };
@@ -135,7 +144,15 @@ describe('ListEventsHandler - Timezone Handling', () => {
         list: vi.fn()
       },
       calendarList: {
-        get: vi.fn()
+        get: vi.fn(),
+        list: vi.fn().mockResolvedValue({
+          data: {
+            items: [
+              { id: 'primary', summary: 'Primary Calendar' },
+              { id: 'work@example.com', summary: 'Work Calendar' }
+            ]
+          }
+        })
       }
     };
     vi.mocked(google.calendar).mockReturnValue(mockCalendar);
