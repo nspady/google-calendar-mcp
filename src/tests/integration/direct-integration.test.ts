@@ -936,6 +936,111 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         }
       });
 
+      it('should resolve calendar names to IDs automatically', async () => {
+        const startTime = testFactory.startTimer('list-events-calendar-name-resolution');
+
+        try {
+          // First, get the list of calendars to find a calendar name
+          const calendarsResult = await client.callTool({
+            name: 'list-calendars',
+            arguments: {}
+          });
+
+          expect(TestDataFactory.validateEventResponse(calendarsResult)).toBe(true);
+          const calendarsResponse = JSON.parse((calendarsResult.content as any)[0].text);
+          expect(calendarsResponse.calendars).toBeDefined();
+          expect(calendarsResponse.calendars.length).toBeGreaterThan(0);
+
+          // Get the first calendar's name (summary field)
+          const firstCalendar = calendarsResponse.calendars[0];
+          const calendarName = firstCalendar.summary;
+          const calendarId = firstCalendar.id;
+
+          console.log(`🔍 Testing calendar name resolution: "${calendarName}" -> "${calendarId}"`);
+
+          // Test 1: Use calendar name instead of ID
+          const timeRanges = TestDataFactory.getTimeRanges();
+          const resultWithName = await client.callTool({
+            name: 'list-events',
+            arguments: {
+              calendarId: calendarName,  // Using calendar name, not ID
+              timeMin: timeRanges.nextWeek.timeMin,
+              timeMax: timeRanges.nextWeek.timeMax
+            }
+          });
+
+          expect(TestDataFactory.validateEventResponse(resultWithName)).toBe(true);
+          const responseWithName = JSON.parse((resultWithName.content as any)[0].text);
+          console.log(`✅ Successfully listed events using calendar name: "${calendarName}"`);
+
+          // Test 2: Use calendar ID directly (for comparison)
+          const resultWithId = await client.callTool({
+            name: 'list-events',
+            arguments: {
+              calendarId: calendarId,
+              timeMin: timeRanges.nextWeek.timeMin,
+              timeMax: timeRanges.nextWeek.timeMax
+            }
+          });
+
+          expect(TestDataFactory.validateEventResponse(resultWithId)).toBe(true);
+          const responseWithId = JSON.parse((resultWithId.content as any)[0].text);
+
+          // Both methods should return the same events
+          expect(responseWithName.totalCount).toBe(responseWithId.totalCount);
+          console.log(`✅ Calendar name and ID both return ${responseWithId.totalCount} events`);
+
+          // Test 3: Use multiple calendar names in an array
+          if (calendarsResponse.calendars.length > 1) {
+            const secondCalendar = calendarsResponse.calendars[1];
+            const calendarNames = [calendarName, secondCalendar.summary];
+
+            console.log(`🔍 Testing multiple calendar names: ${JSON.stringify(calendarNames)}`);
+
+            const resultWithMultipleNames = await client.callTool({
+              name: 'list-events',
+              arguments: {
+                calendarId: JSON.stringify(calendarNames),
+                timeMin: timeRanges.nextWeek.timeMin,
+                timeMax: timeRanges.nextWeek.timeMax
+              }
+            });
+
+            expect(TestDataFactory.validateEventResponse(resultWithMultipleNames)).toBe(true);
+            const responseWithMultipleNames = JSON.parse((resultWithMultipleNames.content as any)[0].text);
+            console.log(`✅ Successfully listed events from ${calendarNames.length} calendars using names`);
+            expect(responseWithMultipleNames.calendars).toBeDefined();
+            expect(responseWithMultipleNames.calendars.length).toBe(2);
+          }
+
+          // Test 4: Invalid calendar name should provide helpful error
+          // Note: MCP tools return errors as responses (with error content), not as thrown exceptions
+          const result = await client.callTool({
+            name: 'list-events',
+            arguments: {
+              calendarId: 'ThisCalendarNameDefinitelyDoesNotExist_XYZ123',
+              timeMin: timeRanges.nextWeek.timeMin,
+              timeMax: timeRanges.nextWeek.timeMax
+            }
+          });
+
+          // Extract the error message from the MCP response
+          const resultText = (result.content as any)[0]?.text || JSON.stringify(result);
+
+          // Verify it contains our resolution error message
+          expect(resultText).toContain('Calendar(s) not found');
+          expect(resultText).toContain('ThisCalendarNameDefinitelyDoesNotExist_XYZ123');
+          expect(resultText).toContain('Available calendars');
+          console.log('✅ Helpful error message provided for invalid calendar name');
+          console.log(`   Error: ${resultText.substring(0, 150)}...`);
+
+          testFactory.endTimer('list-events-calendar-name-resolution', startTime, true);
+        } catch (error) {
+          testFactory.endTimer('list-events-calendar-name-resolution', startTime, false, String(error));
+          throw error;
+        }
+      });
+
       it('should search events with specific fields', async () => {
         // Create an event with rich data
         const eventData = TestDataFactory.createColoredEvent('11', {

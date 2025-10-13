@@ -45,6 +45,17 @@ describe('Batch List Events Functionality', () => {
     mockCalendarApi = {
       events: {
         list: vi.fn()
+      },
+      calendarList: {
+        list: vi.fn().mockResolvedValue({
+          data: {
+            items: [
+              { id: 'primary', summary: 'Primary Calendar', summaryOverride: undefined },
+              { id: 'work@example.com', summary: 'Work Calendar', summaryOverride: undefined },
+              { id: 'personal@example.com', summary: 'Personal Calendar', summaryOverride: undefined }
+            ]
+          }
+        })
       }
     };
 

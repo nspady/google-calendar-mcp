@@ -487,14 +487,14 @@ export class ToolRegistry {
     },
     {
       name: "list-events",
-      description: "List events from one or more calendars.",
+      description: "List events from one or more calendars. Supports both calendar IDs and calendar names.",
       schema: ToolSchemas['list-events'],
       handler: ListEventsHandler,
       // Custom schema for MCP registration (string-only for OpenAI compatibility)
       // Note: Runtime validation accepts native arrays too, but schema advertises string for broader client compatibility
       customInputSchema: {
         calendarId: z.string().describe(
-          "Calendar ID(s) to query. Single ID: 'primary'. Multiple IDs: JSON array string '[\"cal1\", \"cal2\"]' (single or double quotes supported)"
+          "Calendar identifier(s) to query. Accepts calendar IDs (e.g., 'primary', 'user@gmail.com') OR calendar names (e.g., 'Work', 'Personal'). Names match against both the calendar's title and user's personal override name. Single calendar: 'primary' or 'Work'. Multiple calendars: JSON array string '[\"Work\", \"Personal\"]'"
         ),
         timeMin: timeMinSchema,
         timeMax: timeMaxSchema,
