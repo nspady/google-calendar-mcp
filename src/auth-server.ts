@@ -11,7 +11,7 @@ async function runAuthServer() {
     const success = await authServer.start(true);
     
     if (!success && !authServer.authCompletedSuccessfully) {
-      process.stderr.write('Authentication failed. Could not start server or validate existing tokens. Check port availability (3000-3004) and try again.\n');
+      process.stderr.write('Authentication failed. Could not start server or validate existing tokens.\n');
       process.exit(1);
     } else if (authServer.authCompletedSuccessfully) {
       process.stderr.write('Authentication successful.\n');
