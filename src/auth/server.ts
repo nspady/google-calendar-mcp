@@ -167,6 +167,8 @@ export class AuthServer {
     // Try to start the server and get the port
     const port = await this.startServerOnAvailablePort();
     if (port === null) {
+      process.stderr.write(`Could not start auth server on available port. Please check port availability (${this.portRange.start}-${this.portRange.end}) and try again.\n`);
+
       this.authCompletedSuccessfully = false;
       return false;
     }
