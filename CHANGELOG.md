@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.2](https://github.com/nspady/google-calendar-mcp/compare/v2.0.1...v2.0.2) (2025-10-14)
+
+
+### Bug Fixes
+
+* **auth:** improve port availability error message ([9205fd7](https://github.com/nspady/google-calendar-mcp/commit/9205fd75445702d9e49520e4183c96a93078ea46)), closes [#110](https://github.com/nspady/google-calendar-mcp/issues/110)
+
 ## [2.0.1](https://github.com/nspady/google-calendar-mcp/compare/v2.0.0...v2.0.1) (2025-10-13)
 
 
