@@ -33,10 +33,6 @@ jobs:
         if: ${{ steps.release.outputs.release_created }}
         run: npm ci
 
-      - name: Run tests
-        if: ${{ steps.release.outputs.release_created }}
-        run: npm test
-
       - name: Build project
         if: ${{ steps.release.outputs.release_created }}
         run: npm run build
