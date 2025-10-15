@@ -31,10 +31,7 @@ jobs:
 
       - name: Install dependencies
         if: ${{ steps.release.outputs.release_created }}
-        run: |
-          npm ci
-          # Force reinstall optional dependencies (fixes rollup platform binaries on Linux)
-          npm install --force @rollup/rollup-linux-x64-gnu 2>/dev/null || true
+        run: npm ci
 
       - name: Run tests
         if: ${{ steps.release.outputs.release_created }}
@@ -47,7 +44,7 @@ jobs:
       - name: Publish to NPM
         if: ${{ steps.release.outputs.release_created }}
         run: |
-          VERSION="${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }}.${{ steps.release.outputs.patch }}"
+          VERSION="${{ steps.release.outputs.tag_name }}"
 
           # Check if this is a prerelease version (contains -, like v1.3.0-beta.0)
           if [[ "$VERSION" == *"-"* ]]; then
