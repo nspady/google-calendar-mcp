@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.4](https://github.com/nspady/google-calendar-mcp/compare/v2.0.3...v2.0.4) (2025-10-15)
+
+
+### Bug Fixes
+
+* resolve macOS installation error and improve publish workflow ([ec13f39](https://github.com/nspady/google-calendar-mcp/commit/ec13f397652a864cccd003f05ddd03d4e046316f)), closes [#113](https://github.com/nspady/google-calendar-mcp/issues/113)
+
 ## [2.0.3](https://github.com/nspady/google-calendar-mcp/compare/v2.0.2...v2.0.3) (2025-10-15)
 
 
