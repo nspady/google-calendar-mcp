@@ -313,49 +313,67 @@ class RealOpenAIMCPClient implements OpenAIMCPClient {
         required: []
       };
     }
-    
-    // Deep clone and enhance the schema for OpenAI
+
+    // Note: OpenAI doesn't fully support anyOf/oneOf, so we simplify union types
     const enhancedSchema = {
       type: 'object' as const,
       properties: this.enhancePropertiesForOpenAI(mcpSchema.properties || {}),
       required: mcpSchema.required || []
     };
-    
+
     return enhancedSchema;
   }
   
   private enhancePropertiesForOpenAI(properties: any): any {
     const enhanced: any = {};
-    
+
     for (const [key, value] of Object.entries(properties)) {
       const prop = value as any;
       enhanced[key] = { ...prop };
-      
+
+      // Handle anyOf union types (OpenAI doesn't support these well)
+      // For calendarId with string|array union, simplify to string with usage note
+      if (prop.anyOf && Array.isArray(prop.anyOf)) {
+        // Find the string type in the union
+        const stringType = prop.anyOf.find((t: any) => t.type === 'string');
+        if (stringType) {
+          enhanced[key] = {
+            type: 'string',
+            description: `${stringType.description || prop.description || ''} Note: For multiple values, use JSON array string format: '["id1", "id2"]'`.trim()
+          };
+        } else {
+          // Fallback: use the first type
+          enhanced[key] = { ...prop.anyOf[0] };
+        }
+        // Remove anyOf as OpenAI doesn't support it
+        delete enhanced[key].anyOf;
+      }
+
       // Enhance datetime properties for better OpenAI compliance
       if (this.isDateTimeProperty(key, prop)) {
         enhanced[key] = {
-          ...prop,
+          ...enhanced[key],
           type: 'string',
           format: 'date-time',
           pattern: '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2})$',
-          description: `${prop.description || ''} CRITICAL: MUST be in RFC3339 format with timezone. Examples: "2024-01-01T10:00:00Z" (UTC) or "2024-01-01T10:00:00-08:00" (Pacific). NEVER use "2024-01-01T10:00:00" without timezone.`.trim()
+          description: `${enhanced[key].description || prop.description || ''} CRITICAL: MUST be in RFC3339 format with timezone. Examples: "2024-01-01T10:00:00Z" (UTC) or "2024-01-01T10:00:00-08:00" (Pacific). NEVER use "2024-01-01T10:00:00" without timezone.`.trim()
         };
       }
-      
+
       // Recursively enhance nested objects
-      if (prop.type === 'object' && prop.properties) {
-        enhanced[key].properties = this.enhancePropertiesForOpenAI(prop.properties);
+      if (enhanced[key].type === 'object' && enhanced[key].properties) {
+        enhanced[key].properties = this.enhancePropertiesForOpenAI(enhanced[key].properties);
       }
-      
+
       // Enhance array items if they contain objects
-      if (prop.type === 'array' && prop.items && prop.items.properties) {
+      if (enhanced[key].type === 'array' && enhanced[key].items && enhanced[key].items.properties) {
         enhanced[key].items = {
-          ...prop.items,
-          properties: this.enhancePropertiesForOpenAI(prop.items.properties)
+          ...enhanced[key].items,
+          properties: this.enhancePropertiesForOpenAI(enhanced[key].items.properties)
         };
       }
     }
-    
+
     return enhanced;
   }
   
