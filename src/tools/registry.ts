@@ -63,7 +63,9 @@ export const ToolSchemas = {
 
   'list-events': z.object({
     calendarId: z.union([
-      z.string(),
+      z.string().describe(
+        "Calendar identifier(s) to query. Accepts calendar IDs (e.g., 'primary', 'user@gmail.com') OR calendar names (e.g., 'Work', 'Personal'). Single calendar: 'primary'. Multiple calendars: array ['Work', 'Personal'] or JSON string '[\"Work\", \"Personal\"]'"
+      ),
       z.array(z.string().min(1))
         .min(1, "At least one calendar ID is required")
         .max(50, "Maximum 50 calendars allowed per request")
@@ -71,6 +73,7 @@ export const ToolSchemas = {
           (arr) => new Set(arr).size === arr.length,
           "Duplicate calendar IDs are not allowed"
         )
+        .describe("Array of calendar IDs to query events from (max 50, no duplicates)")
     ]),
     timeMin: timeMinSchema,
     timeMax: timeMaxSchema,
@@ -490,19 +493,6 @@ export class ToolRegistry {
       description: "List events from one or more calendars. Supports both calendar IDs and calendar names.",
       schema: ToolSchemas['list-events'],
       handler: ListEventsHandler,
-      // Custom schema for MCP registration (string-only for OpenAI compatibility)
-      // Note: Runtime validation accepts native arrays too, but schema advertises string for broader client compatibility
-      customInputSchema: {
-        calendarId: z.string().describe(
-          "Calendar identifier(s) to query. Accepts calendar IDs (e.g., 'primary', 'user@gmail.com') OR calendar names (e.g., 'Work', 'Personal'). Names match against both the calendar's title and user's personal override name. Single calendar: 'primary' or 'Work'. Multiple calendars: JSON array string '[\"Work\", \"Personal\"]'"
-        ),
-        timeMin: timeMinSchema,
-        timeMax: timeMaxSchema,
-        timeZone: timeZoneSchema,
-        fields: fieldsSchema,
-        privateExtendedProperty: privateExtendedPropertySchema,
-        sharedExtendedProperty: sharedExtendedPropertySchema
-      },
       handlerFunction: async (args: ListEventsInput & { calendarId: string | string[] }) => {
         let processedCalendarId: string | string[] = args.calendarId;
 
