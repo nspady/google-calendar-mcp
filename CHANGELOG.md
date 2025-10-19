@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.5](https://github.com/nspady/google-calendar-mcp/compare/v2.0.4...v2.0.5) (2025-10-19)
+
+
+### Bug Fixes
+
+* **list-events:** support native arrays for Python MCP clients ([#95](https://github.com/nspady/google-calendar-mcp/issues/95)) ([#116](https://github.com/nspady/google-calendar-mcp/issues/116)) ([0e91c23](https://github.com/nspady/google-calendar-mcp/commit/0e91c23c9ae9db0c0ff863cd9019f6212544f62a))
+
 ## [2.0.4](https://github.com/nspady/google-calendar-mcp/compare/v2.0.3...v2.0.4) (2025-10-15)
 
 
