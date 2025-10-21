@@ -20,6 +20,9 @@ vi.mock('googleapis', () => ({
   calendar_v3: {}
 }));
 
+// Import createTimeObject for proper datetime handling in mocks
+import { createTimeObject } from '../../../handlers/utils/datetime.js';
+
 // Mock RecurringEventHelpers
 vi.mock('../../../handlers/core/RecurringEventHelpers.js', () => ({
   RecurringEventHelpers: vi.fn().mockImplementation((calendar) => ({
@@ -31,8 +34,27 @@ vi.mock('../../../handlers/core/RecurringEventHelpers.js', () => ({
       if (args.description !== undefined && args.description !== null) body.description = args.description;
       if (args.location !== undefined && args.location !== null) body.location = args.location;
       const tz = args.timeZone || defaultTimeZone;
-      if (args.start) body.start = { dateTime: args.start, timeZone: tz };
-      if (args.end) body.end = { dateTime: args.end, timeZone: tz };
+
+      // Use createTimeObject to handle both timed and all-day events
+      if (args.start !== undefined && args.start !== null) {
+        const timeObj = createTimeObject(args.start, tz);
+        // When converting formats, explicitly nullify the opposite field
+        if (timeObj.date !== undefined) {
+          body.start = { date: timeObj.date, dateTime: null };
+        } else {
+          body.start = { dateTime: timeObj.dateTime, timeZone: timeObj.timeZone, date: null };
+        }
+      }
+      if (args.end !== undefined && args.end !== null) {
+        const timeObj = createTimeObject(args.end, tz);
+        // When converting formats, explicitly nullify the opposite field
+        if (timeObj.date !== undefined) {
+          body.end = { date: timeObj.date, dateTime: null };
+        } else {
+          body.end = { dateTime: timeObj.dateTime, timeZone: timeObj.timeZone, date: null };
+        }
+      }
+
       if (args.attendees !== undefined && args.attendees !== null) body.attendees = args.attendees;
       if (args.colorId !== undefined && args.colorId !== null) body.colorId = args.colorId;
       if (args.reminders !== undefined && args.reminders !== null) body.reminders = args.reminders;
@@ -185,8 +207,8 @@ describe('UpdateEventHandler', () => {
         calendarId: 'primary',
         eventId: 'event123',
         requestBody: expect.objectContaining({
-          start: { dateTime: '2025-01-16T14:00:00', timeZone: 'America/Los_Angeles' },
-          end: { dateTime: '2025-01-16T15:00:00', timeZone: 'America/Los_Angeles' }
+          start: { dateTime: '2025-01-16T14:00:00', timeZone: 'America/Los_Angeles', date: null },
+          end: { dateTime: '2025-01-16T15:00:00', timeZone: 'America/Los_Angeles', date: null }
         })
       });
 
@@ -756,8 +778,8 @@ describe('UpdateEventHandler', () => {
         calendarId: 'primary',
         eventId: 'event123',
         requestBody: expect.objectContaining({
-          start: { dateTime: '2025-01-16T14:00:00', timeZone: 'America/Los_Angeles' },
-          end: { dateTime: '2025-01-16T15:00:00', timeZone: 'America/Los_Angeles' }
+          start: { dateTime: '2025-01-16T14:00:00', timeZone: 'America/Los_Angeles', date: null },
+          end: { dateTime: '2025-01-16T15:00:00', timeZone: 'America/Los_Angeles', date: null }
         })
       });
     });
@@ -787,10 +809,185 @@ describe('UpdateEventHandler', () => {
         calendarId: 'primary',
         eventId: 'event123',
         requestBody: expect.objectContaining({
-          start: { dateTime: '2025-01-16T14:00:00', timeZone: 'UTC' },
-          end: { dateTime: '2025-01-16T15:00:00', timeZone: 'UTC' }
+          start: { dateTime: '2025-01-16T14:00:00', timeZone: 'UTC', date: null },
+          end: { dateTime: '2025-01-16T15:00:00', timeZone: 'UTC', date: null }
         })
       });
+    });
+  });
+
+  describe('All-day Event Conversion (Issue #118)', () => {
+    it('should convert timed event to all-day event', async () => {
+      const existingTimedEvent = {
+        id: 'event123',
+        summary: 'Timed Meeting',
+        start: { dateTime: '2025-10-18T10:00:00-07:00' },
+        end: { dateTime: '2025-10-18T11:00:00-07:00' }
+      };
+
+      const mockUpdatedAllDayEvent = {
+        id: 'event123',
+        summary: 'Timed Meeting',
+        start: { date: '2025-10-18' },
+        end: { date: '2025-10-19' }
+      };
+
+      mockCalendar.events.get.mockResolvedValue({ data: existingTimedEvent });
+      mockCalendar.events.patch.mockResolvedValue({ data: mockUpdatedAllDayEvent });
+
+      const args = {
+        calendarId: 'primary',
+        eventId: 'event123',
+        start: '2025-10-18',
+        end: '2025-10-19'
+      };
+
+      const result = await handler.runTool(args, mockOAuth2Client);
+
+      // Verify patch was called with correct all-day format
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+        calendarId: 'primary',
+        eventId: 'event123',
+        requestBody: expect.objectContaining({
+          start: { date: '2025-10-18', dateTime: null },
+          end: { date: '2025-10-19', dateTime: null }
+        })
+      });
+
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.event).toBeDefined();
+      expect(response.event.start.date).toBe('2025-10-18');
+      expect(response.event.end.date).toBe('2025-10-19');
+    });
+
+    it('should convert all-day event to timed event', async () => {
+      const existingAllDayEvent = {
+        id: 'event456',
+        summary: 'All Day Event',
+        start: { date: '2025-10-18' },
+        end: { date: '2025-10-19' }
+      };
+
+      const mockUpdatedTimedEvent = {
+        id: 'event456',
+        summary: 'All Day Event',
+        start: { dateTime: '2025-10-18T10:00:00-07:00', timeZone: 'America/Los_Angeles' },
+        end: { dateTime: '2025-10-18T11:00:00-07:00', timeZone: 'America/Los_Angeles' }
+      };
+
+      mockCalendar.events.get.mockResolvedValue({ data: existingAllDayEvent });
+      mockCalendar.events.patch.mockResolvedValue({ data: mockUpdatedTimedEvent });
+
+      const args = {
+        calendarId: 'primary',
+        eventId: 'event456',
+        start: '2025-10-18T10:00:00',
+        end: '2025-10-18T11:00:00',
+        timeZone: 'America/Los_Angeles'
+      };
+
+      const result = await handler.runTool(args, mockOAuth2Client);
+
+      // Verify patch was called with correct timed format
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+        calendarId: 'primary',
+        eventId: 'event456',
+        requestBody: expect.objectContaining({
+          start: { dateTime: '2025-10-18T10:00:00', timeZone: 'America/Los_Angeles', date: null },
+          end: { dateTime: '2025-10-18T11:00:00', timeZone: 'America/Los_Angeles', date: null }
+        })
+      });
+
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.event).toBeDefined();
+      expect(response.event.start.dateTime).toBeDefined();
+      expect(response.event.end.dateTime).toBeDefined();
+    });
+
+    it('should keep all-day event as all-day when updating', async () => {
+      const existingAllDayEvent = {
+        id: 'event789',
+        summary: 'All Day Event',
+        start: { date: '2025-10-18' },
+        end: { date: '2025-10-19' }
+      };
+
+      const mockUpdatedAllDayEvent = {
+        id: 'event789',
+        summary: 'All Day Event',
+        start: { date: '2025-10-20' },
+        end: { date: '2025-10-21' }
+      };
+
+      mockCalendar.events.get.mockResolvedValue({ data: existingAllDayEvent });
+      mockCalendar.events.patch.mockResolvedValue({ data: mockUpdatedAllDayEvent });
+
+      const args = {
+        calendarId: 'primary',
+        eventId: 'event789',
+        start: '2025-10-20',
+        end: '2025-10-21'
+      };
+
+      const result = await handler.runTool(args, mockOAuth2Client);
+
+      // Verify patch was called with all-day format
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+        calendarId: 'primary',
+        eventId: 'event789',
+        requestBody: expect.objectContaining({
+          start: { date: '2025-10-20', dateTime: null },
+          end: { date: '2025-10-21', dateTime: null }
+        })
+      });
+
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.event).toBeDefined();
+      expect(response.event.start.date).toBe('2025-10-20');
+      expect(response.event.end.date).toBe('2025-10-21');
+    });
+
+    it('should keep timed event as timed when updating', async () => {
+      const existingTimedEvent = {
+        id: 'event999',
+        summary: 'Timed Meeting',
+        start: { dateTime: '2025-10-18T10:00:00-07:00' },
+        end: { dateTime: '2025-10-18T11:00:00-07:00' }
+      };
+
+      const mockUpdatedTimedEvent = {
+        id: 'event999',
+        summary: 'Timed Meeting',
+        start: { dateTime: '2025-10-18T14:00:00-07:00', timeZone: 'America/Los_Angeles' },
+        end: { dateTime: '2025-10-18T15:00:00-07:00', timeZone: 'America/Los_Angeles' }
+      };
+
+      mockCalendar.events.get.mockResolvedValue({ data: existingTimedEvent });
+      mockCalendar.events.patch.mockResolvedValue({ data: mockUpdatedTimedEvent });
+
+      const args = {
+        calendarId: 'primary',
+        eventId: 'event999',
+        start: '2025-10-18T14:00:00',
+        end: '2025-10-18T15:00:00'
+      };
+
+      const result = await handler.runTool(args, mockOAuth2Client);
+
+      // Verify patch was called with timed format
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+        calendarId: 'primary',
+        eventId: 'event999',
+        requestBody: expect.objectContaining({
+          start: { dateTime: '2025-10-18T14:00:00', timeZone: 'America/Los_Angeles', date: null },
+          end: { dateTime: '2025-10-18T15:00:00', timeZone: 'America/Los_Angeles', date: null }
+        })
+      });
+
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.event).toBeDefined();
+      expect(response.event.start.dateTime).toBeDefined();
+      expect(response.event.end.dateTime).toBeDefined();
     });
   });
 });

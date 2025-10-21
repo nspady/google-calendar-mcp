@@ -345,8 +345,8 @@ describe('RecurringEventHelpers', () => {
         summary: 'Updated Meeting',
         description: 'Updated description',
         location: 'New Location',
-        colorId: '9',
-        timeZone: 'America/Los_Angeles'
+        colorId: '9'
+        // No timeZone or start/end - these should not be added
       };
 
       const result = helpers.buildUpdateRequestBody(args);
@@ -355,9 +355,8 @@ describe('RecurringEventHelpers', () => {
         summary: 'Updated Meeting',
         description: 'Updated description',
         location: 'New Location',
-        colorId: '9',
-        start: { timeZone: 'America/Los_Angeles' },
-        end: { timeZone: 'America/Los_Angeles' }
+        colorId: '9'
+        // No start/end should be present
       });
     });
 
@@ -373,13 +372,15 @@ describe('RecurringEventHelpers', () => {
 
       expect(result).toEqual({
         summary: 'Meeting',
-        start: { 
+        start: {
           dateTime: '2024-06-15T10:00:00-07:00',
-          timeZone: 'America/Los_Angeles'
+          date: null
+          // No timeZone when datetime already includes timezone
         },
-        end: { 
+        end: {
           dateTime: '2024-06-15T11:00:00-07:00',
-          timeZone: 'America/Los_Angeles'
+          date: null
+          // No timeZone when datetime already includes timezone
         }
       });
     });
@@ -396,11 +397,10 @@ describe('RecurringEventHelpers', () => {
 
       expect(result.start).toEqual({
         dateTime: '2024-06-15T10:00:00-07:00',
-        timeZone: 'America/Los_Angeles'
+        date: null
+        // No timeZone when datetime already includes timezone
       });
-      expect(result.end).toEqual({
-        timeZone: 'America/Los_Angeles'
-      });
+      expect(result.end).toBeUndefined();
     });
 
     it('should use default timezone when no timezone provided', () => {
@@ -415,13 +415,15 @@ describe('RecurringEventHelpers', () => {
 
       expect(result).toEqual({
         summary: 'Meeting',
-        start: { 
+        start: {
           dateTime: '2024-06-15T10:00:00',
-          timeZone: 'Europe/London'
+          timeZone: 'Europe/London',
+          date: null
         },
-        end: { 
+        end: {
           dateTime: '2024-06-15T11:00:00',
-          timeZone: 'Europe/London'
+          timeZone: 'Europe/London',
+          date: null
         }
       });
     });
@@ -658,8 +660,9 @@ describe('RecurringEventHelpers', () => {
       expect(result.attendees).toEqual(complexArgs.attendees);
       expect(result.reminders).toEqual(complexArgs.reminders);
       expect(result.recurrence).toEqual(complexArgs.recurrence);
-      expect(result.start).toEqual({ timeZone: 'America/Los_Angeles' });
-      expect(result.end).toEqual({ timeZone: 'America/Los_Angeles' });
+      // No start/end should be added when only timezone is provided without start/end values
+      expect(result.start).toBeUndefined();
+      expect(result.end).toBeUndefined();
     });
 
     it('should handle buildUpdateRequestBody with mixed null, undefined, and valid values', () => {
@@ -683,11 +686,12 @@ describe('RecurringEventHelpers', () => {
       expect(result.colorId).toBe(''); // Empty string should be included
       expect(result.attendees).toEqual([]); // Empty array should be included
       expect('reminders' in result).toBe(false);
-      expect(result.start).toEqual({ 
+      expect(result.start).toEqual({
         dateTime: '2024-06-15T10:00:00Z',
-        timeZone: 'UTC'
+        date: null
+        // No timeZone when datetime already includes timezone (Z suffix)
       });
-      expect(result.end).toEqual({ timeZone: 'UTC' });
+      expect(result.end).toBeUndefined(); // end is null, so should not be set
     });
   });
 }); 

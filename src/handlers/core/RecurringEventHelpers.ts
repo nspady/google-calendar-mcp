@@ -1,4 +1,5 @@
 import { calendar_v3 } from 'googleapis';
+import { createTimeObject } from '../utils/datetime.js';
 
 export class RecurringEventHelpers {
   private calendar: calendar_v3.Calendar;
@@ -132,25 +133,31 @@ export class RecurringEventHelpers {
     if (args.extendedProperties !== undefined && args.extendedProperties !== null) requestBody.extendedProperties = args.extendedProperties;
     if (args.attachments !== undefined && args.attachments !== null) requestBody.attachments = args.attachments;
 
-    // Handle time changes
-    let timeChanged = false;
+    // Handle time changes - use createTimeObject to support both timed and all-day events
     const effectiveTimeZone = args.timeZone || defaultTimeZone;
-    
+
     if (args.start !== undefined && args.start !== null) {
-      requestBody.start = { dateTime: args.start, timeZone: effectiveTimeZone };
-      timeChanged = true;
+      const timeObj = createTimeObject(args.start, effectiveTimeZone);
+      // When converting between formats, explicitly nullify the opposite field
+      // This is required by Google Calendar API to successfully convert between timed and all-day events
+      if (timeObj.date !== undefined) {
+        // All-day event: set date and nullify dateTime
+        requestBody.start = { date: timeObj.date, dateTime: null };
+      } else {
+        // Timed event: set dateTime/timeZone and nullify date
+        requestBody.start = { dateTime: timeObj.dateTime, timeZone: timeObj.timeZone, date: null };
+      }
     }
     if (args.end !== undefined && args.end !== null) {
-      requestBody.end = { dateTime: args.end, timeZone: effectiveTimeZone };
-      timeChanged = true;
-    }
-
-    // Only add timezone objects if there were actual time changes, OR if neither start/end provided but timezone is given
-    if (timeChanged || (!args.start && !args.end && effectiveTimeZone)) {
-      if (!requestBody.start) requestBody.start = {};
-      if (!requestBody.end) requestBody.end = {};
-      if (!requestBody.start.timeZone) requestBody.start.timeZone = effectiveTimeZone;
-      if (!requestBody.end.timeZone) requestBody.end.timeZone = effectiveTimeZone;
+      const timeObj = createTimeObject(args.end, effectiveTimeZone);
+      // When converting between formats, explicitly nullify the opposite field
+      if (timeObj.date !== undefined) {
+        // All-day event: set date and nullify dateTime
+        requestBody.end = { date: timeObj.date, dateTime: null };
+      } else {
+        // Timed event: set dateTime/timeZone and nullify date
+        requestBody.end = { dateTime: timeObj.dateTime, timeZone: timeObj.timeZone, date: null };
+      }
     }
 
     return requestBody;
