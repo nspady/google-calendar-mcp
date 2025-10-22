@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.6](https://github.com/nspady/google-calendar-mcp/compare/v2.0.5...v2.0.6) (2025-10-22)
+
+
+### Bug Fixes
+
+* support converting between timed and all-day events in update-event ([#119](https://github.com/nspady/google-calendar-mcp/issues/119)) ([407e4c8](https://github.com/nspady/google-calendar-mcp/commit/407e4c89753932e13f9ccd55800999b4b12288be))
+
 ## [2.0.5](https://github.com/nspady/google-calendar-mcp/compare/v2.0.4...v2.0.5) (2025-10-19)
 
 
