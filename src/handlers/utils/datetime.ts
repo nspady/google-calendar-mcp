@@ -4,40 +4,6 @@
  */
 
 /**
- * Type representing the flexible datetime input format
- * Accepts either a string or Google Calendar API object format
- */
-export type FlexibleDateTime = string | {
-    date?: string;
-    dateTime?: string;
-    timeZone?: string;
-};
-
-/**
- * Normalizes flexible datetime input to a simple string format
- * Converts Google Calendar API object format to string format for internal processing
- *
- * @param input Flexible datetime input (string or object)
- * @returns Normalized string format
- */
-export function normalizeDateTime(input: FlexibleDateTime): string {
-    if (typeof input === 'string') {
-        return input;
-    }
-
-    // Object format from Google Calendar API
-    if (input.date) {
-        // All-day event
-        return input.date;
-    } else if (input.dateTime) {
-        // Timed event - return dateTime (timeZone info is handled separately)
-        return input.dateTime;
-    }
-
-    throw new Error('Invalid datetime format: must specify either date or dateTime');
-}
-
-/**
  * Checks if a datetime string includes timezone information
  * @param datetime ISO 8601 datetime string
  * @returns True if timezone is included, false if timezone-naive
