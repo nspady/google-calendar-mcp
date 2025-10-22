@@ -26,7 +26,7 @@ export class UpdateEventHandler extends BaseToolHandler {
     
     async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
         const validArgs = args as UpdateEventInput;
-
+        
         // Check for conflicts if enabled
         let conflicts = null;
         if (validArgs.checkConflicts !== false && (validArgs.start || validArgs.end)) {
@@ -36,11 +36,11 @@ export class UpdateEventHandler extends BaseToolHandler {
                 calendarId: validArgs.calendarId,
                 eventId: validArgs.eventId
             });
-
+            
             if (!existingEvent.data) {
                 throw new Error('Event not found');
             }
-
+            
             // Create updated event object for conflict checking
             const timezone = validArgs.timeZone || await this.getCalendarTimezone(oauth2Client, validArgs.calendarId);
             const eventToCheck: calendar_v3.Schema$Event = {
@@ -52,7 +52,7 @@ export class UpdateEventHandler extends BaseToolHandler {
                 end: validArgs.end ? createTimeObject(validArgs.end, timezone) : existingEvent.data.end,
                 location: validArgs.location || existingEvent.data.location,
             };
-
+            
             // Check for conflicts
             conflicts = await this.conflictDetectionService.checkConflicts(
                 oauth2Client,
@@ -65,10 +65,10 @@ export class UpdateEventHandler extends BaseToolHandler {
                 }
             );
         }
-
+        
         // Update the event
         const event = await this.updateEventWithScope(oauth2Client, validArgs);
-
+        
         // Create structured response
         const response: UpdateEventResponse = {
             event: convertGoogleEventToStructured(event, validArgs.calendarId)
@@ -153,7 +153,8 @@ export class UpdateEventHandler extends BaseToolHandler {
             eventId: instanceId,
             requestBody,
             ...(conferenceDataVersion && { conferenceDataVersion }),
-            ...(supportsAttachments && { supportsAttachments })
+            ...(supportsAttachments && { supportsAttachments }),
+            ...(args.sendUpdates !== undefined && { sendUpdates: args.sendUpdates })
         });
 
         if (!response.data) throw new Error('Failed to update event instance');
@@ -176,7 +177,8 @@ export class UpdateEventHandler extends BaseToolHandler {
             eventId: args.eventId,
             requestBody,
             ...(conferenceDataVersion && { conferenceDataVersion }),
-            ...(supportsAttachments && { supportsAttachments })
+            ...(supportsAttachments && { supportsAttachments }),
+            ...(args.sendUpdates !== undefined && { sendUpdates: args.sendUpdates })
         });
 
         if (!response.data) throw new Error('Failed to update event');
@@ -216,7 +218,8 @@ export class UpdateEventHandler extends BaseToolHandler {
         await calendar.events.patch({
             calendarId: args.calendarId,
             eventId: args.eventId,
-            requestBody: { recurrence: updatedRecurrence }
+            requestBody: { recurrence: updatedRecurrence },
+            ...(args.sendUpdates !== undefined && { sendUpdates: args.sendUpdates })
         });
 
         // 3. Create new recurring event starting from future date
@@ -249,7 +252,8 @@ export class UpdateEventHandler extends BaseToolHandler {
             calendarId: args.calendarId,
             requestBody: newEvent,
             ...(conferenceDataVersion && { conferenceDataVersion }),
-            ...(supportsAttachments && { supportsAttachments })
+            ...(supportsAttachments && { supportsAttachments }),
+            ...(args.sendUpdates !== undefined && { sendUpdates: args.sendUpdates })
         });
 
         if (!response.data) throw new Error('Failed to create new recurring event');

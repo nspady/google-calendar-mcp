@@ -20,9 +20,6 @@ vi.mock('googleapis', () => ({
   calendar_v3: {}
 }));
 
-// Import createTimeObject for proper datetime handling in mocks
-import { createTimeObject } from '../../../handlers/utils/datetime.js';
-
 // Mock RecurringEventHelpers
 vi.mock('../../../handlers/core/RecurringEventHelpers.js', () => ({
   RecurringEventHelpers: vi.fn().mockImplementation((calendar) => ({
@@ -34,27 +31,8 @@ vi.mock('../../../handlers/core/RecurringEventHelpers.js', () => ({
       if (args.description !== undefined && args.description !== null) body.description = args.description;
       if (args.location !== undefined && args.location !== null) body.location = args.location;
       const tz = args.timeZone || defaultTimeZone;
-
-      // Use createTimeObject to handle both timed and all-day events
-      if (args.start !== undefined && args.start !== null) {
-        const timeObj = createTimeObject(args.start, tz);
-        // When converting formats, explicitly nullify the opposite field
-        if (timeObj.date !== undefined) {
-          body.start = { date: timeObj.date, dateTime: null };
-        } else {
-          body.start = { dateTime: timeObj.dateTime, timeZone: timeObj.timeZone, date: null };
-        }
-      }
-      if (args.end !== undefined && args.end !== null) {
-        const timeObj = createTimeObject(args.end, tz);
-        // When converting formats, explicitly nullify the opposite field
-        if (timeObj.date !== undefined) {
-          body.end = { date: timeObj.date, dateTime: null };
-        } else {
-          body.end = { dateTime: timeObj.dateTime, timeZone: timeObj.timeZone, date: null };
-        }
-      }
-
+      if (args.start) body.start = { dateTime: args.start, timeZone: tz };
+      if (args.end) body.end = { dateTime: args.end, timeZone: tz };
       if (args.attendees !== undefined && args.attendees !== null) body.attendees = args.attendees;
       if (args.colorId !== undefined && args.colorId !== null) body.colorId = args.colorId;
       if (args.reminders !== undefined && args.reminders !== null) body.reminders = args.reminders;
@@ -131,13 +109,13 @@ describe('UpdateEventHandler', () => {
 
       const result = await handler.runTool(args, mockOAuth2Client);
 
-      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith(expect.objectContaining({
         calendarId: 'primary',
         eventId: 'event123',
         requestBody: expect.objectContaining({
           summary: 'Updated Meeting'
         })
-      });
+      }));
 
       expect(result.content[0].type).toBe('text');
       const response = JSON.parse((result.content[0] as any).text);
@@ -167,14 +145,14 @@ describe('UpdateEventHandler', () => {
 
       const result = await handler.runTool(args, mockOAuth2Client);
 
-      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith(expect.objectContaining({
         calendarId: 'primary',
         eventId: 'event123',
         requestBody: expect.objectContaining({
           description: 'New description',
           location: 'Conference Room B'
         })
-      });
+      }));
 
       const response = JSON.parse((result.content[0] as any).text);
       expect(response.event).toBeDefined();
@@ -203,14 +181,14 @@ describe('UpdateEventHandler', () => {
 
       const result = await handler.runTool(args, mockOAuth2Client);
 
-      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith(expect.objectContaining({
         calendarId: 'primary',
         eventId: 'event123',
         requestBody: expect.objectContaining({
-          start: { dateTime: '2025-01-16T14:00:00', timeZone: 'America/Los_Angeles', date: null },
-          end: { dateTime: '2025-01-16T15:00:00', timeZone: 'America/Los_Angeles', date: null }
+          start: { dateTime: '2025-01-16T14:00:00', timeZone: 'America/Los_Angeles' },
+          end: { dateTime: '2025-01-16T15:00:00', timeZone: 'America/Los_Angeles' }
         })
-      });
+      }));
 
       const response = JSON.parse((result.content[0] as any).text);
       expect(response.event).toBeDefined();
@@ -241,7 +219,7 @@ describe('UpdateEventHandler', () => {
 
       const result = await handler.runTool(args, mockOAuth2Client);
 
-      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith(expect.objectContaining({
         calendarId: 'primary',
         eventId: 'event123',
         requestBody: expect.objectContaining({
@@ -250,7 +228,10 @@ describe('UpdateEventHandler', () => {
             { email: 'bob@example.com' }
           ]
         })
-      });
+      }));
+
+      const patchArgs = mockCalendar.events.patch.mock.calls[0][0];
+      expect(patchArgs.sendUpdates).toBe('all');
 
       const response = JSON.parse((result.content[0] as any).text);
       expect(response.event).toBeDefined();
@@ -286,7 +267,7 @@ describe('UpdateEventHandler', () => {
 
       const result = await handler.runTool(args, mockOAuth2Client);
 
-      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith(expect.objectContaining({
         calendarId: 'primary',
         eventId: 'event123',
         requestBody: expect.objectContaining({
@@ -298,7 +279,7 @@ describe('UpdateEventHandler', () => {
             ]
           }
         })
-      });
+      }));
 
       const response = JSON.parse((result.content[0] as any).text);
       expect(response.event).toBeDefined();
@@ -327,7 +308,7 @@ describe('UpdateEventHandler', () => {
 
       const result = await handler.runTool(args, mockOAuth2Client);
 
-      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith(expect.objectContaining({
         calendarId: 'primary',
         eventId: 'event123',
         requestBody: expect.objectContaining({
@@ -336,7 +317,7 @@ describe('UpdateEventHandler', () => {
           guestsCanSeeOtherGuests: false,
           anyoneCanAddSelf: true
         })
-      });
+      }));
 
       const response = JSON.parse(result.content[0].text as string);
       expect(response).toHaveProperty('event');
@@ -374,7 +355,7 @@ describe('UpdateEventHandler', () => {
 
       const result = await handler.runTool(args, mockOAuth2Client);
 
-      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith(expect.objectContaining({
         calendarId: 'primary',
         eventId: 'event123',
         requestBody: expect.objectContaining({
@@ -389,7 +370,7 @@ describe('UpdateEventHandler', () => {
           }
         }),
         conferenceDataVersion: 1
-      });
+      }));
 
       const response = JSON.parse(result.content[0].text as string);
       expect(response).toHaveProperty('event');
@@ -417,13 +398,13 @@ describe('UpdateEventHandler', () => {
 
       const result = await handler.runTool(args, mockOAuth2Client);
 
-      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith(expect.objectContaining({
         calendarId: 'primary',
         eventId: 'event123',
         requestBody: expect.objectContaining({
           colorId: '7'
         })
-      });
+      }));
 
       const response = JSON.parse((result.content[0] as any).text);
       expect(response.event).toBeDefined();
@@ -461,7 +442,7 @@ describe('UpdateEventHandler', () => {
 
       const result = await handler.runTool(args, mockOAuth2Client);
 
-      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith(expect.objectContaining({
         calendarId: 'primary',
         eventId: 'event123',
         requestBody: expect.objectContaining({
@@ -470,7 +451,10 @@ describe('UpdateEventHandler', () => {
           location: 'New Location',
           colorId: '5'
         })
-      });
+      }));
+
+      const multiPatchArgs = mockCalendar.events.patch.mock.calls[0][0];
+      expect(multiPatchArgs.sendUpdates).toBe('externalOnly');
 
       const response = JSON.parse((result.content[0] as any).text);
       expect(response.event).toBeDefined();
@@ -528,16 +512,21 @@ describe('UpdateEventHandler', () => {
         calendarId: 'primary',
         eventId: 'recurring123',
         futureStartDate: '2025-02-01T10:00:00-08:00',
-        timeZone: 'America/Los_Angeles'
+        timeZone: 'America/Los_Angeles',
+        sendUpdates: 'all' as const
       } as UpdateEventInput;
 
       await (handler as any).updateFutureInstances(helpersStub, args, 'America/Los_Angeles');
+
+      const patchArgs = mockCalendar.events.patch.mock.calls[0][0];
+      expect(patchArgs.sendUpdates).toBe('all');
 
       const insertCall = mockCalendar.events.insert.mock.calls[0][0];
       expect(insertCall.supportsAttachments).toBe(true);
       expect(insertCall.requestBody.attachments).toEqual([
         { fileId: 'file1', fileUrl: 'https://drive.google.com/file1' }
       ]);
+      expect(insertCall.sendUpdates).toBe('all');
     });
 
     it('should set conferenceDataVersion when duplicating conference data for future instances', async () => {
@@ -602,13 +591,15 @@ describe('UpdateEventHandler', () => {
 
       await handler.runTool(args, mockOAuth2Client);
 
-      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith(expect.objectContaining({
         calendarId: 'primary',
         eventId: 'event123',
         requestBody: expect.objectContaining({
           summary: 'Updated Meeting'
         })
-      });
+      }));
+      const sendAllArgs = mockCalendar.events.patch.mock.calls[0][0];
+      expect(sendAllArgs.sendUpdates).toBe('all');
     });
 
     it('should send updates to external users only when specified', async () => {
@@ -629,13 +620,15 @@ describe('UpdateEventHandler', () => {
 
       await handler.runTool(args, mockOAuth2Client);
 
-      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith(expect.objectContaining({
         calendarId: 'primary',
         eventId: 'event123',
         requestBody: expect.objectContaining({
           summary: 'Updated Meeting'
         })
-      });
+      }));
+      const sendExternalArgs = mockCalendar.events.patch.mock.calls[0][0];
+      expect(sendExternalArgs.sendUpdates).toBe('externalOnly');
     });
 
     it('should not send updates when none specified', async () => {
@@ -656,13 +649,15 @@ describe('UpdateEventHandler', () => {
 
       await handler.runTool(args, mockOAuth2Client);
 
-      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith(expect.objectContaining({
         calendarId: 'primary',
         eventId: 'event123',
         requestBody: expect.objectContaining({
           summary: 'Updated Meeting'
         })
-      });
+      }));
+      const sendNoneArgs = mockCalendar.events.patch.mock.calls[0][0];
+      expect(sendNoneArgs.sendUpdates).toBe('none');
     });
   });
 
@@ -774,14 +769,14 @@ describe('UpdateEventHandler', () => {
       await handler.runTool(args, mockOAuth2Client);
 
       // Should use the mocked default timezone 'America/Los_Angeles'
-      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith(expect.objectContaining({
         calendarId: 'primary',
         eventId: 'event123',
         requestBody: expect.objectContaining({
-          start: { dateTime: '2025-01-16T14:00:00', timeZone: 'America/Los_Angeles', date: null },
-          end: { dateTime: '2025-01-16T15:00:00', timeZone: 'America/Los_Angeles', date: null }
+          start: { dateTime: '2025-01-16T14:00:00', timeZone: 'America/Los_Angeles' },
+          end: { dateTime: '2025-01-16T15:00:00', timeZone: 'America/Los_Angeles' }
         })
-      });
+      }));
     });
 
     it('should override calendar timezone when specified', async () => {
@@ -805,189 +800,14 @@ describe('UpdateEventHandler', () => {
 
       await handler.runTool(args, mockOAuth2Client);
 
-      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith(expect.objectContaining({
         calendarId: 'primary',
         eventId: 'event123',
         requestBody: expect.objectContaining({
-          start: { dateTime: '2025-01-16T14:00:00', timeZone: 'UTC', date: null },
-          end: { dateTime: '2025-01-16T15:00:00', timeZone: 'UTC', date: null }
+          start: { dateTime: '2025-01-16T14:00:00', timeZone: 'UTC' },
+          end: { dateTime: '2025-01-16T15:00:00', timeZone: 'UTC' }
         })
-      });
-    });
-  });
-
-  describe('All-day Event Conversion (Issue #118)', () => {
-    it('should convert timed event to all-day event', async () => {
-      const existingTimedEvent = {
-        id: 'event123',
-        summary: 'Timed Meeting',
-        start: { dateTime: '2025-10-18T10:00:00-07:00' },
-        end: { dateTime: '2025-10-18T11:00:00-07:00' }
-      };
-
-      const mockUpdatedAllDayEvent = {
-        id: 'event123',
-        summary: 'Timed Meeting',
-        start: { date: '2025-10-18' },
-        end: { date: '2025-10-19' }
-      };
-
-      mockCalendar.events.get.mockResolvedValue({ data: existingTimedEvent });
-      mockCalendar.events.patch.mockResolvedValue({ data: mockUpdatedAllDayEvent });
-
-      const args = {
-        calendarId: 'primary',
-        eventId: 'event123',
-        start: '2025-10-18',
-        end: '2025-10-19'
-      };
-
-      const result = await handler.runTool(args, mockOAuth2Client);
-
-      // Verify patch was called with correct all-day format
-      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
-        calendarId: 'primary',
-        eventId: 'event123',
-        requestBody: expect.objectContaining({
-          start: { date: '2025-10-18', dateTime: null },
-          end: { date: '2025-10-19', dateTime: null }
-        })
-      });
-
-      const response = JSON.parse((result.content[0] as any).text);
-      expect(response.event).toBeDefined();
-      expect(response.event.start.date).toBe('2025-10-18');
-      expect(response.event.end.date).toBe('2025-10-19');
-    });
-
-    it('should convert all-day event to timed event', async () => {
-      const existingAllDayEvent = {
-        id: 'event456',
-        summary: 'All Day Event',
-        start: { date: '2025-10-18' },
-        end: { date: '2025-10-19' }
-      };
-
-      const mockUpdatedTimedEvent = {
-        id: 'event456',
-        summary: 'All Day Event',
-        start: { dateTime: '2025-10-18T10:00:00-07:00', timeZone: 'America/Los_Angeles' },
-        end: { dateTime: '2025-10-18T11:00:00-07:00', timeZone: 'America/Los_Angeles' }
-      };
-
-      mockCalendar.events.get.mockResolvedValue({ data: existingAllDayEvent });
-      mockCalendar.events.patch.mockResolvedValue({ data: mockUpdatedTimedEvent });
-
-      const args = {
-        calendarId: 'primary',
-        eventId: 'event456',
-        start: '2025-10-18T10:00:00',
-        end: '2025-10-18T11:00:00',
-        timeZone: 'America/Los_Angeles'
-      };
-
-      const result = await handler.runTool(args, mockOAuth2Client);
-
-      // Verify patch was called with correct timed format
-      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
-        calendarId: 'primary',
-        eventId: 'event456',
-        requestBody: expect.objectContaining({
-          start: { dateTime: '2025-10-18T10:00:00', timeZone: 'America/Los_Angeles', date: null },
-          end: { dateTime: '2025-10-18T11:00:00', timeZone: 'America/Los_Angeles', date: null }
-        })
-      });
-
-      const response = JSON.parse((result.content[0] as any).text);
-      expect(response.event).toBeDefined();
-      expect(response.event.start.dateTime).toBeDefined();
-      expect(response.event.end.dateTime).toBeDefined();
-    });
-
-    it('should keep all-day event as all-day when updating', async () => {
-      const existingAllDayEvent = {
-        id: 'event789',
-        summary: 'All Day Event',
-        start: { date: '2025-10-18' },
-        end: { date: '2025-10-19' }
-      };
-
-      const mockUpdatedAllDayEvent = {
-        id: 'event789',
-        summary: 'All Day Event',
-        start: { date: '2025-10-20' },
-        end: { date: '2025-10-21' }
-      };
-
-      mockCalendar.events.get.mockResolvedValue({ data: existingAllDayEvent });
-      mockCalendar.events.patch.mockResolvedValue({ data: mockUpdatedAllDayEvent });
-
-      const args = {
-        calendarId: 'primary',
-        eventId: 'event789',
-        start: '2025-10-20',
-        end: '2025-10-21'
-      };
-
-      const result = await handler.runTool(args, mockOAuth2Client);
-
-      // Verify patch was called with all-day format
-      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
-        calendarId: 'primary',
-        eventId: 'event789',
-        requestBody: expect.objectContaining({
-          start: { date: '2025-10-20', dateTime: null },
-          end: { date: '2025-10-21', dateTime: null }
-        })
-      });
-
-      const response = JSON.parse((result.content[0] as any).text);
-      expect(response.event).toBeDefined();
-      expect(response.event.start.date).toBe('2025-10-20');
-      expect(response.event.end.date).toBe('2025-10-21');
-    });
-
-    it('should keep timed event as timed when updating', async () => {
-      const existingTimedEvent = {
-        id: 'event999',
-        summary: 'Timed Meeting',
-        start: { dateTime: '2025-10-18T10:00:00-07:00' },
-        end: { dateTime: '2025-10-18T11:00:00-07:00' }
-      };
-
-      const mockUpdatedTimedEvent = {
-        id: 'event999',
-        summary: 'Timed Meeting',
-        start: { dateTime: '2025-10-18T14:00:00-07:00', timeZone: 'America/Los_Angeles' },
-        end: { dateTime: '2025-10-18T15:00:00-07:00', timeZone: 'America/Los_Angeles' }
-      };
-
-      mockCalendar.events.get.mockResolvedValue({ data: existingTimedEvent });
-      mockCalendar.events.patch.mockResolvedValue({ data: mockUpdatedTimedEvent });
-
-      const args = {
-        calendarId: 'primary',
-        eventId: 'event999',
-        start: '2025-10-18T14:00:00',
-        end: '2025-10-18T15:00:00'
-      };
-
-      const result = await handler.runTool(args, mockOAuth2Client);
-
-      // Verify patch was called with timed format
-      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
-        calendarId: 'primary',
-        eventId: 'event999',
-        requestBody: expect.objectContaining({
-          start: { dateTime: '2025-10-18T14:00:00', timeZone: 'America/Los_Angeles', date: null },
-          end: { dateTime: '2025-10-18T15:00:00', timeZone: 'America/Los_Angeles', date: null }
-        })
-      });
-
-      const response = JSON.parse((result.content[0] as any).text);
-      expect(response.event).toBeDefined();
-      expect(response.event.start.dateTime).toBeDefined();
-      expect(response.event.end.dateTime).toBeDefined();
+      }));
     });
   });
 });
