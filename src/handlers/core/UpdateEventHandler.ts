@@ -26,7 +26,7 @@ export class UpdateEventHandler extends BaseToolHandler {
     
     async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
         const validArgs = args as UpdateEventInput;
-        
+
         // Check for conflicts if enabled
         let conflicts = null;
         if (validArgs.checkConflicts !== false && (validArgs.start || validArgs.end)) {
@@ -36,11 +36,11 @@ export class UpdateEventHandler extends BaseToolHandler {
                 calendarId: validArgs.calendarId,
                 eventId: validArgs.eventId
             });
-            
+
             if (!existingEvent.data) {
                 throw new Error('Event not found');
             }
-            
+
             // Create updated event object for conflict checking
             const timezone = validArgs.timeZone || await this.getCalendarTimezone(oauth2Client, validArgs.calendarId);
             const eventToCheck: calendar_v3.Schema$Event = {
@@ -52,7 +52,7 @@ export class UpdateEventHandler extends BaseToolHandler {
                 end: validArgs.end ? createTimeObject(validArgs.end, timezone) : existingEvent.data.end,
                 location: validArgs.location || existingEvent.data.location,
             };
-            
+
             // Check for conflicts
             conflicts = await this.conflictDetectionService.checkConflicts(
                 oauth2Client,
@@ -65,10 +65,10 @@ export class UpdateEventHandler extends BaseToolHandler {
                 }
             );
         }
-        
+
         // Update the event
         const event = await this.updateEventWithScope(oauth2Client, validArgs);
-        
+
         // Create structured response
         const response: UpdateEventResponse = {
             event: convertGoogleEventToStructured(event, validArgs.calendarId)
