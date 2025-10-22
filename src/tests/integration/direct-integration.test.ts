@@ -786,6 +786,107 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         // Verify the update
         await verifyEventInSearch('Updated Complex Meeting - All Fields');
       });
+
+      it('should convert timed event to all-day event and back (Issue #118)', async () => {
+        console.log('\n🧪 Testing timed ↔ all-day event conversion (Issue #118)...');
+
+        // Step 1: Create a timed event
+        const timedEvent = TestDataFactory.createSingleEvent({
+          summary: `Conversion Test ${Date.now()}`,
+          description: 'Testing conversion between timed and all-day formats'
+        });
+
+        const eventId = await createTestEvent(timedEvent);
+        createdEventIds.push(eventId);
+        console.log(`✅ Created timed event: ${eventId}`);
+
+        // Wait for event to be created
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Step 2: Convert timed event to all-day event
+        console.log('🔄 Converting timed event to all-day...');
+        const toAllDayResult = await client.callTool({
+          name: 'update-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            eventId: eventId,
+            start: '2025-10-25',
+            end: '2025-10-26',
+            sendUpdates: SEND_UPDATES
+          }
+        });
+
+        expect(TestDataFactory.validateEventResponse(toAllDayResult)).toBe(true);
+        const allDayResponse = JSON.parse((toAllDayResult.content as any)[0].text);
+        expect(allDayResponse.event).toBeDefined();
+        expect(allDayResponse.event.start.date).toBe('2025-10-25');
+        expect(allDayResponse.event.end.date).toBe('2025-10-26');
+        expect(allDayResponse.event.start.dateTime).toBeUndefined();
+        console.log('✅ Successfully converted to all-day event');
+
+        // Wait for update to propagate
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Step 3: Convert all-day event back to timed event
+        console.log('🔄 Converting all-day event back to timed...');
+        const toTimedResult = await client.callTool({
+          name: 'update-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            eventId: eventId,
+            start: '2025-10-25T09:00:00',
+            end: '2025-10-25T10:00:00',
+            timeZone: 'America/Los_Angeles',
+            sendUpdates: SEND_UPDATES
+          }
+        });
+
+        expect(TestDataFactory.validateEventResponse(toTimedResult)).toBe(true);
+        const timedResponse = JSON.parse((toTimedResult.content as any)[0].text);
+        expect(timedResponse.event).toBeDefined();
+        expect(timedResponse.event.start.dateTime).toBeDefined();
+        expect(timedResponse.event.end.dateTime).toBeDefined();
+        expect(timedResponse.event.start.date).toBeUndefined();
+        console.log('✅ Successfully converted back to timed event');
+
+        // Step 4: Verify we can create an all-day event directly and convert it
+        console.log('🔄 Testing direct all-day event creation and conversion...');
+        const allDayEventData = {
+          summary: `All-Day Conversion Test ${Date.now()}`,
+          start: '2025-12-25',
+          end: '2025-12-26',
+          description: 'Testing all-day to timed conversion'
+        };
+
+        const allDayEventId = await createTestEvent(allDayEventData);
+        createdEventIds.push(allDayEventId);
+        console.log(`✅ Created all-day event: ${allDayEventId}`);
+
+        // Wait for event to be created
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Convert all-day to timed
+        const directConversionResult = await client.callTool({
+          name: 'update-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            eventId: allDayEventId,
+            start: '2025-12-25T10:00:00',
+            end: '2025-12-25T17:00:00',
+            timeZone: 'America/Los_Angeles',
+            sendUpdates: SEND_UPDATES
+          }
+        });
+
+        expect(TestDataFactory.validateEventResponse(directConversionResult)).toBe(true);
+        const directResponse = JSON.parse((directConversionResult.content as any)[0].text);
+        expect(directResponse.event).toBeDefined();
+        expect(directResponse.event.start.dateTime).toBeDefined();
+        expect(directResponse.event.end.dateTime).toBeDefined();
+        console.log('✅ Successfully converted all-day event to timed event');
+
+        console.log('✨ All conversion tests passed!');
+      });
     });
 
     describe('Batch and Multi-Calendar Operations', () => {

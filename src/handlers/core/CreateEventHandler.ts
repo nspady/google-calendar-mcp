@@ -20,7 +20,7 @@ export class CreateEventHandler extends BaseToolHandler {
     
     async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
         const validArgs = args as CreateEventInput;
-        
+
         // Create the event object for conflict checking
         const timezone = args.timeZone || await this.getCalendarTimezone(oauth2Client, validArgs.calendarId);
         const eventToCheck: calendar_v3.Schema$Event = {
@@ -61,7 +61,7 @@ export class CreateEventHandler extends BaseToolHandler {
                     url: exactDuplicate.event.url,
                     similarity: exactDuplicate.event.similarity
                 },
-                calendarId: exactDuplicate.calendarId,
+                calendarId: exactDuplicate.calendarId || '',
                 suggestion: exactDuplicate.suggestion
             };
             

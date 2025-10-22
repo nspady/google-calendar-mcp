@@ -183,31 +183,31 @@ export function convertCalendarsToStructured(
 }> {
   return calendars.map(cal => ({
     id: cal.id || '',
-    summary: cal.summary,
-    description: cal.description,
-    location: cal.location,
-    timeZone: cal.timeZone,
-    summaryOverride: cal.summaryOverride,
-    colorId: cal.colorId,
-    backgroundColor: cal.backgroundColor,
-    foregroundColor: cal.foregroundColor,
-    hidden: cal.hidden,
-    selected: cal.selected,
-    accessRole: cal.accessRole,
+    summary: cal.summary ?? undefined,
+    description: cal.description ?? undefined,
+    location: cal.location ?? undefined,
+    timeZone: cal.timeZone ?? undefined,
+    summaryOverride: cal.summaryOverride ?? undefined,
+    colorId: cal.colorId ?? undefined,
+    backgroundColor: cal.backgroundColor ?? undefined,
+    foregroundColor: cal.foregroundColor ?? undefined,
+    hidden: cal.hidden ?? undefined,
+    selected: cal.selected ?? undefined,
+    accessRole: cal.accessRole ?? undefined,
     defaultReminders: cal.defaultReminders?.map(r => ({
       method: (r.method as 'email' | 'popup') || 'popup',
       minutes: r.minutes || 0
     })),
     notificationSettings: cal.notificationSettings ? {
       notifications: cal.notificationSettings.notifications?.map(n => ({
-        type: n.type,
-        method: n.method
+        type: n.type ?? undefined,
+        method: n.method ?? undefined
       }))
     } : undefined,
-    primary: cal.primary,
-    deleted: cal.deleted,
+    primary: cal.primary ?? undefined,
+    deleted: cal.deleted ?? undefined,
     conferenceProperties: cal.conferenceProperties ? {
-      allowedConferenceSolutionTypes: cal.conferenceProperties.allowedConferenceSolutionTypes
+      allowedConferenceSolutionTypes: cal.conferenceProperties.allowedConferenceSolutionTypes ?? undefined
     } : undefined
   }));
 }

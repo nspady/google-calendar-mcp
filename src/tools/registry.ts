@@ -17,6 +17,9 @@ import { FreeBusyEventHandler } from "../handlers/core/FreeBusyEventHandler.js";
 import { GetCurrentTimeHandler } from "../handlers/core/GetCurrentTimeHandler.js";
 
 // Define shared schema fields for reuse
+// Note: Event datetime fields (start/end) are NOT shared to avoid $ref generation
+// Each tool defines its own inline schemas for these fields
+
 const timeMinSchema = z.string()
   .refine((val) => {
     const withTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(val);
@@ -139,20 +142,20 @@ export const ToolSchemas = {
     description: z.string().optional().describe("Description/notes for the event"),
     start: z.string()
       .refine((val) => {
-        const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(val); // All-day event format
+        const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(val);
         const withTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(val);
         const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
         return dateOnly || withTimezone || withoutTimezone;
       }, "Must be ISO 8601 format: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events")
-      .describe("Event start time: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events"),
+      .describe("Event start time: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events. Also accepts Google Calendar API object format: {date: '2025-01-01'} or {dateTime: '2025-01-01T10:00:00', timeZone: 'America/Los_Angeles'}"),
     end: z.string()
       .refine((val) => {
-        const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(val); // All-day event format
+        const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(val);
         const withTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(val);
         const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
         return dateOnly || withTimezone || withoutTimezone;
       }, "Must be ISO 8601 format: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events")
-      .describe("Event end time: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events (exclusive)"),
+      .describe("Event end time: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events (exclusive). Also accepts Google Calendar API object format: {date: '2025-01-02'} or {dateTime: '2025-01-01T11:00:00', timeZone: 'America/Los_Angeles'}"),
     timeZone: z.string().optional().describe(
       "Timezone as IANA Time Zone Database name (e.g., America/Los_Angeles). Takes priority over calendar's default timezone. Only used for timezone-naive datetime strings."
     ),
@@ -252,21 +255,21 @@ export const ToolSchemas = {
     description: z.string().optional().describe("Updated description/notes"),
     start: z.string()
       .refine((val) => {
-        const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(val); // All-day event format
+        const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(val);
         const withTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(val);
         const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
         return dateOnly || withTimezone || withoutTimezone;
-      }, "Must be ISO 8601 format: '2024-01-01T10:00:00' for timed events or '2024-01-01' for all-day events")
-      .describe("Updated start time: '2024-01-01T10:00:00' for timed events or '2024-01-01' for all-day events")
+      }, "Must be ISO 8601 format: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events")
+      .describe("Updated start time: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events. Also accepts Google Calendar API object format: {date: '2025-01-01'} or {dateTime: '2025-01-01T10:00:00', timeZone: 'America/Los_Angeles'}")
       .optional(),
     end: z.string()
       .refine((val) => {
-        const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(val); // All-day event format
+        const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(val);
         const withTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(val);
         const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
         return dateOnly || withTimezone || withoutTimezone;
-      }, "Must be ISO 8601 format: '2024-01-01T11:00:00' for timed events or '2024-01-02' for all-day events")
-      .describe("Updated end time: '2024-01-01T11:00:00' for timed events or '2024-01-02' for all-day events (exclusive)")
+      }, "Must be ISO 8601 format: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events")
+      .describe("Updated end time: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events (exclusive). Also accepts Google Calendar API object format: {date: '2025-01-02'} or {dateTime: '2025-01-01T11:00:00', timeZone: 'America/Los_Angeles'}")
       .optional(),
     timeZone: z.string().optional().describe("Updated timezone as IANA Time Zone Database name. If not provided, uses the calendar's default timezone."),
     location: z.string().optional().describe("Updated location"),
@@ -617,10 +620,40 @@ export class ToolRegistry {
     });
   }
 
+  /**
+   * Normalizes datetime fields from object format to string format
+   * Converts { date: "2025-01-01" } or { dateTime: "...", timeZone: "..." } to simple strings
+   * This allows accepting both Google Calendar API format and our simplified format
+   */
+  private static normalizeDateTimeFields(toolName: string, args: any): any {
+    // Only normalize for tools that have datetime fields
+    const toolsWithDateTime = ['create-event', 'update-event'];
+    if (!toolsWithDateTime.includes(toolName)) {
+      return args;
+    }
+
+    const normalized = { ...args };
+    const dateTimeFields = ['start', 'end', 'originalStartTime', 'futureStartDate'];
+
+    for (const field of dateTimeFields) {
+      if (normalized[field] && typeof normalized[field] === 'object') {
+        const obj = normalized[field];
+        // Convert object format to string format
+        if (obj.date) {
+          normalized[field] = obj.date;
+        } else if (obj.dateTime) {
+          normalized[field] = obj.dateTime;
+        }
+      }
+    }
+
+    return normalized;
+  }
+
   static async registerAll(
-    server: McpServer, 
+    server: McpServer,
     executeWithHandler: (
-      handler: any, 
+      handler: any,
       args: any
     ) => Promise<{ content: Array<{ type: "text"; text: string }> }>
   ) {
@@ -633,12 +666,16 @@ export class ToolRegistry {
           inputSchema: tool.customInputSchema || this.extractSchemaShape(tool.schema)
         },
         async (args: any) => {
+          // Preprocess: Normalize datetime fields (convert object format to string format)
+          // This allows accepting both formats while keeping schemas simple
+          const normalizedArgs = this.normalizeDateTimeFields(tool.name, args);
+
           // Validate input using our Zod schema
-          const validatedArgs = tool.schema.parse(args);
-          
+          const validatedArgs = tool.schema.parse(normalizedArgs);
+
           // Apply any custom handler function preprocessing
           const processedArgs = tool.handlerFunction ? await tool.handlerFunction(validatedArgs) : validatedArgs;
-          
+
           // Create handler instance and execute
           const handler = new tool.handler();
           return executeWithHandler(handler, processedArgs);
