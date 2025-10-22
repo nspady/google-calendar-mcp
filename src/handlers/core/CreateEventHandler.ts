@@ -61,7 +61,7 @@ export class CreateEventHandler extends BaseToolHandler {
                     url: exactDuplicate.event.url,
                     similarity: exactDuplicate.event.similarity
                 },
-                calendarId: exactDuplicate.calendarId,
+                calendarId: exactDuplicate.calendarId || '',
                 suggestion: exactDuplicate.suggestion
             };
             
