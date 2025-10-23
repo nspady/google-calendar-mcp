@@ -1,0 +1,201 @@
+name: release-flow
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (vX.Y.Z) or 'auto' to compute from tags/commits"
+        required: true
+        default: "auto"
+      bump:
+        description: "If version=auto, bump type (patch|minor|major|auto)"
+        required: true
+        default: "auto"
+
+# Manual releases should not cancel each other
+concurrency:
+  group: manual-release
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-west-2
+  ECR_REGISTRY: 028498954406.dkr.ecr.us-west-2.amazonaws.com
+  ECR_REPOSITORY: raynmaker/gcal-mcp-server
+
+jobs:
+  compute-version:
+    name: Compute version (SemVer)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.setver.outputs.version }}
+      version_no_v: ${{ steps.setver.outputs.version_no_v }}
+      bump_used: ${{ steps.setver.outputs.bump_used }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  
+
+      - name: Fetch tags
+        run: git fetch --tags --force --prune
+
+      - id: lasttag
+        name: Last tag (v*)
+        shell: bash
+        run: |
+          LAST=$(git tag -l 'v[0-9]*' --sort=-v:refname | head -n1 || true)
+          echo "last=$LAST" >> $GITHUB_OUTPUT
+          echo "Last tag: ${LAST:-<none>}"
+
+      - id: decide-bump
+        name: Decide bump (manual or auto)
+        shell: bash
+        run: |
+          IN_VERSION="${{ github.event.inputs.version }}"
+          IN_BUMP="${{ github.event.inputs.bump }}"
+          if [[ "$IN_VERSION" != "auto" ]]; then
+            echo "mode=manual" >> $GITHUB_OUTPUT
+            echo "version=$IN_VERSION" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          # normalize bump
+          case "$IN_BUMP" in
+            patch|minor|major) echo "mode=bump" >> $GITHUB_OUTPUT; echo "bump=$IN_BUMP" >> $GITHUB_OUTPUT; exit 0;;
+            *) ;; # fallthrough to auto
+          esac
+          # auto-detect from Conventional Commits since last tag
+          LAST="${{ steps.lasttag.outputs.last }}"
+          RANGE=""; [[ -n "$LAST" ]] && RANGE="${LAST}..HEAD"
+          LOG=$(git log --format=%B $RANGE || true)
+          if echo "$LOG" | grep -Eiq 'BREAKING CHANGE|^.*!:'; then BUMP=major
+          elif echo "$LOG" | grep -Eiq '^feat(\(.+\))?: '; then BUMP=minor
+          else BUMP=patch
+          fi
+          echo "mode=auto" >> $GITHUB_OUTPUT
+          echo "bump=$BUMP" >> $GITHUB_OUTPUT
+          echo "Detected bump: $BUMP"
+
+      - id: setver
+        name: Compute next version
+        shell: bash
+        run: |
+          IN_MODE="${{ steps.decide-bump.outputs.mode }}"
+          if [[ "$IN_MODE" == "manual" ]]; then
+            VER="${{ steps.decide-bump.outputs.version }}"
+            if ! [[ "$VER" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([\-+].*)?$ ]]; then
+              echo "::error ::Invalid version: $VER (expected vX.Y.Z)"; exit 1
+            fi
+            echo "version=$VER" >> $GITHUB_OUTPUT
+            echo "version_no_v=${VER#v}" >> $GITHUB_OUTPUT
+            echo "bump_used=manual" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # base = last tag or v0.0.0
+          LAST="${{ steps.lasttag.outputs.last }}"
+          [[ -z "$LAST" ]] && LAST="v0.0.0"
+          base="${LAST#v}"
+          IFS='.' read -r MA MI PA <<< "$base"
+
+          BUMP="${{ steps.decide-bump.outputs.bump }}"
+          case "$BUMP" in
+            major) ((MA++)); MI=0; PA=0;;
+            minor) ((MI++)); PA=0;;
+            patch|*) ((PA++));;
+          esac
+
+          NEW="v${MA}.${MI}.${PA}"
+          echo "version=$NEW" >> $GITHUB_OUTPUT
+          echo "version_no_v=${NEW#v}" >> $GITHUB_OUTPUT
+          echo "bump_used=${BUMP}" >> $GITHUB_OUTPUT
+          echo "Computed: $NEW (from ${LAST} via ${BUMP})"
+
+      - name: Summary (suggested/selected version)
+        run: |
+          echo "### Release version" >> $GITHUB_STEP_SUMMARY
+          echo "- Version: **${{ steps.setver.outputs.version }}**" >> $GITHUB_STEP_SUMMARY
+          echo "- Bump used: \`${{ steps.setver.outputs.bump_used }}\`" >> $GITHUB_STEP_SUMMARY
+
+  create-git-tag:
+    name: Create & push Git tag
+    needs: compute-version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fail if tag already exists remotely
+        shell: bash
+        run: |
+          VER='${{ needs.compute-version.outputs.version }}'
+          if git ls-remote --tags origin "refs/tags/${VER}" | grep -q .; then
+            echo "::error ::Tag ${VER} already exists on origin"; exit 1
+          fi
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create & push tag
+        run: |
+          VER='${{ needs.compute-version.outputs.version }}'
+          git tag -a "$VER" -m "Release $VER"
+          git push origin "$VER"
+
+      - name: Summary (tag)
+        run: echo "Pushed tag **${{ needs.compute-version.outputs.version }}**" >> $GITHUB_STEP_SUMMARY
+
+  build-and-push-image:
+    name: Build & push image to ECR
+    needs: [compute-version, create-git-tag]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::028498954406:role/GitHubOIDC
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gh-release-${{ github.run_id }}
+
+      - name: Ensure ECR repository exists
+        run: |
+          aws ecr describe-repositories --region "${{ env.AWS_REGION }}" \
+            --repository-names "${{ env.ECR_REPOSITORY }}" >/dev/null 2>&1 || \
+          aws ecr create-repository --region "${{ env.AWS_REGION }}" \
+            --repository-name "${{ env.ECR_REPOSITORY }}" \
+            --image-scanning-configuration scanOnPush=true
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: login-ecr
+
+      - uses: docker/setup-buildx-action@v3
+
+      - id: build
+        name: Build & push versioned image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ needs.compute-version.outputs.version }}
+          labels: |
+            org.opencontainers.image.source=${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.compute-version.outputs.version }}
+
+      - name: Summary (image)
+        run: |
+          echo "### Image pushed" >> $GITHUB_STEP_SUMMARY
+          echo "\`${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ needs.compute-version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Digest: \`${{ steps.build.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
