@@ -345,4 +345,34 @@ export class TokenManager {
     this.accountMode = newMode;
     return this.loadSavedTokens();
   }
+
+  /**
+   * Check if OAuth tokens exist without triggering authentication flow
+   * Used by selectAuthMethod() to determine if OAuth is available
+   * @returns true if OAuth tokens exist for current account mode
+   */
+  async hasOAuthTokens(): Promise<boolean> {
+    try {
+      await this.ensureTokenDirectoryExists();
+
+      // Check if token file exists
+      const tokenExists = await fs.access(this.tokenPath).then(() => true).catch(() => false);
+      if (!tokenExists) {
+        // Try migration from legacy location
+        const migrated = await this.migrateLegacyTokens();
+        if (!migrated) {
+          return false;
+        }
+      }
+
+      // Load multi-account tokens
+      const multiAccountTokens = await this.loadMultiAccountTokens();
+      const tokens = multiAccountTokens[this.accountMode];
+
+      // Check if tokens exist for this account mode
+      return !!(tokens && typeof tokens === 'object' && (tokens.access_token || tokens.refresh_token));
+    } catch (error) {
+      return false;
+    }
+  }
 } 
