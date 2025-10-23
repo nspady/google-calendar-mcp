@@ -1,0 +1,72 @@
+name: Build and Push to ECR
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'   # Semantic version tags 
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to deploy (e.g., v1.0.0)"
+        required: false    
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   
+      contents: read    
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (assume role with OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::028498954406:role/GitHubOIDC
+          aws-region: us-west-2
+          role-session-name: github-actions-${{ github.run_id }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tag
+        run: |
+          if [[ -n "${{ github.event.inputs.version }}" ]]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_ENV
+            echo "RELEASE_BUILD=true" >> $GITHUB_ENV
+            echo "Manual dispatch detected: version=${{ github.event.inputs.version }}"
+          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+            echo "RELEASE_BUILD=true" >> $GITHUB_ENV
+            echo "Tag push detected: version=${GITHUB_REF#refs/tags/}"
+          else
+            echo "VERSION=latest" >> $GITHUB_ENV
+            echo "RELEASE_BUILD=false" >> $GITHUB_ENV
+            echo "Branch push detected: using latest"
+          fi
+
+      - name: Build, tag, and push image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: raynmaker/gcal-mcp-server
+          VERSION: ${{ env.VERSION }}
+          RELEASE_BUILD: ${{ env.RELEASE_BUILD }}
+        run: |
+          echo "🚀 Building and pushing image: $VERSION"
+
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$VERSION .
+
+          if [ "$RELEASE_BUILD" = "true" ]; then
+            echo "📦 Pushing versioned and latest tags..."
+            docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$VERSION $ECR_REGISTRY/$ECR_REPOSITORY:latest
+            docker push $ECR_REGISTRY/$ECR_REPOSITORY:$VERSION
+            docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          else
+            echo "📦 Pushing latest only..."
+            docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          fi
