@@ -4,6 +4,7 @@ A Model Context Protocol (MCP) server that provides Google Calendar integration 
 
 ## Features
 
+- **Multi-Tenant Support**: HTTP mode supports multiple users with their own tokens (NEW!)
 - **Multi-Calendar Support**: List events from multiple calendars simultaneously
 - **Event Management**: Create, update, delete, and search calendar events
 - **Recurring Events**: Advanced modification capabilities for recurring events
@@ -158,6 +159,7 @@ Along with the normal capabilities you would expect for a calendar integration y
 ## Documentation
 
 - [Authentication Setup](docs/authentication.md) - Detailed Google Cloud setup
+- [Multi-Tenant Architecture](docs/multi-tenant.md) - **NEW:** Multi-user support with HTTP transport
 - [Advanced Usage](docs/advanced-usage.md) - Multi-account, batch operations
 - [Deployment Guide](docs/deployment.md) - HTTP transport, remote access
 - [Docker Guide](docs/docker.md) - Docker deployment with stdio and HTTP modes
