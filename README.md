@@ -40,15 +40,19 @@ Create OAuth 2.0 credentials:
       - Note about test mode: While an app is in test mode the auth tokens will expire after 1 week and need to be refreshed (see Re-authentication section below).
 
 #### Option B: gcloud CLI (Application Default Credentials)
-If you have the Google Cloud SDK installed, you can use Application Default Credentials:
+
+**Important: This method only works with Google Workspace accounts.** Standard Gmail accounts are not supported due to domain-wide delegation requirements.
+
+If you have the Google Cloud SDK installed and a Google Workspace account, you can use Application Default Credentials:
 
 ```bash
-gcloud auth application-default login --scopes=https://www.googleapis.com/auth/calendar,https://www.googleapis.com/auth/calendar.events
+gcloud auth application-default login --scopes 'https://www.googleapis.com/auth/calendar,https://www.googleapis.com/auth/calendar.events'
 ```
 
 This method:
+- **Requires a Google Workspace account** (does not work with standard Gmail)
 - Doesn't require creating OAuth credentials in Google Cloud Console
-- Ideal for developers already using gcloud
+- Ideal for developers already using gcloud with Workspace
 - Works with both user credentials and service accounts
 - Can be forced via `GOOGLE_AUTH_METHOD=gcloud` environment variable
 
@@ -57,6 +61,8 @@ This method:
 - Otherwise, falls back to OAuth credentials
 - Set `GOOGLE_AUTH_METHOD=oauth` to force OAuth even when gcloud is available
 - Set `GOOGLE_AUTH_METHOD=gcloud` to force gcloud (error if unavailable)
+
+**For standard Gmail accounts:** Use Option A (OAuth) instead.
 
 ### Installation
 

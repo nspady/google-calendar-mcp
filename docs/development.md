@@ -37,9 +37,12 @@ GOOGLE_AUTH_METHOD=oauth npm test
 ```
 
 ### Testing with gcloud ADC
+
+**Important: gcloud ADC only works with Google Workspace accounts.** Standard Gmail accounts are not supported.
+
 ```bash
-# Authenticate with gcloud
-gcloud auth application-default login --scopes=https://www.googleapis.com/auth/calendar,https://www.googleapis.com/auth/calendar.events
+# Authenticate with gcloud (requires Google Workspace account)
+gcloud auth application-default login --scopes 'https://www.googleapis.com/auth/calendar,https://www.googleapis.com/auth/calendar.events'
 
 # Run tests (will auto-detect and use ADC)
 npm test
@@ -59,6 +62,7 @@ npm test
 1. If `GOOGLE_AUTH_METHOD` is set, it will use that method (error if unavailable)
 2. If unset, it will prefer gcloud ADC if available, otherwise fall back to OAuth
 3. All authentication methods use the same OAuth2Client interface internally
+4. **gcloud ADC requires a Google Workspace account** - standard Gmail accounts must use OAuth
 
 ## Contributing
 

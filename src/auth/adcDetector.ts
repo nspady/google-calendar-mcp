@@ -101,7 +101,7 @@ export class ADCDetector {
             valid: false,
             oauth2Client: null,
             missingScopes: requiredScopes,
-            error: `ADC credentials lack required Calendar API scopes. Run: gcloud auth application-default login --scopes=${requiredScopes.join(',')}`,
+            error: `ADC credentials lack required Calendar API scopes. Run: gcloud auth application-default login --scopes '${requiredScopes.join(',')}'`,
             source: this.getADCPath()
           };
         }
@@ -112,7 +112,7 @@ export class ADCDetector {
           valid: false,
           oauth2Client: null,
           missingScopes: requiredScopes,
-          error: `Failed to get access token from ADC: ${errorMsg}. Try running: gcloud auth application-default login --scopes=${requiredScopes.join(',')}`,
+          error: `Failed to get access token from ADC: ${errorMsg}. Try running: gcloud auth application-default login --scopes '${requiredScopes.join(',')}'`,
           source: this.getADCPath()
         };
       }
@@ -123,7 +123,7 @@ export class ADCDetector {
           valid: false,
           oauth2Client: null,
           missingScopes: requiredScopes,
-          error: `ADC credentials found but no access token available. Run: gcloud auth application-default login --scopes=${requiredScopes.join(',')}`,
+          error: `ADC credentials found but no access token available. Run: gcloud auth application-default login --scopes '${requiredScopes.join(',')}'`,
           source: this.getADCPath()
         };
       }

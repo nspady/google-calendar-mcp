@@ -129,7 +129,7 @@ export async function selectAuthMethod(requiredScopes: string[]): Promise<Creden
         `GOOGLE_AUTH_METHOD is set to 'gcloud' but Application Default Credentials are not available or invalid.\n\n` +
         `Error: ${errorMsg}\n\n` +
         `To fix, run:\n` +
-        `  gcloud auth application-default login --scopes=${requiredScopes.join(',')}\n\n` +
+        `  gcloud auth application-default login --scopes '${requiredScopes.join(',')}'\n\n` +
         `Or unset GOOGLE_AUTH_METHOD to fall back to OAuth flow.`
       );
     }
@@ -200,7 +200,7 @@ export async function selectAuthMethod(requiredScopes: string[]): Promise<Creden
     ErrorCode.InvalidRequest,
     `No valid authentication credentials available.\n\n` +
     `Please either:\n` +
-    `1. Run: gcloud auth application-default login --scopes=${requiredScopes.join(',')}\n` +
+    `1. Run: gcloud auth application-default login --scopes '${requiredScopes.join(',')}'\n` +
     `2. Run: npm run auth\n\n` +
     `For more information, see the README.md`
   );
