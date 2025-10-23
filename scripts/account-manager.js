@@ -3,18 +3,20 @@
 /**
  * Account Manager Script
  * 
- * This script helps manage OAuth tokens for multiple Google accounts:
- * - Normal account: For regular operations
- * - Test account: For integration testing
+ * This script helps manage OAuth tokens for multiple Google accounts.
+ * You can now use any account ID, not just 'normal' and 'test'.
  * 
  * Usage:
  *   node scripts/account-manager.js list                    # List available accounts
- *   node scripts/account-manager.js auth normal            # Authenticate normal account
- *   node scripts/account-manager.js auth test              # Authenticate test account
+ *   node scripts/account-manager.js auth <account-id>      # Authenticate an account
  *   node scripts/account-manager.js status                 # Show current account status
- *   node scripts/account-manager.js clear normal           # Clear normal account tokens
- *   node scripts/account-manager.js clear test             # Clear test account tokens
+ *   node scripts/account-manager.js clear <account-id>     # Clear account tokens
  *   node scripts/account-manager.js test                   # Run tests with test account
+ * 
+ * Examples:
+ *   node scripts/account-manager.js auth work              # Authenticate 'work' account
+ *   node scripts/account-manager.js auth personal          # Authenticate 'personal' account
+ *   node scripts/account-manager.js auth client-abc        # Authenticate 'client-abc' account
  */
 
 import { spawn } from 'child_process';
@@ -148,8 +150,9 @@ async function listAccounts() {
 }
 
 async function authenticateAccount(accountMode) {
-  if (!['normal', 'test'].includes(accountMode)) {
-    error('Account mode must be "normal" or "test"');
+  // Validate account ID (alphanumeric, dash, underscore)
+  if (!/^[a-z0-9_-]+$/.test(accountMode)) {
+    error('Account ID must contain only lowercase letters, numbers, dashes, and underscores');
     process.exit(1);
   }
   
@@ -196,8 +199,9 @@ async function showStatus() {
 }
 
 async function clearAccount(accountMode) {
-  if (!['normal', 'test'].includes(accountMode)) {
-    error('Account mode must be "normal" or "test"');
+  // Validate account ID (alphanumeric, dash, underscore)
+  if (!/^[a-z0-9_-]+$/.test(accountMode)) {
+    error('Account ID must contain only lowercase letters, numbers, dashes, and underscores');
     process.exit(1);
   }
   
@@ -244,22 +248,24 @@ async function runTests() {
 
 function showUsage() {
   log('\n' + colorize('bright', 'Google Calendar Account Manager'));
-  log('\nManage OAuth tokens for multiple Google accounts (normal & test)');
+  log('\nManage OAuth tokens for multiple Google accounts');
   log('\n' + colorize('bright', 'Usage:'));
   log('  node scripts/account-manager.js <command> [args]');
   log('\n' + colorize('bright', 'Commands:'));
   log('  list                    List available accounts and their status');
-  log('  auth <normal|test>      Authenticate the specified account');
+  log('  auth <account-id>       Authenticate the specified account');
   log('  status                  Show current account status and configuration');
-  log('  clear <normal|test>     Clear tokens for the specified account');
+  log('  clear <account-id>      Clear tokens for the specified account');
   log('  test                    Run integration tests with test account');
   log('  help                    Show this help message');
   log('\n' + colorize('bright', 'Examples:'));
-  log('  node scripts/account-manager.js auth test     # Authenticate test account');
-  log('  node scripts/account-manager.js test          # Run tests with test account');
-  log('  node scripts/account-manager.js status        # Check account status');
+  log('  node scripts/account-manager.js auth work         # Authenticate work account');
+  log('  node scripts/account-manager.js auth personal     # Authenticate personal account');
+  log('  node scripts/account-manager.js auth client-abc   # Authenticate client account');
+  log('  node scripts/account-manager.js clear work        # Clear work account tokens');
+  log('  node scripts/account-manager.js status            # Check account status');
   log('\n' + colorize('bright', 'Environment Variables:'));
-  log('  GOOGLE_ACCOUNT_MODE     Set to "test" or "normal" (default: normal)');
+  log('  GOOGLE_ACCOUNT_MODE     Set to any account ID (default: normal)');
   log('  TEST_CALENDAR_ID        Calendar ID to use for testing');
   log('  INVITEE_1, INVITEE_2    Email addresses for testing invitations');
   log('  CLAUDE_API_KEY          API key for Claude integration tests');
@@ -275,7 +281,7 @@ async function main() {
       break;
     case 'auth':
       if (!arg) {
-        error('Please specify account mode: normal or test');
+        error('Please specify an account ID (e.g., work, personal, test)');
         process.exit(1);
       }
       await authenticateAccount(arg);
@@ -285,7 +291,7 @@ async function main() {
       break;
     case 'clear':
       if (!arg) {
-        error('Please specify account mode: normal or test');
+        error('Please specify an account ID (e.g., work, personal, test)');
         process.exit(1);
       }
       await clearAccount(arg);
