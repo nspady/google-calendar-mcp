@@ -14,11 +14,22 @@ export class OAuth2ClientFactory {
   /**
    * Initialize the factory with OAuth credentials
    * This only needs to be called once at startup
+   *
+   * @param optional - If true, skip initialization if credentials are not available
    */
-  async initialize(): Promise<void> {
-    const creds = await loadCredentials();
-    this.clientId = creds.client_id;
-    this.clientSecret = creds.client_secret;
+  async initialize(optional: boolean = false): Promise<void> {
+    try {
+      const creds = await loadCredentials();
+      this.clientId = creds.client_id;
+      this.clientSecret = creds.client_secret;
+    } catch (error) {
+      if (!optional) {
+        throw error;
+      }
+      // In optional mode, we can work without credentials
+      // Tokens will still work, but validation features may be limited
+      process.stderr.write('Note: OAuth credentials not found. Token validation features will be limited.\n');
+    }
   }
 
   /**
@@ -30,10 +41,6 @@ export class OAuth2ClientFactory {
    * @returns OAuth2Client configured with the provided credentials
    */
   createFromAccessToken(accessToken: string, refreshToken?: string): OAuth2Client {
-    if (!this.clientId || !this.clientSecret) {
-      throw new Error('OAuth2ClientFactory not initialized. Call initialize() first.');
-    }
-
     // Check cache first
     const cacheKey = this.getCacheKey(accessToken);
     const cached = this.clientCache.get(cacheKey);
@@ -42,11 +49,17 @@ export class OAuth2ClientFactory {
       return cached.client;
     }
 
-    // Create new client
-    const client = new OAuth2Client({
-      clientId: this.clientId,
-      clientSecret: this.clientSecret
-    });
+    // Create new client - can work with or without client ID/secret
+    const clientOptions: any = {};
+    if (this.clientId) {
+      clientOptions.clientId = this.clientId;
+    }
+    if (this.clientSecret) {
+      clientOptions.clientSecret = this.clientSecret;
+    }
+
+    // Create new client (works even without clientId/clientSecret for basic API calls)
+    const client = new OAuth2Client(clientOptions);
 
     const credentials: Credentials = {
       access_token: accessToken
@@ -78,14 +91,15 @@ export class OAuth2ClientFactory {
    * @returns OAuth2Client configured with the provided credentials
    */
   createFromCredentials(credentials: Credentials): OAuth2Client {
-    if (!this.clientId || !this.clientSecret) {
-      throw new Error('OAuth2ClientFactory not initialized. Call initialize() first.');
+    const clientOptions: any = {};
+    if (this.clientId) {
+      clientOptions.clientId = this.clientId;
+    }
+    if (this.clientSecret) {
+      clientOptions.clientSecret = this.clientSecret;
     }
 
-    const client = new OAuth2Client({
-      clientId: this.clientId,
-      clientSecret: this.clientSecret
-    });
+    const client = new OAuth2Client(clientOptions);
 
     client.setCredentials(credentials);
     return client;

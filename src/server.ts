@@ -37,17 +37,20 @@ export class GoogleCalendarMcpServer {
   async initialize(): Promise<void> {
     // 1. Initialize OAuth2ClientFactory for multi-tenant support
     this.oauth2Factory = new OAuth2ClientFactory();
-    await this.oauth2Factory.initialize();
 
     // 2. Initialize Authentication based on transport type
     if (this.config.transport.type === 'stdio') {
       // Stdio mode: traditional single-user authentication
+      // Need credentials file for OAuth flow
+      await this.oauth2Factory.initialize(false); // Required
       this.oauth2Client = await initializeOAuth2Client();
       this.tokenManager = new TokenManager(this.oauth2Client);
       this.authServer = new AuthServer(this.oauth2Client);
       await this.handleStartupAuthentication();
     } else {
       // HTTP mode: multi-tenant support, no startup auth required
+      // Credentials are optional - tokens come from clients
+      await this.oauth2Factory.initialize(true); // Optional
       process.stderr.write('HTTP mode: Multi-tenant support enabled. Pass tokens via Authorization header.\n');
       process.stderr.write('No OAuth flow required at startup. Clients should provide their own access tokens.\n');
     }

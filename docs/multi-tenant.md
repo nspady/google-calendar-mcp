@@ -55,8 +55,10 @@ Uses Node.js `AsyncLocalStorage` to maintain request context:
 
 ### Starting the Server in Multi-Tenant Mode
 
+**Important**: OAuth credentials file is **NOT required** for multi-tenant HTTP mode! The server works with client-provided tokens only.
+
 ```bash
-# Start server in HTTP mode
+# Start server in HTTP mode (no credentials file needed)
 npm run start:http
 
 # Or with custom port/host
@@ -65,10 +67,16 @@ node build/index.js --transport http --port 3000 --host 0.0.0.0
 
 Server will output:
 ```
+Note: OAuth credentials not found. Token validation features will be limited.
 HTTP mode: Multi-tenant support enabled. Pass tokens via Authorization header.
 No OAuth flow required at startup. Clients should provide their own access tokens.
 Google Calendar MCP Server listening on http://127.0.0.1:3000
 ```
+
+**Note**: The "OAuth credentials not found" message is informational only. The server will work perfectly fine with client-provided tokens. OAuth credentials are only needed for:
+- stdio mode (single-user desktop apps)
+- Optional token validation features
+- Automatic token refresh (if you want server-side refresh capability)
 
 ### Client Implementation
 
