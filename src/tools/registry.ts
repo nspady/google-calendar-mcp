@@ -3,6 +3,7 @@ import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { BaseToolHandler } from "../handlers/core/BaseToolHandler.js";
 import { ALLOWED_EVENT_FIELDS } from "../utils/field-mask-builder.js";
+import { RequestContextStore } from "../transports/contextMiddleware.js";
 
 // Import all handlers
 import { ListCalendarsHandler } from "../handlers/core/ListCalendarsHandler.js";
@@ -531,10 +532,11 @@ export class ToolRegistry {
   }
 
   static async registerAll(
-    server: McpServer, 
+    server: McpServer,
     executeWithHandler: (
-      handler: any, 
-      args: any
+      handler: any,
+      args: any,
+      context?: any
     ) => Promise<{ content: Array<{ type: "text"; text: string }> }>
   ) {
     for (const tool of this.tools) {
@@ -548,13 +550,16 @@ export class ToolRegistry {
         async (args: any) => {
           // Validate input using our Zod schema
           const validatedArgs = tool.schema.parse(args);
-          
+
           // Apply any custom handler function preprocessing
           const processedArgs = tool.handlerFunction ? await tool.handlerFunction(validatedArgs) : validatedArgs;
-          
-          // Create handler instance and execute
+
+          // Get request context from AsyncLocalStorage (set by HTTP transport)
+          const requestContext = RequestContextStore.getContext();
+
+          // Create handler instance and execute with context
           const handler = new tool.handler();
-          return executeWithHandler(handler, processedArgs);
+          return executeWithHandler(handler, processedArgs, requestContext);
         }
       );
     }

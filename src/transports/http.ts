@@ -1,10 +1,16 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import http from "http";
+import { RequestContextStore, extractRequestContext } from './contextMiddleware.js';
 
 export interface HttpTransportConfig {
   port?: number;
   host?: string;
+}
+
+export interface McpRequestContext {
+  userToken?: string;
+  refreshToken?: string;
 }
 
 export class HttpTransportHandler {
@@ -19,16 +25,44 @@ export class HttpTransportHandler {
   async connect(): Promise<void> {
     const port = this.config.port || 3000;
     const host = this.config.host || '127.0.0.1';
-    
+
+    // Store reference to server for context injection
+    const mcpServer = this.server;
+
     // Configure transport for stateless mode to allow multiple initialization cycles
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined // Stateless mode - allows multiple initializations
     });
 
-    await this.server.connect(transport);
-    
+    await mcpServer.connect(transport);
+
     // Create HTTP server to handle the StreamableHTTP transport
     const httpServer = http.createServer(async (req, res) => {
+      // Extract authorization token from header for multi-tenant support
+      const authHeader = req.headers['authorization'];
+      let userToken: string | undefined;
+      let refreshToken: string | undefined;
+
+      if (authHeader) {
+        if (authHeader.startsWith('Bearer ')) {
+          userToken = authHeader.substring(7);
+        } else if (authHeader.startsWith('Token ')) {
+          userToken = authHeader.substring(6);
+        }
+      }
+
+      // Also check for refresh token in custom header
+      const refreshHeader = req.headers['x-refresh-token'];
+      if (refreshHeader && typeof refreshHeader === 'string') {
+        refreshToken = refreshHeader;
+      }
+
+      // Attach token context to request for later use
+      (req as any).mcpContext = {
+        userToken,
+        refreshToken
+      } as McpRequestContext;
+
       // Validate Origin header to prevent DNS rebinding attacks (MCP spec requirement)
       const origin = req.headers.origin;
       const allowedOrigins = [
@@ -63,7 +97,7 @@ export class HttpTransportHandler {
       // Handle CORS
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, mcp-session-id');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, mcp-session-id, Authorization, X-Refresh-Token');
       
       if (req.method === 'OPTIONS') {
         res.writeHead(200);
@@ -97,7 +131,13 @@ export class HttpTransportHandler {
       }
 
       try {
-        await transport.handleRequest(req, res);
+        // Extract request context and run the handler within the context store
+        // This makes the context available to all downstream operations
+        const requestContext = extractRequestContext(req);
+
+        await RequestContextStore.run(requestContext, async () => {
+          await transport.handleRequest(req, res);
+        });
       } catch (error) {
         process.stderr.write(`Error handling request: ${error instanceof Error ? error.message : error}\n`);
         if (!res.headersSent) {

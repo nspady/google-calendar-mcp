@@ -6,13 +6,14 @@ import { OAuth2Client } from "google-auth-library";
 import { initializeOAuth2Client } from './auth/client.js';
 import { AuthServer } from './auth/server.js';
 import { TokenManager } from './auth/tokenManager.js';
+import { OAuth2ClientFactory } from './auth/clientFactory.js';
 
 // Import tool registry
 import { ToolRegistry } from './tools/registry.js';
 
 // Import transport handlers
 import { StdioTransportHandler } from './transports/stdio.js';
-import { HttpTransportHandler, HttpTransportConfig } from './transports/http.js';
+import { HttpTransportHandler, HttpTransportConfig, McpRequestContext } from './transports/http.js';
 
 // Import config
 import { ServerConfig } from './config/TransportConfig.js';
@@ -22,6 +23,7 @@ export class GoogleCalendarMcpServer {
   private oauth2Client!: OAuth2Client;
   private tokenManager!: TokenManager;
   private authServer!: AuthServer;
+  private oauth2Factory!: OAuth2ClientFactory;
   private config: ServerConfig;
 
   constructor(config: ServerConfig) {
@@ -33,13 +35,25 @@ export class GoogleCalendarMcpServer {
   }
 
   async initialize(): Promise<void> {
-    // 1. Initialize Authentication (but don't block on it)
-    this.oauth2Client = await initializeOAuth2Client();
-    this.tokenManager = new TokenManager(this.oauth2Client);
-    this.authServer = new AuthServer(this.oauth2Client);
+    // 1. Initialize OAuth2ClientFactory for multi-tenant support
+    this.oauth2Factory = new OAuth2ClientFactory();
 
-    // 2. Handle startup authentication based on transport type
-    await this.handleStartupAuthentication();
+    // 2. Initialize Authentication based on transport type
+    if (this.config.transport.type === 'stdio') {
+      // Stdio mode: traditional single-user authentication
+      // Need credentials file for OAuth flow
+      await this.oauth2Factory.initialize(false); // Required
+      this.oauth2Client = await initializeOAuth2Client();
+      this.tokenManager = new TokenManager(this.oauth2Client);
+      this.authServer = new AuthServer(this.oauth2Client);
+      await this.handleStartupAuthentication();
+    } else {
+      // HTTP mode: multi-tenant support, no startup auth required
+      // Credentials are optional - tokens come from clients
+      await this.oauth2Factory.initialize(true); // Optional
+      process.stderr.write('HTTP mode: Multi-tenant support enabled. Pass tokens via Authorization header.\n');
+      process.stderr.write('No OAuth flow required at startup. Clients should provide their own access tokens.\n');
+    }
 
     // 3. Set up Modern Tool Definitions
     this.registerTools();
@@ -121,9 +135,41 @@ export class GoogleCalendarMcpServer {
     }
   }
 
-  private async executeWithHandler(handler: any, args: any): Promise<{ content: Array<{ type: "text"; text: string }> }> {
-    await this.ensureAuthenticated();
-    const result = await handler.runTool(args, this.oauth2Client);
+  private async executeWithHandler(
+    handler: any,
+    args: any,
+    context?: McpRequestContext
+  ): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+    let client: OAuth2Client;
+
+    // Multi-tenant mode: use provided token if available (HTTP mode)
+    if (context?.userToken) {
+      try {
+        client = this.oauth2Factory.createFromAccessToken(
+          context.userToken,
+          context.refreshToken
+        );
+      } catch (error) {
+        throw new McpError(
+          ErrorCode.InvalidRequest,
+          `Failed to create OAuth client from provided token: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
+    }
+    // Single-user mode: use stored token (stdio mode)
+    else if (this.oauth2Client) {
+      await this.ensureAuthenticated();
+      client = this.oauth2Client;
+    }
+    // No authentication available
+    else {
+      throw new McpError(
+        ErrorCode.InvalidRequest,
+        "Authentication required. For HTTP mode, provide token via Authorization header. For stdio mode, run auth flow first."
+      );
+    }
+
+    const result = await handler.runTool(args, client);
     return result;
   }
 
@@ -154,10 +200,15 @@ export class GoogleCalendarMcpServer {
         if (this.authServer) {
           await this.authServer.stop();
         }
-        
+
+        // Clear OAuth2ClientFactory cache
+        if (this.oauth2Factory) {
+          this.oauth2Factory.clearCache();
+        }
+
         // McpServer handles transport cleanup automatically
         this.server.close();
-        
+
         process.exit(0);
       } catch (error: unknown) {
         process.stderr.write(`Error during cleanup: ${error instanceof Error ? error.message : error}\n`);
