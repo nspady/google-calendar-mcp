@@ -240,6 +240,15 @@ export interface DeleteEventResponse {
 }
 
 /**
+ * Response format for responding to an event invitation
+ */
+export interface RespondToEventResponse {
+  event: StructuredEvent;
+  responseStatus: 'accepted' | 'declined' | 'tentative' | 'needsAction';
+  message: string;
+}
+
+/**
  * Detailed information about a calendar
  */
 export interface CalendarInfo {

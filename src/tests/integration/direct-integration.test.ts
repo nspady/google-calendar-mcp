@@ -2469,6 +2469,199 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
     });
   });
 
+  describe('Event Response Management', () => {
+    it('should respond to event invitations', async () => {
+      // Note: This test requires creating an event where the authenticated user
+      // is invited as an attendee (not the organizer)
+      // For this test to work properly, we need the test account's email
+
+      // Create an event with the test user as an attendee
+      const testUserEmail = process.env.TEST_USER_EMAIL || 'test@example.com';
+      const eventData = TestDataFactory.createSingleEvent({
+        summary: `Integration Test - RSVP Test ${Date.now()}`,
+        attendees: [
+          { email: testUserEmail }
+        ]
+      });
+
+      const eventId = await createTestEvent(eventData);
+      createdEventIds.push(eventId);
+
+      // Wait for event to be created
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Respond to the event with "accepted"
+      const respondStartTime = testFactory.startTimer('respond-to-event');
+
+      try {
+        const respondResult = await client.callTool({
+          name: 'respond-to-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            eventId: eventId,
+            response: 'accepted',
+            sendUpdates: SEND_UPDATES
+          }
+        });
+
+        testFactory.endTimer('respond-to-event', respondStartTime, true);
+
+        expect(TestDataFactory.validateEventResponse(respondResult)).toBe(true);
+
+        const responseText = (respondResult.content as any)[0].text;
+        const response = JSON.parse(responseText);
+
+        expect(response.responseStatus).toBe('accepted');
+        expect(response.message).toContain('accepted');
+        expect(response.event).toBeDefined();
+        expect(response.event.id).toBe(eventId);
+
+        console.log('✅ Successfully responded to event invitation');
+
+        // Try other response types
+        const declineResult = await client.callTool({
+          name: 'respond-to-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            eventId: eventId,
+            response: 'declined',
+            sendUpdates: SEND_UPDATES
+          }
+        });
+
+        const declineResponse = JSON.parse((declineResult.content as any)[0].text);
+        expect(declineResponse.responseStatus).toBe('declined');
+
+        console.log('✅ Successfully changed response to declined');
+
+        // Try tentative
+        const tentativeResult = await client.callTool({
+          name: 'respond-to-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            eventId: eventId,
+            response: 'tentative',
+            sendUpdates: SEND_UPDATES
+          }
+        });
+
+        const tentativeResponse = JSON.parse((tentativeResult.content as any)[0].text);
+        expect(tentativeResponse.responseStatus).toBe('tentative');
+
+        console.log('✅ Successfully changed response to tentative');
+      } catch (error) {
+        testFactory.endTimer('respond-to-event', respondStartTime, false, String(error));
+        // If the error is about not being an attendee, that's expected if TEST_USER_EMAIL
+        // doesn't match the authenticated account
+        if (String(error).includes('not an attendee')) {
+          console.log('⚠️  Skipping respond-to-event test - authenticated user not an attendee');
+          console.log('   Set TEST_USER_EMAIL to the authenticated account\'s email to run this test');
+        } else {
+          throw error;
+        }
+      }
+    });
+
+    it('should respond with a comment/note', async () => {
+      const testUserEmail = process.env.TEST_USER_EMAIL || 'test@example.com';
+      const eventData = TestDataFactory.createSingleEvent({
+        summary: `Integration Test - Response with Comment ${Date.now()}`,
+        attendees: [
+          { email: testUserEmail }
+        ]
+      });
+
+      const eventId = await createTestEvent(eventData);
+      createdEventIds.push(eventId);
+
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      try {
+        // Decline with a comment
+        const declineResult = await client.callTool({
+          name: 'respond-to-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            eventId: eventId,
+            response: 'declined',
+            comment: 'I have a scheduling conflict',
+            sendUpdates: SEND_UPDATES
+          }
+        });
+
+        const declineResponse = JSON.parse((declineResult.content as any)[0].text);
+        expect(declineResponse.responseStatus).toBe('declined');
+        expect(declineResponse.message).toContain('I have a scheduling conflict');
+
+        console.log('✅ Successfully declined with comment');
+      } catch (error) {
+        if (String(error).includes('not an attendee')) {
+          console.log('⚠️  Skipping comment test - authenticated user not an attendee');
+        } else {
+          throw error;
+        }
+      }
+    });
+
+    it('should respond to single instance of recurring event', async () => {
+      const testUserEmail = process.env.TEST_USER_EMAIL || 'test@example.com';
+
+      // Create a recurring event
+      const recurringEventData = TestDataFactory.createRecurringEvent({
+        summary: `Integration Test - Recurring RSVP ${Date.now()}`,
+        attendees: [
+          { email: testUserEmail }
+        ]
+      });
+
+      const eventId = await createTestEvent(recurringEventData);
+      createdEventIds.push(eventId);
+
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      try {
+        // Get the event to find the first instance start time
+        const getResult = await client.callTool({
+          name: 'get-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            eventId: eventId
+          }
+        });
+
+        const eventInfo = JSON.parse((getResult.content as any)[0].text);
+        const originalStartTime = eventInfo.event.start.dateTime || eventInfo.event.start.date;
+
+        // Decline just this instance
+        const respondResult = await client.callTool({
+          name: 'respond-to-event',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            eventId: eventId,
+            response: 'declined',
+            modificationScope: 'thisEventOnly',
+            originalStartTime: originalStartTime,
+            comment: 'Cannot make this one',
+            sendUpdates: SEND_UPDATES
+          }
+        });
+
+        const response = JSON.parse((respondResult.content as any)[0].text);
+        expect(response.responseStatus).toBe('declined');
+        expect(response.message).toContain('this instance only');
+        expect(response.message).toContain('Cannot make this one');
+
+        console.log('✅ Successfully declined single instance of recurring event');
+      } catch (error) {
+        if (String(error).includes('not an attendee')) {
+          console.log('⚠️  Skipping recurring event test - authenticated user not an attendee');
+        } else {
+          throw error;
+        }
+      }
+    });
+  });
+
   describe('Performance Benchmarks', () => {
     it('should complete basic operations within reasonable time limits', async () => {
       // Create a test event for performance testing
