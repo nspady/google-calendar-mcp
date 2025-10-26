@@ -15,6 +15,7 @@ import { UpdateEventHandler } from "../handlers/core/UpdateEventHandler.js";
 import { DeleteEventHandler } from "../handlers/core/DeleteEventHandler.js";
 import { FreeBusyEventHandler } from "../handlers/core/FreeBusyEventHandler.js";
 import { GetCurrentTimeHandler } from "../handlers/core/GetCurrentTimeHandler.js";
+import { RespondToEventHandler } from "../handlers/core/RespondToEventHandler.js";
 
 // Define shared schema fields for reuse
 // Note: Event datetime fields (start/end) are NOT shared to avoid $ref generation
@@ -431,7 +432,44 @@ export const ToolSchemas = {
     timeZone: z.string().optional().describe(
       "Optional IANA timezone (e.g., 'America/Los_Angeles', 'Europe/London', 'UTC'). If not provided, uses the primary Google Calendar's default timezone."
     )
-  })
+  }),
+
+  'respond-to-event': z.object({
+    calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
+    eventId: z.string().describe("ID of the event to respond to"),
+    response: z.enum(["accepted", "declined", "tentative", "needsAction"]).describe(
+      "Your response to the event invitation: 'accepted' (accept), 'declined' (decline), 'tentative' (maybe), 'needsAction' (no response)"
+    ),
+    comment: z.string().optional().describe(
+      "Optional message/note to include with your response (e.g., 'I have a conflict' when declining)"
+    ),
+    modificationScope: z.enum(["thisEventOnly", "all"]).optional().describe(
+      "For recurring events: 'thisEventOnly' responds to just this instance, 'all' responds to all instances. Default is 'all'."
+    ),
+    originalStartTime: z.string()
+      .refine((val) => {
+        const withTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(val);
+        const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
+        return withTimezone || withoutTimezone;
+      }, "Must be ISO 8601 format: '2025-01-01T10:00:00'")
+      .describe("Original start time of the specific instance (required when modificationScope is 'thisEventOnly')")
+      .optional(),
+    sendUpdates: z.enum(["all", "externalOnly", "none"]).optional().describe(
+      "Whether to send response notifications. 'all' sends to all guests, 'externalOnly' to non-Google Calendar users only, 'none' sends no notifications. Default is 'all'."
+    )
+  }).refine(
+    (data) => {
+      // Require originalStartTime when modificationScope is 'thisEventOnly'
+      if (data.modificationScope === 'thisEventOnly' && !data.originalStartTime) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "originalStartTime is required when modificationScope is 'thisEventOnly'",
+      path: ["originalStartTime"]
+    }
+  )
 } as const;
 
 // Generate TypeScript types from schemas
@@ -450,6 +488,7 @@ export type UpdateEventInput = ToolInputs['update-event'];
 export type DeleteEventInput = ToolInputs['delete-event'];
 export type GetFreeBusyInput = ToolInputs['get-freebusy'];
 export type GetCurrentTimeInput = ToolInputs['get-current-time'];
+export type RespondToEventInput = ToolInputs['respond-to-event'];
 
 interface ToolDefinition {
   name: keyof typeof ToolSchemas;
@@ -604,6 +643,12 @@ export class ToolRegistry {
       description: "Get current time in the primary Google Calendar's timezone (or a requested timezone).",
       schema: ToolSchemas['get-current-time'],
       handler: GetCurrentTimeHandler
+    },
+    {
+      name: "respond-to-event",
+      description: "Respond to a calendar event invitation with Accept, Decline, Maybe (Tentative), or No Response.",
+      schema: ToolSchemas['respond-to-event'],
+      handler: RespondToEventHandler
     }
   ];
 
