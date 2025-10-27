@@ -6,8 +6,71 @@ import { calendar_v3, google } from "googleapis";
 import { getCredentialsProjectId } from "../../auth/utils.js";
 
 
-export abstract class BaseToolHandler {
-    abstract runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult>;
+export abstract class BaseToolHandler<TArgs = any> {
+    abstract runTool(args: TArgs, accounts: Map<string, OAuth2Client>): Promise<CallToolResult>;
+
+    /**
+     * Get OAuth2Client for a specific account or determine default account
+     * @param accountId Optional account ID. If not provided, uses single account if available.
+     * @param accounts Map of available accounts
+     * @returns OAuth2Client for the specified or default account
+     * @throws McpError if account is invalid or not found
+     */
+    protected getClientForAccount(accountId: string | undefined, accounts: Map<string, OAuth2Client>): OAuth2Client {
+        // No accounts available
+        if (accounts.size === 0) {
+            throw new McpError(
+                ErrorCode.InvalidRequest,
+                'No authenticated accounts available. Please run authentication first.'
+            );
+        }
+
+        // Account ID specified - validate and retrieve
+        if (accountId) {
+            // Validate account ID format
+            const { validateAccountId } = require('../../auth/paths.js');
+            try {
+                validateAccountId(accountId);
+            } catch (error) {
+                throw new McpError(
+                    ErrorCode.InvalidRequest,
+                    error instanceof Error ? error.message : 'Invalid account ID'
+                );
+            }
+
+            // Get client for specified account
+            const client = accounts.get(accountId);
+            if (!client) {
+                const availableAccounts = Array.from(accounts.keys()).join(', ');
+                throw new McpError(
+                    ErrorCode.InvalidRequest,
+                    `Account "${accountId}" not found. Available accounts: ${availableAccounts}`
+                );
+            }
+
+            return client;
+        }
+
+        // No account specified - use default behavior
+        if (accounts.size === 1) {
+            // Single account - use it automatically
+            const firstClient = accounts.values().next().value;
+            if (!firstClient) {
+                throw new McpError(
+                    ErrorCode.InternalError,
+                    'Failed to retrieve OAuth client'
+                );
+            }
+            return firstClient;
+        }
+
+        // Multiple accounts but no account specified - error
+        const availableAccounts = Array.from(accounts.keys()).join(', ');
+        throw new McpError(
+            ErrorCode.InvalidRequest,
+            `Multiple accounts available (${availableAccounts}). You must specify the 'account' parameter to indicate which account to use.`
+        );
+    }
 
     protected handleGoogleApiError(error: unknown): never {
         if (error instanceof GaxiosError) {

@@ -359,8 +359,8 @@ export class TokenManager {
       for (const [accountId, tokens] of Object.entries(multiAccountTokens)) {
         // Validate account ID
         try {
-          const { validateAccountId } = await import('./paths.js');
-          validateAccountId(accountId);
+          const pathsModule = await import('./paths.js');
+          pathsModule.validateAccountId(accountId);
 
           // Skip invalid token entries
           if (!tokens || typeof tokens !== 'object' || !tokens.access_token) {
@@ -368,10 +368,11 @@ export class TokenManager {
           }
 
           // Create a new OAuth2Client for this account
+          // Use public properties to construct client
           const client = new OAuth2Client(
-            this.oauth2Client._clientId,
-            this.oauth2Client._clientSecret,
-            this.oauth2Client.redirectUri
+            (this.oauth2Client as any)._clientId,
+            (this.oauth2Client as any)._clientSecret,
+            (this.oauth2Client as any)._redirectUri
           );
           client.setCredentials(tokens);
 
@@ -432,9 +433,9 @@ export class TokenManager {
         let email = 'unknown';
         try {
           const client = new OAuth2Client(
-            this.oauth2Client._clientId,
-            this.oauth2Client._clientSecret,
-            this.oauth2Client.redirectUri
+            (this.oauth2Client as any)._clientId,
+            (this.oauth2Client as any)._clientSecret,
+            (this.oauth2Client as any)._redirectUri
           );
           client.setCredentials(tokens);
           email = await this.getUserEmail(client);
