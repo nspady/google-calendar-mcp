@@ -8,7 +8,7 @@ import { validateEventId } from "../../utils/event-id-validator.js";
 import { ConflictDetectionService } from "../../services/conflict-detection/index.js";
 import { CONFLICT_DETECTION_CONFIG } from "../../services/conflict-detection/config.js";
 import { createStructuredResponse, convertConflictsToStructured, createWarningsArray } from "../../utils/response-builder.js";
-import { CreateEventResponse, convertGoogleEventToStructured, DuplicateInfo } from "../../types/structured-responses.js";
+import { CreateEventResponse, convertGoogleEventToStructured } from "../../types/structured-responses.js";
 
 export class CreateEventHandler extends BaseToolHandler {
     private conflictDetectionService: ConflictDetectionService;
@@ -19,8 +19,28 @@ export class CreateEventHandler extends BaseToolHandler {
     }
     
     async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
-        const oauth2Client = this.getClientForAccount(args.account, accounts);
         const validArgs = args as CreateEventInput;
+
+        // Smart account selection: use specified account or find best account with write permissions
+        let oauth2Client: OAuth2Client;
+        let selectedAccountId: string | undefined;
+
+        if (args.account) {
+            // User specified account - use it
+            oauth2Client = this.getClientForAccount(args.account, accounts);
+            selectedAccountId = args.account;
+        } else {
+            // No account specified - find best account with write permissions
+            const accountSelection = await this.getAccountForCalendarWrite(validArgs.calendarId, accounts);
+            if (!accountSelection) {
+                // Fallback to default account if CalendarRegistry doesn't find one
+                oauth2Client = this.getClientForAccount(undefined, accounts);
+                selectedAccountId = Array.from(accounts.keys())[0];
+            } else {
+                oauth2Client = accountSelection.client;
+                selectedAccountId = accountSelection.accountId;
+            }
+        }
 
         // Create the event object for conflict checking
         const timezone = args.timeZone || await this.getCalendarTimezone(oauth2Client, validArgs.calendarId);
@@ -52,20 +72,6 @@ export class CreateEventHandler extends BaseToolHandler {
         );
         
         if (exactDuplicate && validArgs.allowDuplicates !== true) {
-            // Create a duplicate error response
-            const duplicateInfo: DuplicateInfo = {
-                event: {
-                    id: exactDuplicate.event.id || '',
-                    title: exactDuplicate.event.title,
-                    start: exactDuplicate.event.start || '',
-                    end: exactDuplicate.event.end || '',
-                    url: exactDuplicate.event.url,
-                    similarity: exactDuplicate.event.similarity
-                },
-                calendarId: exactDuplicate.calendarId || '',
-                suggestion: exactDuplicate.suggestion
-            };
-            
             // Throw an error that will be handled by MCP SDK
             throw new Error(
                 `Duplicate event detected (${Math.round(exactDuplicate.event.similarity * 100)}% similar). ` +
@@ -80,12 +86,12 @@ export class CreateEventHandler extends BaseToolHandler {
         // Generate structured response with conflict warnings
         const structuredConflicts = convertConflictsToStructured(conflicts);
         const response: CreateEventResponse = {
-            event: convertGoogleEventToStructured(event, validArgs.calendarId),
+            event: convertGoogleEventToStructured(event, validArgs.calendarId, selectedAccountId),
             conflicts: structuredConflicts.conflicts,
             duplicates: structuredConflicts.duplicates,
             warnings: createWarningsArray(conflicts)
         };
-        
+
         return createStructuredResponse(response);
     }
 

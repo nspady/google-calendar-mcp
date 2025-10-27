@@ -131,6 +131,7 @@ export interface StructuredEvent {
   privateCopy?: boolean;
   locked?: boolean;
   calendarId?: string;
+  accountId?: string;
 }
 
 /**
@@ -319,11 +320,13 @@ export interface GetCurrentTimeResponse {
  * Converts a Google Calendar API event to our structured format
  * @param event - The Google Calendar API event object
  * @param calendarId - Optional calendar ID to include in the response
+ * @param accountId - Optional account ID to include in the response (for multi-account queries)
  * @returns Structured event representation
  */
 export function convertGoogleEventToStructured(
   event: calendar_v3.Schema$Event,
-  calendarId?: string
+  calendarId?: string,
+  accountId?: string
 ): StructuredEvent {
   return {
     id: event.id || '',
@@ -406,5 +409,6 @@ export function convertGoogleEventToStructured(
     privateCopy: event.privateCopy ?? undefined,
     locked: event.locked ?? undefined,
     calendarId: calendarId,
+    accountId: accountId,
   };
 }

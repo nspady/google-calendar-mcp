@@ -6,24 +6,31 @@ import { TestDataFactory, TestEvent } from './test-data-factory.js';
 
 /**
  * Comprehensive Integration Tests for Google Calendar MCP
- * 
+ *
  * REQUIREMENTS TO RUN THESE TESTS:
  * 1. Valid Google OAuth credentials file at path specified by GOOGLE_OAUTH_CREDENTIALS env var
  * 2. Authenticated test account: Run `npm run dev auth:test` first
  * 3. TEST_CALENDAR_ID environment variable set to a real Google Calendar ID
  * 4. Network access to Google Calendar API
- * 
+ *
  * These tests exercise all MCP tools against a real test calendar and will:
  * - Create, modify, and delete real calendar events
  * - Make actual API calls to Google Calendar
  * - Require valid authentication tokens
- * 
+ *
  * Test Strategy:
  * 1. Create test events first
  * 2. Test read operations (list, search, freebusy)
  * 3. Test write operations (update)
  * 4. Clean up by deleting created events
  * 5. Track performance metrics throughout
+ *
+ * MULTI-ACCOUNT SUPPORT:
+ * - These integration tests focus on single-account scenarios
+ * - Multi-account functionality (account parameter, CalendarRegistry, smart account selection)
+ *   is thoroughly tested in unit tests (see multi-account.test.ts, CalendarRegistry.test.ts)
+ * - All tools support the optional 'account' parameter for multi-account scenarios
+ * - When account is not specified, tools use smart account selection (via CalendarRegistry)
  */
 
 describe('Google Calendar MCP - Direct Integration Tests', () => {

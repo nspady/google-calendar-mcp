@@ -7,8 +7,25 @@ import { createStructuredResponse } from "../../utils/response-builder.js";
 
 export class DeleteEventHandler extends BaseToolHandler {
     async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
-        const oauth2Client = this.getClientForAccount(args.account, accounts);
         const validArgs = args as DeleteEventInput;
+
+        // Smart account selection: use specified account or find best account with write permissions
+        let oauth2Client: OAuth2Client;
+
+        if (args.account) {
+            // User specified account - use it
+            oauth2Client = this.getClientForAccount(args.account, accounts);
+        } else {
+            // No account specified - find best account with write permissions
+            const accountSelection = await this.getAccountForCalendarWrite(validArgs.calendarId, accounts);
+            if (!accountSelection) {
+                // Fallback to default account if CalendarRegistry doesn't find one
+                oauth2Client = this.getClientForAccount(undefined, accounts);
+            } else {
+                oauth2Client = accountSelection.client;
+            }
+        }
+
         await this.deleteEvent(oauth2Client, validArgs);
 
         const response: DeleteEventResponse = {

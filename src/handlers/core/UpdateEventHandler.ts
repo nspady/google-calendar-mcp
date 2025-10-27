@@ -25,8 +25,28 @@ export class UpdateEventHandler extends BaseToolHandler {
     }
     
     async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
-        const oauth2Client = this.getClientForAccount(args.account, accounts);
         const validArgs = args as UpdateEventInput;
+
+        // Smart account selection: use specified account or find best account with write permissions
+        let oauth2Client: OAuth2Client;
+        let selectedAccountId: string | undefined;
+
+        if (args.account) {
+            // User specified account - use it
+            oauth2Client = this.getClientForAccount(args.account, accounts);
+            selectedAccountId = args.account;
+        } else {
+            // No account specified - find best account with write permissions
+            const accountSelection = await this.getAccountForCalendarWrite(validArgs.calendarId, accounts);
+            if (!accountSelection) {
+                // Fallback to default account if CalendarRegistry doesn't find one
+                oauth2Client = this.getClientForAccount(undefined, accounts);
+                selectedAccountId = Array.from(accounts.keys())[0];
+            } else {
+                oauth2Client = accountSelection.client;
+                selectedAccountId = accountSelection.accountId;
+            }
+        }
 
         // Check for conflicts if enabled
         let conflicts = null;
@@ -72,7 +92,7 @@ export class UpdateEventHandler extends BaseToolHandler {
 
         // Create structured response
         const response: UpdateEventResponse = {
-            event: convertGoogleEventToStructured(event, validArgs.calendarId)
+            event: convertGoogleEventToStructured(event, validArgs.calendarId, selectedAccountId)
         };
         
         // Add conflict information if present

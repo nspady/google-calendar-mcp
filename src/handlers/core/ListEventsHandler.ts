@@ -8,9 +8,10 @@ import { buildListFieldMask } from "../../utils/field-mask-builder.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
 import { ListEventsResponse, StructuredEvent, convertGoogleEventToStructured } from "../../types/structured-responses.js";
 
-// Extended event type to include calendar ID for tracking source
+// Extended event type to include calendar ID and account ID for tracking source
 interface ExtendedEvent extends calendar_v3.Schema$Event {
   calendarId: string;
+  accountId?: string;
 }
 
 interface ListEventsArgs {
@@ -21,43 +22,79 @@ interface ListEventsArgs {
   fields?: string[];
   privateExtendedProperty?: string[];
   sharedExtendedProperty?: string[];
-  account?: string;
+  account?: string | string[];
 }
 
 export class ListEventsHandler extends BaseToolHandler {
     async runTool(args: ListEventsArgs, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
-        const oauth2Client = this.getClientForAccount(args.account, accounts);
+        // Get clients for specified accounts (supports single or multiple)
+        const selectedAccounts = this.getClientsForAccounts(args.account, accounts);
 
         // MCP SDK has already validated the arguments against the tool schema
         const validArgs = args;
 
         // Normalize calendarId to always be an array for consistent processing
-        // The Zod schema transform has already handled JSON string parsing if needed
         const calendarNamesOrIds = Array.isArray(validArgs.calendarId)
             ? validArgs.calendarId
             : [validArgs.calendarId];
 
-        // Resolve calendar names to IDs (if any names were provided)
-        const calendarIds = await this.resolveCalendarIds(oauth2Client, calendarNamesOrIds);
+        // Fetch events from all selected accounts
+        const eventsPerAccount = await Promise.all(
+            Array.from(selectedAccounts.entries()).map(async ([accountId, client]) => {
+                try {
+                    // Resolve calendar names to IDs for this account
+                    const calendarIds = await this.resolveCalendarIds(client, calendarNamesOrIds);
 
-        const allEvents = await this.fetchEvents(oauth2Client, calendarIds, {
-            timeMin: validArgs.timeMin,
-            timeMax: validArgs.timeMax,
-            timeZone: validArgs.timeZone,
-            fields: validArgs.fields,
-            privateExtendedProperty: validArgs.privateExtendedProperty,
-            sharedExtendedProperty: validArgs.sharedExtendedProperty
+                    const events = await this.fetchEvents(client, calendarIds, {
+                        timeMin: validArgs.timeMin,
+                        timeMax: validArgs.timeMax,
+                        timeZone: validArgs.timeZone,
+                        fields: validArgs.fields,
+                        privateExtendedProperty: validArgs.privateExtendedProperty,
+                        sharedExtendedProperty: validArgs.sharedExtendedProperty
+                    });
+
+                    // Tag events with account ID and return metadata
+                    return {
+                        accountId,
+                        calendarIds,
+                        events: events.map(event => ({ ...event, accountId }))
+                    };
+                } catch (error) {
+                    // For single account, propagate error
+                    if (selectedAccounts.size === 1) {
+                        throw error;
+                    }
+                    // For multi-account, continue with other accounts
+                    return { accountId, calendarIds: [], events: [] };
+                }
+            })
+        );
+
+        // Flatten and merge all events and calendar IDs
+        const allEvents = eventsPerAccount.flatMap(result => result.events);
+        const allQueriedCalendarIds = [...new Set(eventsPerAccount.flatMap(result => result.calendarIds))];
+
+        // Sort events chronologically
+        allEvents.sort((a, b) => {
+            const aTime = a.start?.dateTime || a.start?.date || '';
+            const bTime = b.start?.dateTime || b.start?.date || '';
+            return aTime.localeCompare(bTime);
         });
 
         // Convert extended events to structured format
         const structuredEvents: StructuredEvent[] = allEvents.map(event =>
-            convertGoogleEventToStructured(event, event.calendarId)
+            convertGoogleEventToStructured(event, event.calendarId, event.accountId)
         );
 
         const response: ListEventsResponse = {
             events: structuredEvents,
             totalCount: allEvents.length,
-            calendars: calendarIds.length > 1 ? calendarIds : undefined
+            calendars: allQueriedCalendarIds.length > 1 ? allQueriedCalendarIds : undefined,
+            ...(selectedAccounts.size > 1 && {
+                accounts: Array.from(selectedAccounts.keys()),
+                note: `Showing merged events from ${selectedAccounts.size} account(s), sorted chronologically`
+            })
         };
 
         return createStructuredResponse(response);
