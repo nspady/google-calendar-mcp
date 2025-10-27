@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Calendar MCP - Account Management</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .card h2 {
+            font-size: 1.3rem;
+            margin-bottom: 1rem;
+            color: #444;
+        }
+        .account-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .account-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: #f9f9f9;
+            border-radius: 6px;
+            border: 1px solid #e5e5e5;
+        }
+        .account-info {
+            flex: 1;
+        }
+        .account-id {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.25rem;
+        }
+        .account-email {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        .account-status {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-top: 0.5rem;
+        }
+        .status-active {
+            background: #e7f5e7;
+            color: #2d7c2d;
+        }
+        .status-expired {
+            background: #fff3e0;
+            color: #e65100;
+        }
+        .account-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        button {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-weight: 500;
+        }
+        .btn-primary {
+            background: #1976d2;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #1565c0;
+        }
+        .btn-danger {
+            background: #d32f2f;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #c62828;
+        }
+        .btn-warning {
+            background: #f57c00;
+            color: white;
+        }
+        .btn-warning:hover {
+            background: #ef6c00;
+        }
+        .add-account-form {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-end;
+        }
+        .form-group {
+            flex: 1;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #555;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #1976d2;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: #999;
+        }
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+        }
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 1rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+        .success {
+            background: #e7f5e7;
+            color: #2d7c2d;
+            padding: 1rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Google Calendar MCP</h1>
+            <p class="subtitle">Manage your authenticated Google accounts</p>
+        </header>
+
+        <div id="message"></div>
+
+        <div class="card">
+            <h2>Add Account</h2>
+            <form class="add-account-form" id="addAccountForm">
+                <div class="form-group">
+                    <label for="accountId">Account ID</label>
+                    <input
+                        type="text"
+                        id="accountId"
+                        name="accountId"
+                        placeholder="e.g., work, personal, home"
+                        pattern="[a-z0-9_-]{1,64}"
+                        title="1-64 characters: lowercase letters, numbers, dashes, underscores only"
+                        required
+                    >
+                </div>
+                <button type="submit" class="btn-primary">Add Account</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Authenticated Accounts</h2>
+            <div id="accountList" class="loading">Loading accounts...</div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/accounts';
+
+        function showMessage(message, type = 'success') {
+            const messageDiv = document.getElementById('message');
+            messageDiv.className = type;
+            messageDiv.textContent = message;
+            setTimeout(() => {
+                messageDiv.className = '';
+                messageDiv.textContent = '';
+            }, 5000);
+        }
+
+        async function loadAccounts() {
+            try {
+                const response = await fetch(API_BASE);
+                if (!response.ok) {
+                    throw new Error(`Failed to load accounts: ${response.statusText}`);
+                }
+                const data = await response.json();
+                renderAccounts(data.accounts);
+            } catch (error) {
+                document.getElementById('accountList').innerHTML =
+                    `<div class="error">Error loading accounts: ${error.message}</div>`;
+            }
+        }
+
+        function renderAccounts(accounts) {
+            const accountList = document.getElementById('accountList');
+
+            if (!accounts || accounts.length === 0) {
+                accountList.innerHTML = '<div class="empty-state">No accounts authenticated yet</div>';
+                return;
+            }
+
+            accountList.innerHTML = accounts.map(account => `
+                <div class="account-item">
+                    <div class="account-info">
+                        <div class="account-id">${escapeHtml(account.id)}</div>
+                        <div class="account-email">${escapeHtml(account.email)}</div>
+                        <span class="account-status status-${account.status}">
+                            ${account.status}
+                        </span>
+                    </div>
+                    <div class="account-actions">
+                        ${account.status === 'expired' ?
+                            `<button class="btn-warning" onclick="reauthAccount('${escapeHtml(account.id)}')">Re-authenticate</button>` :
+                            ''}
+                        <button class="btn-danger" onclick="removeAccount('${escapeHtml(account.id)}')">Remove</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function addAccount(accountId) {
+            try {
+                const response = await fetch(API_BASE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ accountId })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Failed to add account');
+                }
+
+                showMessage(`Account "${accountId}" authenticated successfully!`, 'success');
+                loadAccounts();
+            } catch (error) {
+                showMessage(error.message, 'error');
+            }
+        }
+
+        async function removeAccount(accountId) {
+            if (!confirm(`Are you sure you want to remove account "${accountId}"?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/${accountId}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Failed to remove account');
+                }
+
+                showMessage(`Account "${accountId}" removed successfully!`, 'success');
+                loadAccounts();
+            } catch (error) {
+                showMessage(error.message, 'error');
+            }
+        }
+
+        async function reauthAccount(accountId) {
+            try {
+                const response = await fetch(`${API_BASE}/${accountId}/reauth`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Failed to re-authenticate account');
+                }
+
+                showMessage(`Account "${accountId}" re-authenticated successfully!`, 'success');
+                loadAccounts();
+            } catch (error) {
+                showMessage(error.message, 'error');
+            }
+        }
+
+        document.getElementById('addAccountForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const accountId = document.getElementById('accountId').value.trim();
+            if (accountId) {
+                addAccount(accountId);
+                document.getElementById('accountId').value = '';
+            }
+        });
+
+        // Load accounts on page load
+        loadAccounts();
+    </script>
+</body>
+</html>

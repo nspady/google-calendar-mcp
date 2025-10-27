@@ -1,6 +1,14 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import http from "http";
+import fs from "fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
+import { TokenManager } from "../auth/tokenManager.js";
+import { AuthServer } from "../auth/server.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export interface HttpTransportConfig {
   port?: number;
@@ -10,10 +18,34 @@ export interface HttpTransportConfig {
 export class HttpTransportHandler {
   private server: McpServer;
   private config: HttpTransportConfig;
+  private tokenManager: TokenManager;
+  private authServer: AuthServer;
 
-  constructor(server: McpServer, config: HttpTransportConfig = {}) {
+  constructor(
+    server: McpServer,
+    config: HttpTransportConfig = {},
+    tokenManager: TokenManager,
+    authServer: AuthServer
+  ) {
     this.server = server;
     this.config = config;
+    this.tokenManager = tokenManager;
+    this.authServer = authServer;
+  }
+
+  private parseRequestBody(req: http.IncomingMessage): Promise<any> {
+    return new Promise((resolve, reject) => {
+      let body = '';
+      req.on('data', chunk => body += chunk.toString());
+      req.on('end', () => {
+        try {
+          resolve(body ? JSON.parse(body) : {});
+        } catch (error) {
+          reject(new Error('Invalid JSON in request body'));
+        }
+      });
+      req.on('error', reject);
+    });
   }
 
   async connect(): Promise<void> {
@@ -82,6 +114,169 @@ export class HttpTransportHandler {
           }));
           return;
         }
+      }
+
+      // Serve Account Management UI
+      if (req.method === 'GET' && (req.url === '/' || req.url === '/accounts')) {
+        try {
+          const htmlPath = path.join(__dirname, '..', 'web', 'accounts.html');
+          const html = await fs.readFile(htmlPath, 'utf-8');
+          res.writeHead(200, { 'Content-Type': 'text/html' });
+          res.end(html);
+        } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: 'Failed to load UI',
+            message: error instanceof Error ? error.message : String(error)
+          }));
+        }
+        return;
+      }
+
+      // Account Management API Endpoints
+
+      // GET /api/accounts - List all authenticated accounts
+      if (req.method === 'GET' && req.url === '/api/accounts') {
+        try {
+          const accounts = await this.tokenManager.listAccounts();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ accounts }));
+        } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: 'Failed to list accounts',
+            message: error instanceof Error ? error.message : String(error)
+          }));
+        }
+        return;
+      }
+
+      // POST /api/accounts - Add new account (start OAuth flow)
+      if (req.method === 'POST' && req.url === '/api/accounts') {
+        try {
+          const body = await this.parseRequestBody(req);
+          const accountId = body.accountId;
+
+          if (!accountId || typeof accountId !== 'string') {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              error: 'Invalid request',
+              message: 'accountId is required and must be a string'
+            }));
+            return;
+          }
+
+          // Validate account ID format
+          const { validateAccountId } = await import('../auth/paths.js') as any;
+          try {
+            validateAccountId(accountId);
+          } catch (error) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              error: 'Invalid account ID',
+              message: error instanceof Error ? error.message : String(error)
+            }));
+            return;
+          }
+
+          // Switch to new account mode and start OAuth flow
+          this.tokenManager.setAccountMode(accountId);
+          const authSuccess = await this.authServer.start(true); // openBrowser = true
+
+          if (!authSuccess) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              error: 'Authentication failed',
+              message: 'Failed to complete OAuth flow'
+            }));
+            return;
+          }
+
+          res.writeHead(201, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            success: true,
+            accountId,
+            message: 'Account authenticated successfully'
+          }));
+        } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: 'Failed to add account',
+            message: error instanceof Error ? error.message : String(error)
+          }));
+        }
+        return;
+      }
+
+      // DELETE /api/accounts/:id - Remove account
+      if (req.method === 'DELETE' && req.url?.startsWith('/api/accounts/')) {
+        const accountId = req.url.substring('/api/accounts/'.length);
+
+        try {
+          // Validate account ID format
+          const { validateAccountId } = await import('../auth/paths.js') as any;
+          validateAccountId(accountId);
+
+          // Switch to account and clear tokens
+          const originalMode = this.tokenManager.getAccountMode();
+          this.tokenManager.setAccountMode(accountId);
+          await this.tokenManager.clearTokens();
+          this.tokenManager.setAccountMode(originalMode);
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            success: true,
+            accountId,
+            message: 'Account removed successfully'
+          }));
+        } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: 'Failed to remove account',
+            message: error instanceof Error ? error.message : String(error)
+          }));
+        }
+        return;
+      }
+
+      // POST /api/accounts/:id/reauth - Re-authenticate account
+      if (req.method === 'POST' && req.url?.match(/^\/api\/accounts\/[^/]+\/reauth$/)) {
+        const accountId = req.url.split('/')[3];
+
+        try {
+          // Validate account ID format
+          const { validateAccountId } = await import('../auth/paths.js') as any;
+          validateAccountId(accountId);
+
+          // Switch to account mode and start OAuth flow
+          const originalMode = this.tokenManager.getAccountMode();
+          this.tokenManager.setAccountMode(accountId);
+          const authSuccess = await this.authServer.start(true); // openBrowser = true
+          this.tokenManager.setAccountMode(originalMode);
+
+          if (!authSuccess) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              error: 'Re-authentication failed',
+              message: 'Failed to complete OAuth flow'
+            }));
+            return;
+          }
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            success: true,
+            accountId,
+            message: 'Account re-authenticated successfully'
+          }));
+        } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            error: 'Failed to re-authenticate account',
+            message: error instanceof Error ? error.message : String(error)
+          }));
+        }
+        return;
       }
 
       // Handle health check endpoint
