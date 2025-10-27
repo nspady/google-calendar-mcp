@@ -8,11 +8,11 @@
 
 ## Core Architecture
 
-### Multi-Client Loading
-- [ ] `TokenManager.loadAllAccounts()` → `Map<accountId, OAuth2Client>`
-- [ ] `TokenManager.getClient(accountId)` → single client
-- [ ] `TokenManager.listAccounts()` → account names + emails
-- [ ] Validation: `/^[a-z0-9_-]{1,64}$/` + reserved names blocked
+### Multi-Client Loading ✅ COMPLETED
+- [x] `TokenManager.loadAllAccounts()` → `Map<accountId, OAuth2Client>`
+- [x] `TokenManager.getClient(accountId)` → single client
+- [x] `TokenManager.listAccounts()` → account names + emails
+- [x] Validation: `/^[a-z0-9_-]{1,64}$/` + reserved names blocked
 
 ### Calendar Deduplication
 **Problem:** Same calendar accessible from multiple accounts with different permissions.
@@ -43,66 +43,72 @@ interface UnifiedCalendar {
 
 ---
 
-## Phase 1: Multi-Account Core (3 days)
+## Phase 1: Multi-Account Core ✅ COMPLETED
 
 ### Token Management
-- [ ] `src/auth/tokenManager.ts` - Load all accounts on startup
-- [ ] `src/auth/paths.js` - Add validation (security fix)
-- [ ] `src/auth/utils.ts` - Add validation (security fix)
+- [x] `src/auth/tokenManager.ts` - Load all accounts on startup
+- [x] `src/auth/paths.js` - Add validation (security fix)
+- [x] `src/auth/utils.ts` - Add validation (security fix)
 
 ### Server Initialization
-- [ ] `src/server.ts` - Initialize `Map<accountId, OAuth2Client>`
-- [ ] `src/server.ts` - Pass accounts map to handlers
-- [ ] MCP capability: Advertise available accounts in `initialize` response
+- [x] `src/server.ts` - Initialize `Map<accountId, OAuth2Client>`
+- [x] `src/server.ts` - Pass accounts map to handlers
+- [ ] MCP capability: Advertise available accounts in `initialize` response (deferred)
 
 ### Base Handler
-- [ ] `src/handlers/core/BaseToolHandler.ts` - Accept accounts map
-- [ ] `src/handlers/core/BaseToolHandler.ts` - `getClient(accountId)` method
-- [ ] `src/handlers/core/BaseToolHandler.ts` - Calendar registry integration
+- [x] `src/handlers/core/BaseToolHandler.ts` - Accept accounts map
+- [x] `src/handlers/core/BaseToolHandler.ts` - `getClientForAccount(accountId)` method
+- [ ] `src/handlers/core/BaseToolHandler.ts` - Calendar registry integration (Phase 4)
 
 ---
 
-## Phase 2: Tool Schema Updates (2 days)
+## Phase 2: Tool Schema Updates ✅ COMPLETED
 
 ### Account Parameter (All Tools)
 ```typescript
-account?: string | string[]  // Optional: single or multiple accounts
+account?: string  // Optional: single account (array support in Phase 4)
 ```
 
 **Behavior:**
-- Omitted + 1 account → use that account
-- Omitted + multiple accounts → list all (for queries) or error (for mutations)
-- Specified → use specified account(s)
+- Omitted + 1 account → use that account automatically
+- Omitted + multiple accounts → error (must specify which account)
+- Specified → use specified account
 
-### Files to Update
-- [ ] `src/tools/registry.ts` - Add `account` param to all schemas
-- [ ] `src/handlers/core/ListEventsHandler.ts` - Multi-account support
-- [ ] `src/handlers/core/CreateEventHandler.ts` - Use preferredAccount
-- [ ] `src/handlers/core/UpdateEventHandler.ts` - Use preferredAccount
-- [ ] `src/handlers/core/DeleteEventHandler.ts` - Use preferredAccount
-- [ ] `src/handlers/core/GetEventHandler.ts` - Any account
-- [ ] `src/handlers/core/ListCalendarsHandler.ts` - Suggest account, deduplicate results
-- [ ] Remaining 8+ handlers - Account parameter support
+### Files Updated
+- [x] `src/tools/registry.ts` - Added `account` param to all 10 tool schemas
+- [x] `src/handlers/core/ListEventsHandler.ts` - Account parameter support
+- [x] `src/handlers/core/CreateEventHandler.ts` - Account parameter support
+- [x] `src/handlers/core/UpdateEventHandler.ts` - Account parameter support
+- [x] `src/handlers/core/DeleteEventHandler.ts` - Account parameter support
+- [x] `src/handlers/core/GetEventHandler.ts` - Account parameter support
+- [x] `src/handlers/core/ListCalendarsHandler.ts` - Account parameter support
+- [x] `src/handlers/core/SearchEventsHandler.ts` - Account parameter support
+- [x] `src/handlers/core/GetCurrentTimeHandler.ts` - Account parameter support
+- [x] `src/handlers/core/FreeBusyEventHandler.ts` - Account parameter support
+- [x] `src/handlers/core/ListColorsHandler.ts` - Account parameter support
+- [x] All test files updated to use accounts Map
 
 ---
 
-## Phase 3: Account Management UI (2 days)
+## Phase 3: Account Management UI ✅ COMPLETED
 
 ### HTTP Endpoints
-- [ ] `GET /accounts` - List all accounts (id, email, status)
-- [ ] `POST /accounts` - Add account (name + OAuth flow)
-- [ ] `DELETE /accounts/:id` - Remove account
-- [ ] `POST /accounts/:id/reauth` - Re-authorize account
+- [x] `GET /api/accounts` - List all accounts (id, email, status)
+- [x] `POST /api/accounts` - Add account (accountId + OAuth flow)
+- [x] `DELETE /api/accounts/:id` - Remove account
+- [x] `POST /api/accounts/:id/reauth` - Re-authenticate expired account
 
 ### Web UI
-- [ ] `src/ui/accounts.html` - Account manager interface
-- [ ] Account cards with email + status indicators
-- [ ] Add account flow with OAuth popup
-- [ ] Remove/reauth actions
+- [x] `src/web/accounts.html` - Clean account manager interface
+- [x] Account cards with email + status indicators (active/expired)
+- [x] Add account form with validation
+- [x] Remove/reauth actions with confirmation
+- [x] Real-time status updates after operations
+- [x] Updated build script to copy static files
 
 ### stdio Mode
-- [ ] `src/transports/stdio.ts` - Load all accounts on startup
-- [ ] CLI: `npm start -- --account work,personal` (filter accounts)
+- [x] `src/transports/stdio.ts` - Already loads all accounts on startup
+- [ ] CLI: `npm start -- --account work,personal` (filter accounts) - deferred to Phase 4
 
 ---
 
