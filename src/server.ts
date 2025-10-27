@@ -23,6 +23,7 @@ export class GoogleCalendarMcpServer {
   private tokenManager!: TokenManager;
   private authServer!: AuthServer;
   private config: ServerConfig;
+  private accounts!: Map<string, OAuth2Client>;
 
   constructor(config: ServerConfig) {
     this.config = config;
@@ -38,13 +39,20 @@ export class GoogleCalendarMcpServer {
     this.tokenManager = new TokenManager(this.oauth2Client);
     this.authServer = new AuthServer(this.oauth2Client);
 
-    // 2. Handle startup authentication based on transport type
+    // 2. Load all authenticated accounts
+    this.accounts = await this.tokenManager.loadAllAccounts();
+    if (this.accounts.size > 0) {
+      const accountList = Array.from(this.accounts.keys()).join(', ');
+      process.stderr.write(`Loaded ${this.accounts.size} account(s): ${accountList}\n`);
+    }
+
+    // 3. Handle startup authentication based on transport type
     await this.handleStartupAuthentication();
 
-    // 3. Set up Modern Tool Definitions
+    // 4. Set up Modern Tool Definitions
     this.registerTools();
 
-    // 4. Set up Graceful Shutdown
+    // 5. Set up Graceful Shutdown
     this.setupGracefulShutdown();
   }
 
@@ -123,7 +131,11 @@ export class GoogleCalendarMcpServer {
 
   private async executeWithHandler(handler: any, args: any): Promise<{ content: Array<{ type: "text"; text: string }> }> {
     await this.ensureAuthenticated();
-    const result = await handler.runTool(args, this.oauth2Client);
+
+    // Reload accounts in case new ones were added during runtime
+    this.accounts = await this.tokenManager.loadAllAccounts();
+
+    const result = await handler.runTool(args, this.accounts);
     return result;
   }
 
