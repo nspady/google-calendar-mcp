@@ -60,11 +60,21 @@ const sharedExtendedPropertySchema = z
     "Filter by shared extended properties (key=value). Matches events that have all specified properties."
   );
 
+const accountSchema = z.string()
+  .regex(/^[a-z0-9_-]{1,64}$/, "Account ID must be 1-64 characters: lowercase letters, numbers, dashes, underscores only")
+  .optional()
+  .describe(
+    "Account ID to use for this operation (e.g., 'work', 'personal'). Optional when only one account is authenticated. Required when multiple accounts are available. Use list-accounts to see available accounts."
+  );
+
 // Define all tool schemas with TypeScript inference
 export const ToolSchemas = {
-  'list-calendars': z.object({}),
+  'list-calendars': z.object({
+    account: accountSchema
+  }),
 
   'list-events': z.object({
+    account: accountSchema,
     calendarId: z.union([
       z.string().describe(
         "Calendar identifier(s) to query. Accepts calendar IDs (e.g., 'primary', 'user@gmail.com') OR calendar names (e.g., 'Work', 'Personal'). Single calendar: 'primary'. Multiple calendars: array ['Work', 'Personal'] or JSON string '[\"Work\", \"Personal\"]'"
@@ -87,6 +97,7 @@ export const ToolSchemas = {
   }),
   
   'search-events': z.object({
+    account: accountSchema,
     calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
     query: z.string().describe(
       "Free text search query (searches summary, description, location, attendees, etc.)"
@@ -126,6 +137,7 @@ export const ToolSchemas = {
   }),
   
   'get-event': z.object({
+    account: accountSchema,
     calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
     eventId: z.string().describe("ID of the event to retrieve"),
     fields: z.array(z.enum(ALLOWED_EVENT_FIELDS)).optional().describe(
@@ -133,9 +145,12 @@ export const ToolSchemas = {
     )
   }),
 
-  'list-colors': z.object({}),
+  'list-colors': z.object({
+    account: accountSchema,
+  }),
   
   'create-event': z.object({
+    account: accountSchema,
     calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
     eventId: z.string().optional().describe("Optional custom event ID (5-1024 characters, base32hex encoding: lowercase letters a-v and digits 0-9 only). If not provided, Google Calendar will generate one."),
     summary: z.string().describe("Title of the event"),
@@ -249,6 +264,7 @@ export const ToolSchemas = {
   }),
   
   'update-event': z.object({
+    account: accountSchema,
     calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
     eventId: z.string().describe("ID of the event to update"),
     summary: z.string().optional().describe("Updated title of the event"),
@@ -391,6 +407,7 @@ export const ToolSchemas = {
   ),
   
   'delete-event': z.object({
+    account: accountSchema,
     calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
     eventId: z.string().describe("ID of the event to delete"),
     sendUpdates: z.enum(["all", "externalOnly", "none"]).default("all").describe(
@@ -399,6 +416,7 @@ export const ToolSchemas = {
   }),
   
   'get-freebusy': z.object({
+    account: accountSchema,
     calendars: z.array(z.object({
       id: z.string().describe("ID of the calendar (use 'primary' for the main calendar)")
     })).describe(
@@ -428,6 +446,7 @@ export const ToolSchemas = {
   }),
   
   'get-current-time': z.object({
+    account: accountSchema,
     timeZone: z.string().optional().describe(
       "Optional IANA timezone (e.g., 'America/Los_Angeles', 'Europe/London', 'UTC'). If not provided, uses the primary Google Calendar's default timezone."
     )
