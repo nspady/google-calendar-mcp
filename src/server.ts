@@ -154,8 +154,7 @@ export class GoogleCalendarMcpServer {
         const httpHandler = new HttpTransportHandler(
           this.server,
           httpConfig,
-          this.tokenManager,
-          this.authServer
+          this.tokenManager
         );
         await httpHandler.connect();
         break;

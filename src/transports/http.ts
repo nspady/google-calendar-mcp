@@ -5,7 +5,6 @@ import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { TokenManager } from "../auth/tokenManager.js";
-import { AuthServer } from "../auth/server.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,18 +18,15 @@ export class HttpTransportHandler {
   private server: McpServer;
   private config: HttpTransportConfig;
   private tokenManager: TokenManager;
-  private authServer: AuthServer;
 
   constructor(
     server: McpServer,
     config: HttpTransportConfig = {},
-    tokenManager: TokenManager,
-    authServer: AuthServer
+    tokenManager: TokenManager
   ) {
     this.server = server;
     this.config = config;
     this.tokenManager = tokenManager;
-    this.authServer = authServer;
   }
 
   private parseRequestBody(req: http.IncomingMessage): Promise<any> {
@@ -151,7 +147,7 @@ export class HttpTransportHandler {
         return;
       }
 
-      // POST /api/accounts - Add new account (start OAuth flow)
+      // POST /api/accounts - Add new account (get OAuth URL)
       if (req.method === 'POST' && req.url === '/api/accounts') {
         try {
           const body = await this.parseRequestBody(req);
@@ -179,31 +175,160 @@ export class HttpTransportHandler {
             return;
           }
 
-          // Switch to new account mode and start OAuth flow
-          this.tokenManager.setAccountMode(accountId);
-          const authSuccess = await this.authServer.start(true); // openBrowser = true
+          // Generate OAuth URL for this account
+          const { OAuth2Client } = await import('google-auth-library');
+          const { loadCredentials } = await import('../auth/client.js');
 
-          if (!authSuccess) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-              error: 'Authentication failed',
-              message: 'Failed to complete OAuth flow'
-            }));
-            return;
-          }
+          const { client_id, client_secret } = await loadCredentials();
+          const oauth2Client = new OAuth2Client(
+            client_id,
+            client_secret,
+            `http://${req.headers.host}/oauth2callback?account=${accountId}`
+          );
 
-          res.writeHead(201, { 'Content-Type': 'application/json' });
+          const authUrl = oauth2Client.generateAuthUrl({
+            access_type: 'offline',
+            scope: ['https://www.googleapis.com/auth/calendar'],
+            prompt: 'consent'
+          });
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
-            success: true,
-            accountId,
-            message: 'Account authenticated successfully'
+            authUrl,
+            accountId
           }));
         } catch (error) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
-            error: 'Failed to add account',
+            error: 'Failed to initiate OAuth flow',
             message: error instanceof Error ? error.message : String(error)
           }));
+        }
+        return;
+      }
+
+      // GET /oauth2callback - OAuth callback handler
+      if (req.method === 'GET' && req.url?.startsWith('/oauth2callback')) {
+        try {
+          const url = new URL(req.url, `http://${req.headers.host}`);
+          const code = url.searchParams.get('code');
+          const accountId = url.searchParams.get('account');
+
+          if (!code) {
+            res.writeHead(400, { 'Content-Type': 'text/html' });
+            res.end('<h1>Error</h1><p>Authorization code missing</p>');
+            return;
+          }
+
+          if (!accountId) {
+            res.writeHead(400, { 'Content-Type': 'text/html' });
+            res.end('<h1>Error</h1><p>Account ID missing</p>');
+            return;
+          }
+
+          // Exchange code for tokens
+          const { OAuth2Client } = await import('google-auth-library');
+          const { loadCredentials } = await import('../auth/client.js');
+
+          const { client_id, client_secret } = await loadCredentials();
+          const oauth2Client = new OAuth2Client(
+            client_id,
+            client_secret,
+            `http://${req.headers.host}/oauth2callback?account=${accountId}`
+          );
+
+          const { tokens } = await oauth2Client.getToken(code);
+
+          // Save tokens for this account
+          const originalMode = this.tokenManager.getAccountMode();
+          this.tokenManager.setAccountMode(accountId);
+          await this.tokenManager.saveTokens(tokens);
+          this.tokenManager.setAccountMode(originalMode);
+
+          // Get user email
+          oauth2Client.setCredentials(tokens);
+          const tokenInfo = await oauth2Client.getTokenInfo(tokens.access_token || '');
+          const email = tokenInfo.email || 'unknown';
+
+          res.writeHead(200, { 'Content-Type': 'text/html' });
+          res.end(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Authentication Successful</title>
+              <style>
+                body {
+                  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                  display: flex;
+                  justify-content: center;
+                  align-items: center;
+                  height: 100vh;
+                  margin: 0;
+                  background: #f5f5f5;
+                }
+                .container {
+                  text-align: center;
+                  padding: 2rem;
+                  background: white;
+                  border-radius: 8px;
+                  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                  max-width: 500px;
+                }
+                h1 { color: #4CAF50; margin-bottom: 1rem; }
+                p { color: #666; margin: 0.5rem 0; }
+                .account-info {
+                  background: #f9f9f9;
+                  padding: 1rem;
+                  border-radius: 4px;
+                  margin: 1rem 0;
+                }
+                .account-id { font-weight: 600; color: #333; }
+                .email { color: #1976d2; }
+                button {
+                  margin-top: 1rem;
+                  padding: 0.75rem 1.5rem;
+                  background: #1976d2;
+                  color: white;
+                  border: none;
+                  border-radius: 4px;
+                  font-size: 1rem;
+                  cursor: pointer;
+                }
+                button:hover { background: #1565c0; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <h1>✓ Authentication Successful!</h1>
+                <div class="account-info">
+                  <p class="account-id">Account: ${accountId}</p>
+                  <p class="email">${email}</p>
+                </div>
+                <p>You can now close this window and return to the account manager.</p>
+                <button onclick="window.close()">Close Window</button>
+              </div>
+              <script>
+                // Try to communicate back to opener
+                if (window.opener) {
+                  window.opener.postMessage({ type: 'auth-success', accountId: '${accountId}' }, '*');
+                }
+                // Auto-close after 3 seconds
+                setTimeout(() => window.close(), 3000);
+              </script>
+            </body>
+            </html>
+          `);
+        } catch (error) {
+          res.writeHead(500, { 'Content-Type': 'text/html' });
+          res.end(`
+            <html>
+            <body style="font-family: sans-serif; padding: 2rem;">
+              <h1>Authentication Failed</h1>
+              <p>Error: ${error instanceof Error ? error.message : String(error)}</p>
+              <button onclick="window.close()">Close Window</button>
+            </body>
+            </html>
+          `);
         }
         return;
       }
@@ -248,31 +373,32 @@ export class HttpTransportHandler {
           const { validateAccountId } = await import('../auth/paths.js') as any;
           validateAccountId(accountId);
 
-          // Switch to account mode and start OAuth flow
-          const originalMode = this.tokenManager.getAccountMode();
-          this.tokenManager.setAccountMode(accountId);
-          const authSuccess = await this.authServer.start(true); // openBrowser = true
-          this.tokenManager.setAccountMode(originalMode);
+          // Generate OAuth URL for re-authentication
+          const { OAuth2Client } = await import('google-auth-library');
+          const { loadCredentials } = await import('../auth/client.js');
 
-          if (!authSuccess) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-              error: 'Re-authentication failed',
-              message: 'Failed to complete OAuth flow'
-            }));
-            return;
-          }
+          const { client_id, client_secret } = await loadCredentials();
+          const oauth2Client = new OAuth2Client(
+            client_id,
+            client_secret,
+            `http://${req.headers.host}/oauth2callback?account=${accountId}`
+          );
+
+          const authUrl = oauth2Client.generateAuthUrl({
+            access_type: 'offline',
+            scope: ['https://www.googleapis.com/auth/calendar'],
+            prompt: 'consent'
+          });
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
-            success: true,
-            accountId,
-            message: 'Account re-authenticated successfully'
+            authUrl,
+            accountId
           }));
         } catch (error) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
-            error: 'Failed to re-authenticate account',
+            error: 'Failed to initiate re-authentication',
             message: error instanceof Error ? error.message : String(error)
           }));
         }

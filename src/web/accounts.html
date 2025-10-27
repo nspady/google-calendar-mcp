@@ -268,6 +268,7 @@
 
         async function addAccount(accountId) {
             try {
+                // Get OAuth URL from server
                 const response = await fetch(API_BASE, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -277,11 +278,42 @@
                 const data = await response.json();
 
                 if (!response.ok) {
-                    throw new Error(data.message || 'Failed to add account');
+                    throw new Error(data.message || 'Failed to initiate OAuth flow');
                 }
 
-                showMessage(`Account "${accountId}" authenticated successfully!`, 'success');
-                loadAccounts();
+                // Open OAuth URL in popup
+                const popup = window.open(
+                    data.authUrl,
+                    'oauth',
+                    'width=600,height=700,left=100,top=100'
+                );
+
+                if (!popup) {
+                    showMessage('Popup blocked. Please allow popups for this site.', 'error');
+                    return;
+                }
+
+                // Listen for auth success message
+                const handleMessage = (event) => {
+                    if (event.data.type === 'auth-success') {
+                        window.removeEventListener('message', handleMessage);
+                        showMessage(`Account "${accountId}" authenticated successfully!`, 'success');
+                        loadAccounts();
+                    }
+                };
+
+                window.addEventListener('message', handleMessage);
+
+                // Fallback: check if popup is closed without success
+                const checkClosed = setInterval(() => {
+                    if (popup.closed) {
+                        clearInterval(checkClosed);
+                        window.removeEventListener('message', handleMessage);
+                        // Wait a bit then reload accounts in case auth completed
+                        setTimeout(() => loadAccounts(), 500);
+                    }
+                }, 500);
+
             } catch (error) {
                 showMessage(error.message, 'error');
             }
@@ -312,6 +344,7 @@
 
         async function reauthAccount(accountId) {
             try {
+                // Get OAuth URL from server
                 const response = await fetch(`${API_BASE}/${accountId}/reauth`, {
                     method: 'POST'
                 });
@@ -319,11 +352,42 @@
                 const data = await response.json();
 
                 if (!response.ok) {
-                    throw new Error(data.message || 'Failed to re-authenticate account');
+                    throw new Error(data.message || 'Failed to initiate re-authentication');
                 }
 
-                showMessage(`Account "${accountId}" re-authenticated successfully!`, 'success');
-                loadAccounts();
+                // Open OAuth URL in popup
+                const popup = window.open(
+                    data.authUrl,
+                    'oauth',
+                    'width=600,height=700,left=100,top=100'
+                );
+
+                if (!popup) {
+                    showMessage('Popup blocked. Please allow popups for this site.', 'error');
+                    return;
+                }
+
+                // Listen for auth success message
+                const handleMessage = (event) => {
+                    if (event.data.type === 'auth-success') {
+                        window.removeEventListener('message', handleMessage);
+                        showMessage(`Account "${accountId}" re-authenticated successfully!`, 'success');
+                        loadAccounts();
+                    }
+                };
+
+                window.addEventListener('message', handleMessage);
+
+                // Fallback: check if popup is closed without success
+                const checkClosed = setInterval(() => {
+                    if (popup.closed) {
+                        clearInterval(checkClosed);
+                        window.removeEventListener('message', handleMessage);
+                        // Wait a bit then reload accounts in case auth completed
+                        setTimeout(() => loadAccounts(), 500);
+                    }
+                }, 500);
+
             } catch (error) {
                 showMessage(error.message, 'error');
             }
