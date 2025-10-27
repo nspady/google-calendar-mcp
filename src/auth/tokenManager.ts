@@ -6,15 +6,16 @@ import { mkdir } from 'fs/promises';
 import { dirname } from 'path';
 
 // Interface for multi-account token storage
+// Now supports arbitrary account IDs
 interface MultiAccountTokens {
-  normal?: Credentials;
-  test?: Credentials;
+  [accountId: string]: Credentials;
 }
 
 export class TokenManager {
   private oauth2Client: OAuth2Client;
   private tokenPath: string;
-  private accountMode: 'normal' | 'test';
+  private accountMode: string;
+  private accounts: Map<string, OAuth2Client> = new Map();
 
   constructor(oauth2Client: OAuth2Client) {
     this.oauth2Client = oauth2Client;
@@ -29,12 +30,12 @@ export class TokenManager {
   }
 
   // Method to get current account mode
-  public getAccountMode(): 'normal' | 'test' {
+  public getAccountMode(): string {
     return this.accountMode;
   }
 
-  // Method to switch account mode (useful for testing)
-  public setAccountMode(mode: 'normal' | 'test'): void {
+  // Method to switch account mode (supports arbitrary account IDs)
+  public setAccountMode(mode: string): void {
     this.accountMode = mode;
   }
 
@@ -256,7 +257,7 @@ export class TokenManager {
     }
   }
 
-  async validateTokens(accountMode?: 'normal' | 'test'): Promise<boolean> {
+  async validateTokens(accountMode?: string): Promise<boolean> {
     // For unit tests that don't need real authentication, they should mock at the handler level
     // Integration tests always need real tokens
 
@@ -340,9 +341,131 @@ export class TokenManager {
     }
   }
 
-  // Method to switch to a different account (useful for runtime switching)
-  async switchAccount(newMode: 'normal' | 'test'): Promise<boolean> {
+  // Method to switch to a different account (supports arbitrary account IDs)
+  async switchAccount(newMode: string): Promise<boolean> {
     this.accountMode = newMode;
     return this.loadSavedTokens();
+  }
+
+  /**
+   * Load all authenticated accounts from token file
+   * Returns a Map of account ID to OAuth2Client
+   */
+  async loadAllAccounts(): Promise<Map<string, OAuth2Client>> {
+    try {
+      const multiAccountTokens = await this.loadMultiAccountTokens();
+      this.accounts.clear();
+
+      for (const [accountId, tokens] of Object.entries(multiAccountTokens)) {
+        // Validate account ID
+        try {
+          const { validateAccountId } = await import('./paths.js');
+          validateAccountId(accountId);
+
+          // Skip invalid token entries
+          if (!tokens || typeof tokens !== 'object' || !tokens.access_token) {
+            continue;
+          }
+
+          // Create a new OAuth2Client for this account
+          const client = new OAuth2Client(
+            this.oauth2Client._clientId,
+            this.oauth2Client._clientSecret,
+            this.oauth2Client.redirectUri
+          );
+          client.setCredentials(tokens);
+
+          this.accounts.set(accountId, client);
+        } catch (error) {
+          // Skip invalid account IDs
+          if (process.env.NODE_ENV !== 'test') {
+            process.stderr.write(`Skipping invalid account "${accountId}": ${error}\n`);
+          }
+          continue;
+        }
+      }
+
+      return this.accounts;
+    } catch (error: any) {
+      // Check for file not found error (works with both Error objects and plain objects)
+      if (error && error.code === 'ENOENT') {
+        // No token file exists, return empty map
+        return new Map();
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get OAuth2Client for a specific account
+   * @param accountId The account ID to retrieve
+   * @throws Error if account not found or invalid
+   */
+  getClient(accountId: string): OAuth2Client {
+    // Validate account ID first
+    const { validateAccountId } = require('./paths.js');
+    validateAccountId(accountId);
+
+    const client = this.accounts.get(accountId);
+    if (!client) {
+      throw new Error(`Account "${accountId}" not found. Please authenticate this account first.`);
+    }
+
+    return client;
+  }
+
+  /**
+   * List all authenticated accounts with their email addresses and status
+   */
+  async listAccounts(): Promise<Array<{ id: string; email: string; status: string }>> {
+    try {
+      const multiAccountTokens = await this.loadMultiAccountTokens();
+      const accountList: Array<{ id: string; email: string; status: string }> = [];
+
+      for (const [accountId, tokens] of Object.entries(multiAccountTokens)) {
+        // Skip invalid entries
+        if (!tokens || typeof tokens !== 'object') {
+          continue;
+        }
+
+        // Get email address
+        let email = 'unknown';
+        try {
+          const client = new OAuth2Client(
+            this.oauth2Client._clientId,
+            this.oauth2Client._clientSecret,
+            this.oauth2Client.redirectUri
+          );
+          client.setCredentials(tokens);
+          email = await this.getUserEmail(client);
+        } catch (error) {
+          // Email retrieval failed, use unknown
+        }
+
+        // Determine status
+        let status = 'active';
+        if (tokens.expiry_date && tokens.expiry_date < Date.now()) {
+          status = 'expired';
+        }
+
+        accountList.push({ id: accountId, email, status });
+      }
+
+      return accountList;
+    } catch (error) {
+      return [];
+    }
+  }
+
+  /**
+   * Get user email address from OAuth2Client
+   */
+  private async getUserEmail(client: OAuth2Client): Promise<string> {
+    try {
+      const tokenInfo = await client.getTokenInfo(client.credentials.access_token || '');
+      return tokenInfo.email || 'unknown';
+    } catch (error) {
+      return 'unknown';
+    }
   }
 } 
