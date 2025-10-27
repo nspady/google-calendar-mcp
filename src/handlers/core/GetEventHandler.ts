@@ -15,20 +15,40 @@ interface GetEventArgs {
 
 export class GetEventHandler extends BaseToolHandler {
     async runTool(args: GetEventArgs, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
-        const oauth2Client = this.getClientForAccount(args.account, accounts);
         const validArgs = args;
+
+        // Smart account selection: use specified account or find account with access to calendar
+        let oauth2Client: OAuth2Client;
+        let selectedAccountId: string | undefined;
+
+        if (args.account) {
+            // User specified account - use it
+            oauth2Client = this.getClientForAccount(args.account, accounts);
+            selectedAccountId = args.account;
+        } else {
+            // No account specified - try to find account with access (prefer write access)
+            const accountSelection = await this.getAccountForCalendarWrite(validArgs.calendarId, accounts);
+            if (!accountSelection) {
+                // Fallback to first account
+                oauth2Client = accounts.values().next().value;
+                selectedAccountId = Array.from(accounts.keys())[0];
+            } else {
+                oauth2Client = accountSelection.client;
+                selectedAccountId = accountSelection.accountId;
+            }
+        }
 
         try {
             const event = await this.getEvent(oauth2Client, validArgs);
-            
+
             if (!event) {
                 throw new Error(`Event with ID '${validArgs.eventId}' not found in calendar '${validArgs.calendarId}'.`);
             }
-            
+
             const response: GetEventResponse = {
-                event: convertGoogleEventToStructured(event, validArgs.calendarId)
+                event: convertGoogleEventToStructured(event, validArgs.calendarId, selectedAccountId)
             };
-            
+
             return createStructuredResponse(response);
         } catch (error) {
             throw this.handleGoogleApiError(error);

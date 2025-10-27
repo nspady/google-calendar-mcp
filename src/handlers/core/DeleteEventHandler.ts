@@ -19,8 +19,8 @@ export class DeleteEventHandler extends BaseToolHandler {
             // No account specified - find best account with write permissions
             const accountSelection = await this.getAccountForCalendarWrite(validArgs.calendarId, accounts);
             if (!accountSelection) {
-                // Fallback to default account if CalendarRegistry doesn't find one
-                oauth2Client = this.getClientForAccount(undefined, accounts);
+                // Fallback to first account if CalendarRegistry doesn't find one
+                oauth2Client = accounts.values().next().value;
             } else {
                 oauth2Client = accountSelection.client;
             }

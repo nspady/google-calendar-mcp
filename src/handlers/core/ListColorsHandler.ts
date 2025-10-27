@@ -7,7 +7,11 @@ import { ListColorsResponse } from "../../types/structured-responses.js";
 
 export class ListColorsHandler extends BaseToolHandler {
     async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
-        const oauth2Client = this.getClientForAccount(args.account, accounts);
+        // Use specified account or default to first account
+        const oauth2Client = args.account
+            ? this.getClientForAccount(args.account, accounts)
+            : accounts.values().next().value;
+
         const colors = await this.listColors(oauth2Client);
         
         const response: ListColorsResponse = {

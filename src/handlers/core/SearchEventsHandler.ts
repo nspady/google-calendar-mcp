@@ -10,17 +10,38 @@ import { SearchEventsResponse } from "../../types/structured-responses.js";
 
 export class SearchEventsHandler extends BaseToolHandler {
     async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
-        const oauth2Client = this.getClientForAccount(args.account, accounts);
         const validArgs = args as SearchEventsInput;
+
+        // Smart account selection: use specified account or find account with access to calendar
+        let oauth2Client: OAuth2Client;
+        let selectedAccountId: string | undefined;
+
+        if (args.account) {
+            // User specified account - use it
+            oauth2Client = this.getClientForAccount(args.account, accounts);
+            selectedAccountId = args.account;
+        } else {
+            // No account specified - try to find account with access
+            const accountSelection = await this.getAccountForCalendarWrite(validArgs.calendarId, accounts);
+            if (!accountSelection) {
+                // Fallback to first account
+                oauth2Client = accounts.values().next().value;
+                selectedAccountId = Array.from(accounts.keys())[0];
+            } else {
+                oauth2Client = accountSelection.client;
+                selectedAccountId = accountSelection.accountId;
+            }
+        }
+
         const events = await this.searchEvents(oauth2Client, validArgs);
-        
+
         const response: SearchEventsResponse = {
-            events: convertEventsToStructured(events, validArgs.calendarId),
+            events: convertEventsToStructured(events, validArgs.calendarId, selectedAccountId),
             totalCount: events.length,
             query: validArgs.query,
             calendarId: validArgs.calendarId
         };
-        
+
         if (validArgs.timeMin || validArgs.timeMax) {
             const timezone = validArgs.timeZone || await this.getCalendarTimezone(oauth2Client, validArgs.calendarId);
             response.timeRange = {
@@ -28,7 +49,7 @@ export class SearchEventsHandler extends BaseToolHandler {
                 end: validArgs.timeMax ? convertToRFC3339(validArgs.timeMax, timezone) : ''
             };
         }
-        
+
         return createStructuredResponse(response);
     }
 

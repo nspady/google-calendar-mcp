@@ -1121,8 +1121,8 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
             expect(responseWithMultipleNames.calendars.length).toBe(2);
           }
 
-          // Test 4: Invalid calendar name should provide helpful error
-          // Note: MCP tools return errors as responses (with error content), not as thrown exceptions
+          // Test 4: Invalid calendar name with multi-account support
+          // With multi-account support, invalid calendar names return empty results after checking all accounts
           const result = await client.callTool({
             name: 'list-events',
             arguments: {
@@ -1132,15 +1132,18 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
             }
           });
 
-          // Extract the error message from the MCP response
-          const resultText = (result.content as any)[0]?.text || JSON.stringify(result);
-
-          // Verify it contains our resolution error message
-          expect(resultText).toContain('Calendar(s) not found');
-          expect(resultText).toContain('ThisCalendarNameDefinitelyDoesNotExist_XYZ123');
-          expect(resultText).toContain('Available calendars');
-          console.log('✅ Helpful error message provided for invalid calendar name');
-          console.log(`   Error: ${resultText.substring(0, 150)}...`);
+          // With multi-account support, non-existent calendars return empty results
+          expect(TestDataFactory.validateEventResponse(result)).toBe(true);
+          const response = JSON.parse((result.content as any)[0].text);
+          expect(response.events).toBeDefined();
+          expect(response.totalCount).toBe(0);
+          // If multiple accounts were checked, should have accounts field
+          if (response.accounts) {
+            expect(Array.isArray(response.accounts)).toBe(true);
+            console.log('✅ Invalid calendar name returns empty result after checking all accounts');
+          } else {
+            console.log('✅ Invalid calendar name returns empty result');
+          }
 
           testFactory.endTimer('list-events-calendar-name-resolution', startTime, true);
         } catch (error) {

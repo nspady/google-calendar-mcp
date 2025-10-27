@@ -11,8 +11,12 @@ import { convertToRFC3339 } from '../utils/datetime.js';
 
 export class FreeBusyEventHandler extends BaseToolHandler {
   async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
-    const oauth2Client = this.getClientForAccount(args.account, accounts);
     const validArgs = args as GetFreeBusyInput;
+
+    // For freebusy queries, use specified account or default to first account
+    const oauth2Client = args.account
+      ? this.getClientForAccount(args.account, accounts)
+      : accounts.values().next().value;
 
     if(!this.isLessThanThreeMonths(validArgs.timeMin,validArgs.timeMax)){
       throw new McpError(
