@@ -8,10 +8,12 @@ describe('CreateEventHandler Blocking Logic', () => {
   const mockOAuth2Client = {
     getAccessToken: vi.fn().mockResolvedValue({ token: 'mock-token' })
   } as unknown as OAuth2Client;
+  let mockAccounts: Map<string, OAuth2Client>;
 
   it('should show full event details when blocking due to high similarity', async () => {
     const handler = new CreateEventHandler();
-    
+    mockAccounts = new Map([['test', mockOAuth2Client]]);
+
     // Mock the conflict detection service
     const existingEvent: calendar_v3.Schema$Event = {
       id: 'existing-lunch-123',
@@ -61,7 +63,7 @@ describe('CreateEventHandler Blocking Logic', () => {
     };
 
     // Now it should throw an error instead of returning a text message
-    await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow(
+    await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
       'Duplicate event detected (100% similar). Event "Lunch with Josh" already exists. To create anyway, set allowDuplicates to true.'
     );
   });

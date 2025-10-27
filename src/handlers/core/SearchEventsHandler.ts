@@ -9,7 +9,8 @@ import { createStructuredResponse, convertEventsToStructured } from "../../utils
 import { SearchEventsResponse } from "../../types/structured-responses.js";
 
 export class SearchEventsHandler extends BaseToolHandler {
-    async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
+    async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
+        const oauth2Client = this.getClientForAccount(args.account, accounts);
         const validArgs = args as SearchEventsInput;
         const events = await this.searchEvents(oauth2Client, validArgs);
         

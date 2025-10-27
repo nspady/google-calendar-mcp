@@ -21,10 +21,13 @@ interface ListEventsArgs {
   fields?: string[];
   privateExtendedProperty?: string[];
   sharedExtendedProperty?: string[];
+  account?: string;
 }
 
 export class ListEventsHandler extends BaseToolHandler {
-    async runTool(args: ListEventsArgs, oauth2Client: OAuth2Client): Promise<CallToolResult> {
+    async runTool(args: ListEventsArgs, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
+        const oauth2Client = this.getClientForAccount(args.account, accounts);
+
         // MCP SDK has already validated the arguments against the tool schema
         const validArgs = args;
 

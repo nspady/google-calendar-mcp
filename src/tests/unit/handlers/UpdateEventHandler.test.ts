@@ -85,11 +85,13 @@ vi.mock('../../../handlers/core/RecurringEventHelpers.js', () => ({
 describe('UpdateEventHandler', () => {
   let handler: UpdateEventHandler;
   let mockOAuth2Client: OAuth2Client;
+  let mockAccounts: Map<string, OAuth2Client>;
   let mockCalendar: any;
 
   beforeEach(() => {
     handler = new UpdateEventHandler();
     mockOAuth2Client = new OAuth2Client();
+    mockAccounts = new Map([['test', mockOAuth2Client]]);
     
     // Setup mock calendar
     mockCalendar = {
@@ -129,7 +131,7 @@ describe('UpdateEventHandler', () => {
         summary: 'Updated Meeting'
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -165,7 +167,7 @@ describe('UpdateEventHandler', () => {
         location: 'Conference Room B'
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -201,7 +203,7 @@ describe('UpdateEventHandler', () => {
         timeZone: 'America/Los_Angeles'
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -239,7 +241,7 @@ describe('UpdateEventHandler', () => {
         sendUpdates: 'all' as const
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -284,7 +286,7 @@ describe('UpdateEventHandler', () => {
         }
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -325,7 +327,7 @@ describe('UpdateEventHandler', () => {
         anyoneCanAddSelf: true
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -372,7 +374,7 @@ describe('UpdateEventHandler', () => {
         }
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -415,7 +417,7 @@ describe('UpdateEventHandler', () => {
         colorId: '7'
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -459,7 +461,7 @@ describe('UpdateEventHandler', () => {
         sendUpdates: 'externalOnly' as const
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -493,7 +495,7 @@ describe('UpdateEventHandler', () => {
         attachments: []
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       const patchCall = mockCalendar.events.patch.mock.calls[0][0];
       expect(patchCall.requestBody.attachments).toEqual([]);
@@ -600,7 +602,7 @@ describe('UpdateEventHandler', () => {
         sendUpdates: 'all' as const
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -627,7 +629,7 @@ describe('UpdateEventHandler', () => {
         sendUpdates: 'externalOnly' as const
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -654,7 +656,7 @@ describe('UpdateEventHandler', () => {
         sendUpdates: 'none' as const
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -680,7 +682,7 @@ describe('UpdateEventHandler', () => {
       };
 
       // The actual error will be "Not Found" since handleGoogleApiError is not being called
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow('Not Found');
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow('Not Found');
     });
 
     it('should handle permission denied error', async () => {
@@ -696,7 +698,7 @@ describe('UpdateEventHandler', () => {
       };
 
       // Don't mock handleGoogleApiError - let the actual error pass through
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow('Forbidden');
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow('Forbidden');
     });
 
     it('should reject modification scope on non-recurring events', async () => {
@@ -710,7 +712,7 @@ describe('UpdateEventHandler', () => {
         modificationScope: 'thisEventOnly' as const
       };
 
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow(
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
         'Scope other than "all" only applies to recurring events'
       );
     });
@@ -732,7 +734,7 @@ describe('UpdateEventHandler', () => {
         throw new Error('Bad Request');
       });
 
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow('Bad Request');
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow('Bad Request');
     });
 
     it('should handle missing response data', async () => {
@@ -745,7 +747,7 @@ describe('UpdateEventHandler', () => {
         summary: 'Updated Meeting'
       };
 
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow(
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
         'Failed to update event'
       );
     });
@@ -771,7 +773,7 @@ describe('UpdateEventHandler', () => {
         // No timeZone specified
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       // Should use the mocked default timezone 'America/Los_Angeles'
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({
@@ -803,7 +805,7 @@ describe('UpdateEventHandler', () => {
         timeZone: 'UTC'
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -842,7 +844,7 @@ describe('UpdateEventHandler', () => {
         end: '2025-10-19'
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       // Verify patch was called with correct all-day format
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({
@@ -886,7 +888,7 @@ describe('UpdateEventHandler', () => {
         timeZone: 'America/Los_Angeles'
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       // Verify patch was called with correct timed format
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({
@@ -929,7 +931,7 @@ describe('UpdateEventHandler', () => {
         end: '2025-10-21'
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       // Verify patch was called with all-day format
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({
@@ -972,7 +974,7 @@ describe('UpdateEventHandler', () => {
         end: '2025-10-18T15:00:00'
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       // Verify patch was called with timed format
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({

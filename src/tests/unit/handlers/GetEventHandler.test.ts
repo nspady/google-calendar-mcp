@@ -25,11 +25,13 @@ vi.mock('../../../utils/field-mask-builder.js', () => ({
 describe('GetEventHandler', () => {
   let handler: GetEventHandler;
   let mockOAuth2Client: OAuth2Client;
+  let mockAccounts: Map<string, OAuth2Client>;
   let mockCalendar: any;
 
   beforeEach(() => {
     handler = new GetEventHandler();
     mockOAuth2Client = new OAuth2Client();
+    mockAccounts = new Map([['test', mockOAuth2Client]]);
     
     // Setup mock calendar
     mockCalendar = {
@@ -59,7 +61,7 @@ describe('GetEventHandler', () => {
         eventId: 'event123'
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.get).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -92,7 +94,7 @@ describe('GetEventHandler', () => {
         fields: ['description', 'colorId', 'attendees']
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.get).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -118,7 +120,7 @@ describe('GetEventHandler', () => {
       };
 
       // Now throws an error instead of returning a message
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow(
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
         "Event with ID 'nonexistent' not found in calendar 'primary'."
       );
     });
@@ -138,7 +140,7 @@ describe('GetEventHandler', () => {
         throw new Error('Handled API Error');
       });
 
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow('Handled API Error');
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow('Handled API Error');
     });
 
     it('should handle null event response', async () => {
@@ -150,7 +152,7 @@ describe('GetEventHandler', () => {
       };
 
       // Now throws an error instead of returning a message
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow(
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
         "Event with ID 'event123' not found in calendar 'primary'."
       );
     });
@@ -170,7 +172,7 @@ describe('GetEventHandler', () => {
         eventId: 'event123'
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.get).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -193,7 +195,7 @@ describe('GetEventHandler', () => {
         fields: ['description']
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.get).toHaveBeenCalledWith({
         calendarId: 'primary',

@@ -24,7 +24,8 @@ export class UpdateEventHandler extends BaseToolHandler {
         this.conflictDetectionService = new ConflictDetectionService();
     }
     
-    async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
+    async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
+        const oauth2Client = this.getClientForAccount(args.account, accounts);
         const validArgs = args as UpdateEventInput;
 
         // Check for conflicts if enabled

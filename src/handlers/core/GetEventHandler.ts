@@ -10,12 +10,14 @@ interface GetEventArgs {
     calendarId: string;
     eventId: string;
     fields?: string[];
+    account?: string;
 }
 
 export class GetEventHandler extends BaseToolHandler {
-    async runTool(args: GetEventArgs, oauth2Client: OAuth2Client): Promise<CallToolResult> {
+    async runTool(args: GetEventArgs, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
+        const oauth2Client = this.getClientForAccount(args.account, accounts);
         const validArgs = args;
-        
+
         try {
             const event = await this.getEvent(oauth2Client, validArgs);
             

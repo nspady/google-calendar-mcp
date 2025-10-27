@@ -26,11 +26,13 @@ describe('Calendar Name Resolution', () => {
   const mockOAuth2Client = {
     getAccessToken: vi.fn().mockResolvedValue({ token: 'mock-token' })
   } as unknown as OAuth2Client;
+  let mockAccounts: Map<string, OAuth2Client>;
 
   let handler: ListEventsHandler;
   let mockCalendar: any;
 
   beforeEach(() => {
+    mockAccounts = new Map([['test', mockOAuth2Client]]);
     handler = new ListEventsHandler();
     mockCalendar = {
       events: {
@@ -83,7 +85,7 @@ describe('Calendar Name Resolution', () => {
         timeMax: '2025-06-09T23:59:59Z'
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       // Should have called events.list with the resolved ID
       expect(mockCalendar.events.list).toHaveBeenCalledWith(
@@ -100,7 +102,7 @@ describe('Calendar Name Resolution', () => {
         timeMax: '2025-06-09T23:59:59Z'
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.list).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -116,7 +118,7 @@ describe('Calendar Name Resolution', () => {
         timeMax: '2025-06-09T23:59:59Z'
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.list).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -132,7 +134,7 @@ describe('Calendar Name Resolution', () => {
         timeMax: '2025-06-09T23:59:59Z'
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.list).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -150,7 +152,7 @@ describe('Calendar Name Resolution', () => {
         timeMax: '2025-06-09T23:59:59Z'
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.list).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -196,7 +198,7 @@ Content-Type: application/json
 --batch_boundary--`)
       });
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       // Should have called fetch with both resolved calendar IDs
       expect(global.fetch).toHaveBeenCalled();
@@ -230,7 +232,7 @@ HTTP/1.1 200 OK
 --batch_boundary--`)
       });
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       const fetchCall = vi.mocked(global.fetch).mock.calls[0];
       const requestBody = fetchCall[1]?.body as string;
@@ -250,12 +252,12 @@ HTTP/1.1 200 OK
         timeMax: '2025-06-09T23:59:59Z'
       };
 
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow(
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
         /Calendar\(s\) not found: "NonExistentCalendar"/
       );
 
       try {
-        await handler.runTool(args, mockOAuth2Client);
+        await handler.runTool(args, mockAccounts);
       } catch (error: any) {
         // Error message should show both override and original name
         expect(error.message).toContain('Work Calendar');
@@ -286,7 +288,7 @@ HTTP/1.1 200 OK
       };
 
       try {
-        await handler.runTool(args, mockOAuth2Client);
+        await handler.runTool(args, mockAccounts);
       } catch (error: any) {
         // Should not show duplicate when override equals summary
         const message = error.message;
@@ -322,7 +324,7 @@ HTTP/1.1 200 OK
 --batch_boundary--`)
       });
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       // Should NOT have called calendarList.list since all inputs are IDs
       expect(mockCalendar.calendarList.list).not.toHaveBeenCalled();
@@ -352,7 +354,7 @@ HTTP/1.1 200 OK
 --batch_boundary--`)
       });
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       // Should have called calendarList.list exactly once
       expect(mockCalendar.calendarList.list).toHaveBeenCalledTimes(1);
@@ -383,7 +385,7 @@ HTTP/1.1 200 OK
       });
 
       // Should not throw - empty string should be filtered out
-      await expect(handler.runTool(args, mockOAuth2Client)).resolves.toBeDefined();
+      await expect(handler.runTool(args, mockAccounts)).resolves.toBeDefined();
     });
 
     it('should reject when all inputs are empty/whitespace', async () => {
@@ -393,7 +395,7 @@ HTTP/1.1 200 OK
         timeMax: '2025-06-09T23:59:59Z'
       };
 
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow(
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
         /At least one valid calendar identifier is required/
       );
     });

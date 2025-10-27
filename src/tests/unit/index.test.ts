@@ -54,10 +54,12 @@ vi.mock('./auth/tokenManager.js', () => ({
 
 describe('Google Calendar MCP Server', () => {
   let mockOAuth2Client: OAuth2Client;
+  let mockAccounts: Map<string, OAuth2Client>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     mockOAuth2Client = new OAuth2Client();
+    mockAccounts = new Map([['test', mockOAuth2Client]]);
   });
 
   describe('McpServer Configuration', () => {
@@ -114,7 +116,7 @@ describe('Google Calendar MCP Server', () => {
         }
       });
 
-      const result = await handler.runTool({}, mockOAuth2Client);
+      const result = await handler.runTool({}, mockAccounts);
 
       expect(mockCalendarApi.calendarList.list).toHaveBeenCalled();
 
@@ -175,7 +177,7 @@ describe('Google Calendar MCP Server', () => {
 
       (mockCalendarApi.events.insert as any).mockResolvedValue({ data: mockApiResponse });
 
-      const result = await handler.runTool(mockEventArgs, mockOAuth2Client);
+      const result = await handler.runTool(mockEventArgs, mockAccounts);
 
       expect(mockCalendarApi.calendarList.get).toHaveBeenCalledWith({ calendarId: 'primary' });
       expect(mockCalendarApi.events.insert).toHaveBeenCalledWith({
@@ -222,7 +224,7 @@ describe('Google Calendar MCP Server', () => {
         data: { id: 'testEvent', summary: mockEventArgs.summary }
       });
 
-      await handler.runTool(mockEventArgs, mockOAuth2Client);
+      await handler.runTool(mockEventArgs, mockAccounts);
 
       // Verify that the calendar's timezone was used
       expect(mockCalendarApi.events.insert).toHaveBeenCalledWith({
@@ -258,7 +260,7 @@ describe('Google Calendar MCP Server', () => {
         data: { id: 'testEvent', summary: mockEventArgs.summary }
       });
 
-      await handler.runTool(mockEventArgs, mockOAuth2Client);
+      await handler.runTool(mockEventArgs, mockAccounts);
 
       // Verify that timezone from datetime was used (no timeZone property)
       expect(mockCalendarApi.events.insert).toHaveBeenCalledWith({
@@ -294,7 +296,7 @@ describe('Google Calendar MCP Server', () => {
         data: { items: mockEvents }
       });
 
-      const result = await handler.runTool(listEventsArgs, mockOAuth2Client);
+      const result = await handler.runTool(listEventsArgs, mockAccounts);
 
       expect(mockCalendarApi.events.list).toHaveBeenCalledWith({
         calendarId: listEventsArgs.calendarId,

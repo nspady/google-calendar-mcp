@@ -10,7 +10,7 @@ class EnhancedUpdateEventHandler {
     this.calendar = calendar;
   }
 
-  async runTool(args: any, oauth2Client: OAuth2Client): Promise<any> {
+  async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<any> {
     // This would use the enhanced schema for validation
     const event = await this.updateEventWithScope(args);
     return {
@@ -204,6 +204,7 @@ describe('UpdateEventHandler - Recurring Events', () => {
   let handler: EnhancedUpdateEventHandler;
   let mockCalendar: any;
   let mockOAuth2Client: OAuth2Client;
+  let mockAccounts: Map<string, OAuth2Client>;
 
   beforeEach(() => {
     mockCalendar = {
@@ -215,6 +216,7 @@ describe('UpdateEventHandler - Recurring Events', () => {
     };
     handler = new EnhancedUpdateEventHandler(mockCalendar);
     mockOAuth2Client = {} as OAuth2Client;
+    mockAccounts = new Map([['test', mockOAuth2Client]]);
   });
 
   describe('updateEventWithScope', () => {
@@ -704,7 +706,7 @@ describe('UpdateEventHandler - Recurring Events', () => {
         summary: 'Updated Meeting'
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       expect(result).toEqual({
         content: [{

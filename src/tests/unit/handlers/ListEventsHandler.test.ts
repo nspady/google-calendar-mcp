@@ -22,11 +22,13 @@ describe('ListEventsHandler JSON String Handling', () => {
   const mockOAuth2Client = {
     getAccessToken: vi.fn().mockResolvedValue({ token: 'mock-token' })
   } as unknown as OAuth2Client;
-  
+  let mockAccounts: Map<string, OAuth2Client>;
+
   const handler = new ListEventsHandler();
   let mockCalendar: any;
 
   beforeEach(() => {
+    mockAccounts = new Map([['test', mockOAuth2Client]]);
     mockCalendar = {
       events: {
         list: vi.fn().mockResolvedValue({
@@ -83,7 +85,7 @@ Content-Type: application/json
       timeMax: '2025-06-09T23:59:59Z'
     };
 
-    const result = await handler.runTool(args, mockOAuth2Client);
+    const result = await handler.runTool(args, mockAccounts);
     expect(result.content).toHaveLength(1);
     expect(result.content[0].type).toBe('text');
     const response = JSON.parse((result.content[0] as any).text);
@@ -98,7 +100,7 @@ Content-Type: application/json
       timeMax: '2025-06-09T23:59:59Z'
     };
 
-    const result = await handler.runTool(args, mockOAuth2Client);
+    const result = await handler.runTool(args, mockAccounts);
     expect(result.content).toHaveLength(1);
     expect(result.content[0].type).toBe('text');
     const response = JSON.parse((result.content[0] as any).text);
@@ -121,7 +123,7 @@ Content-Type: application/json
       processedArgs.calendarId = JSON.parse(args.calendarId);
     }
 
-    const result = await handler.runTool(processedArgs, mockOAuth2Client);
+    const result = await handler.runTool(processedArgs, mockAccounts);
     expect(result.content).toHaveLength(1);
     expect(result.content[0].type).toBe('text');
     const response = JSON.parse((result.content[0] as any).text);
@@ -134,11 +136,13 @@ Content-Type: application/json
 describe('ListEventsHandler - Timezone Handling', () => {
   let handler: ListEventsHandler;
   let mockOAuth2Client: OAuth2Client;
+  let mockAccounts: Map<string, OAuth2Client>;
   let mockCalendar: any;
 
   beforeEach(() => {
     handler = new ListEventsHandler();
     mockOAuth2Client = {} as OAuth2Client;
+    mockAccounts = new Map([['test', mockOAuth2Client]]);
     mockCalendar = {
       events: {
         list: vi.fn()
@@ -238,7 +242,7 @@ describe('ListEventsHandler - Timezone Handling', () => {
         timeZone: 'America/Los_Angeles'
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       // Verify that the calendar.events.list was called with correctly converted times
       expect(mockCalendar.events.list).toHaveBeenCalledWith({
@@ -258,7 +262,7 @@ describe('ListEventsHandler - Timezone Handling', () => {
         timeZone: 'America/New_York' // Different timezone, should be ignored
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       // Verify that the original timezone-aware times are preserved
       expect(mockCalendar.events.list).toHaveBeenCalledWith({
@@ -283,7 +287,7 @@ describe('ListEventsHandler - Timezone Handling', () => {
         // No timeZone parameter
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       // Verify that the calendar's timezone is used for conversion
       expect(mockCalendar.events.list).toHaveBeenCalledWith({
@@ -303,7 +307,7 @@ describe('ListEventsHandler - Timezone Handling', () => {
         timeZone: 'UTC'
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       // Verify that UTC times are handled correctly
       expect(mockCalendar.events.list).toHaveBeenCalledWith({

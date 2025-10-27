@@ -359,8 +359,8 @@ export class TokenManager {
       for (const [accountId, tokens] of Object.entries(multiAccountTokens)) {
         // Validate account ID
         try {
-          const pathsModule = await import('./paths.js');
-          pathsModule.validateAccountId(accountId);
+          const { validateAccountId } = await import('./paths.js') as any;
+          validateAccountId(accountId);
 
           // Skip invalid token entries
           if (!tokens || typeof tokens !== 'object' || !tokens.access_token) {

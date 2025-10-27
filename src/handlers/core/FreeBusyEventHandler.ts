@@ -10,7 +10,8 @@ import { ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { convertToRFC3339 } from '../utils/datetime.js';
 
 export class FreeBusyEventHandler extends BaseToolHandler {
-  async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
+  async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
+    const oauth2Client = this.getClientForAccount(args.account, accounts);
     const validArgs = args as GetFreeBusyInput;
 
     if(!this.isLessThanThreeMonths(validArgs.timeMin,validArgs.timeMax)){
