@@ -60,11 +60,17 @@ const sharedExtendedPropertySchema = z
     "Filter by shared extended properties (key=value). Matches events that have all specified properties."
   );
 
-const accountSchema = z.string()
-  .regex(/^[a-z0-9_-]{1,64}$/, "Account ID must be 1-64 characters: lowercase letters, numbers, dashes, underscores only")
+const accountSchema = z.union([
+  z.string()
+    .regex(/^[a-z0-9_-]{1,64}$/, "Account ID must be 1-64 characters: lowercase letters, numbers, dashes, underscores only"),
+  z.array(z.string()
+    .regex(/^[a-z0-9_-]{1,64}$/, "Account ID must be 1-64 characters: lowercase letters, numbers, dashes, underscores only"))
+    .min(1, "At least one account ID is required")
+    .max(10, "Maximum 10 accounts allowed per request")
+])
   .optional()
   .describe(
-    "Account ID to use for this operation (e.g., 'work', 'personal'). Optional when only one account is authenticated. Required when multiple accounts are available. Use list-accounts to see available accounts."
+    "Account ID(s) to use for this operation. Single account: 'work'. Multiple accounts: ['work', 'personal']. Optional when only one account is authenticated. For queries (list-events), multiple accounts will merge results. For mutations (create-event), only single account allowed. Use list-accounts to see available accounts."
   );
 
 // Define all tool schemas with TypeScript inference

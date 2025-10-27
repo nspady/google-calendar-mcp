@@ -153,22 +153,33 @@ describe('Provider-Specific Schema Compatibility', () => {
       expect(types).toContain('array');
     });
 
-    it('should ensure all other tools do NOT use anyOf/oneOf/allOf', () => {
+    it('should ensure all other tools do NOT use anyOf/oneOf/allOf (except for account parameter)', () => {
       const tools = ToolRegistry.getToolsWithSchemas();
       const problematicFeatures = ['oneOf', 'anyOf', 'allOf', 'not'];
       const issues: string[] = [];
 
       for (const tool of tools) {
-        // Skip list-events - it's explicitly allowed to use anyOf
+        // Skip list-events - it's explicitly allowed to use anyOf for calendarId
         if (tool.name === 'list-events') {
           continue;
         }
 
-        const schemaStr = JSON.stringify(tool.inputSchema);
+        const schema = tool.inputSchema as JSONSchemaObject;
 
-        for (const feature of problematicFeatures) {
-          if (schemaStr.includes(`"${feature}"`)) {
-            issues.push(`Tool "${tool.name}" contains problematic feature: ${feature}`);
+        // Check each property for problematic features
+        if (schema.properties) {
+          for (const [propName, propSchema] of Object.entries(schema.properties)) {
+            // Skip account parameter - it's allowed to use anyOf for string | string[]
+            if (propName === 'account') {
+              continue;
+            }
+
+            const propStr = JSON.stringify(propSchema);
+            for (const feature of problematicFeatures) {
+              if (propStr.includes(`"${feature}"`)) {
+                issues.push(`Tool "${tool.name}" property "${propName}" contains problematic feature: ${feature}`);
+              }
+            }
           }
         }
       }

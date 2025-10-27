@@ -4,9 +4,12 @@ import { OAuth2Client } from "google-auth-library";
 import { GaxiosError } from 'gaxios';
 import { calendar_v3, google } from "googleapis";
 import { getCredentialsProjectId } from "../../auth/utils.js";
+import { CalendarRegistry } from "../../services/CalendarRegistry.js";
 
 
 export abstract class BaseToolHandler<TArgs = any> {
+    protected calendarRegistry: CalendarRegistry = new CalendarRegistry();
+
     abstract runTool(args: TArgs, accounts: Map<string, OAuth2Client>): Promise<CallToolResult>;
 
     /**
@@ -70,6 +73,111 @@ export abstract class BaseToolHandler<TArgs = any> {
             ErrorCode.InvalidRequest,
             `Multiple accounts available (${availableAccounts}). You must specify the 'account' parameter to indicate which account to use.`
         );
+    }
+
+    /**
+     * Get multiple OAuth2Clients for multi-account operations (e.g., list-events across accounts)
+     * @param accountIds Account ID(s) - string, string[], or undefined
+     * @param accounts Map of available accounts
+     * @returns Map of accountId to OAuth2Client for the specified accounts
+     * @throws McpError if any account is invalid or not found
+     */
+    protected getClientsForAccounts(
+        accountIds: string | string[] | undefined,
+        accounts: Map<string, OAuth2Client>
+    ): Map<string, OAuth2Client> {
+        // No accounts available
+        if (accounts.size === 0) {
+            throw new McpError(
+                ErrorCode.InvalidRequest,
+                'No authenticated accounts available. Please run authentication first.'
+            );
+        }
+
+        // Normalize to array
+        const ids = this.normalizeAccountIds(accountIds);
+
+        // If no specific accounts requested, use all available accounts
+        if (ids.length === 0) {
+            if (accounts.size === 1) {
+                // Single account - use it
+                return accounts;
+            }
+            // Multiple accounts - return all
+            return accounts;
+        }
+
+        // Validate and retrieve specified accounts
+        const { validateAccountId } = require('../../auth/paths.js');
+        const result = new Map<string, OAuth2Client>();
+
+        for (const id of ids) {
+            try {
+                validateAccountId(id);
+            } catch (error) {
+                throw new McpError(
+                    ErrorCode.InvalidRequest,
+                    error instanceof Error ? error.message : 'Invalid account ID'
+                );
+            }
+
+            const client = accounts.get(id);
+            if (!client) {
+                const availableAccounts = Array.from(accounts.keys()).join(', ');
+                throw new McpError(
+                    ErrorCode.InvalidRequest,
+                    `Account "${id}" not found. Available accounts: ${availableAccounts}`
+                );
+            }
+
+            result.set(id, client);
+        }
+
+        return result;
+    }
+
+    /**
+     * Get the best account to use for writing to a specific calendar
+     * Uses CalendarRegistry to find account with highest permissions
+     * @param calendarId Calendar ID
+     * @param accounts All available accounts
+     * @returns Account ID and client for the calendar, or null if no write access
+     */
+    protected async getAccountForCalendarWrite(
+        calendarId: string,
+        accounts: Map<string, OAuth2Client>
+    ): Promise<{ accountId: string; client: OAuth2Client } | null> {
+        const result = await this.calendarRegistry.getAccountForCalendar(
+            calendarId,
+            accounts,
+            'write'
+        );
+
+        if (!result) {
+            return null;
+        }
+
+        const client = accounts.get(result.accountId);
+        if (!client) {
+            return null;
+        }
+
+        return {
+            accountId: result.accountId,
+            client
+        };
+    }
+
+    /**
+     * Normalize account parameter to array of account IDs
+     * @param accountIds string, string[], or undefined
+     * @returns Array of account IDs (empty array if undefined)
+     */
+    protected normalizeAccountIds(accountIds: string | string[] | undefined): string[] {
+        if (!accountIds) {
+            return [];
+        }
+        return Array.isArray(accountIds) ? accountIds : [accountIds];
     }
 
     protected handleGoogleApiError(error: unknown): never {
