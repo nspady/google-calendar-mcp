@@ -115,7 +115,15 @@ export class HttpTransportHandler {
       // Serve Account Management UI
       if (req.method === 'GET' && (req.url === '/' || req.url === '/accounts')) {
         try {
-          const htmlPath = path.join(__dirname, '..', 'web', 'accounts.html');
+          // Try build location first, then source location
+          let htmlPath = path.join(__dirname, 'web', 'accounts.html'); // build location
+          try {
+            await fs.access(htmlPath);
+          } catch {
+            // Build location doesn't exist, try source location
+            htmlPath = path.join(__dirname, '..', 'web', 'accounts.html');
+          }
+
           const html = await fs.readFile(htmlPath, 'utf-8');
           res.writeHead(200, { 'Content-Type': 'text/html' });
           res.end(html);
