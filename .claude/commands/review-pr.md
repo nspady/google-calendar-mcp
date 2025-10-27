@@ -35,13 +35,26 @@ Verify:
 
 ## Output Format
 
-Provide succinct findings:
+**CRITICAL: BE EXTREMELY CONCISE. MAX 300 WORDS TOTAL.**
+
+Audience: Senior engineers with limited time.
+
+**DO NOT:**
+- Create analysis files or documentation
+- Write verbose explanations
+- Provide code examples unless critical
+- List obvious issues
+
+**DO:**
+- Provide file:line references
+- Focus on blocking issues only
+- Give specific, actionable fixes
 
 **MCP Compliance:** ✅/⚠️/❌ [one-line summary]
 **Calendar API:** ✅/⚠️/❌ [one-line summary]
 **Test Coverage:** ✅/⚠️/❌ [coverage % + critical gaps]
 
-**Critical Issues:** [numbered list, max 3]
-**Recommendations:** [numbered list, max 3]
+**Critical Issues:** [numbered list, max 3, with file:line]
+**Recommendations:** [numbered list, max 3, specific fixes]
 
 **Approval Status:** APPROVE / REQUEST CHANGES / BLOCK

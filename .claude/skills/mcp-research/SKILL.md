@@ -81,23 +81,32 @@ WebSearch("MCP consent workflow implementation 2025")
 
 ## Output Format
 
-### Code Review
+**BE EXTREMELY CONCISE.** Senior engineers with limited time.
+
+**MAX 400 words.** Focus on critical issues only:
+- Protocol violations (file:line)
+- Security gaps (specific CVE/exploit)
+- 3 max actionable fixes
+
+### Code Review Template
 ```
-## MCP Compliance Findings
-- Protocol: [JSON-RPC 2.0 compliance status]
-- Security: [Consent/privacy assessment]
-- Issues: [Specific problems with fix recommendations]
-- Testing: [How to validate]
+**Protocol:** [compliant/non-compliant + critical issue]
+**Security:** [ok/issue + specific vulnerability]
+**Critical Fixes:** [1-3 items max, file:line references]
 ```
 
-### Feature Planning
+### Feature Planning Template
 ```
-## MCP Implementation Plan
-- Approach: [Tool/resource/prompt + pattern]
-- Requirements: [Protocol requirements + constraints]
-- Security: [Consent/privacy needs]
-- Complexity: [Implementation estimate]
+**Approach:** [tool/resource/prompt]
+**Requirements:** [1-2 critical constraints]
+**Security:** [specific consent/privacy needs]
 ```
+
+**DO NOT:**
+- Write long explanations
+- Create documentation files
+- Provide code examples (unless critical fix)
+- Explain basic MCP concepts
 
 ## Success Criteria
 

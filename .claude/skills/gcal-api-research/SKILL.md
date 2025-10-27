@@ -177,44 +177,31 @@ Synthesize findings to validate the implementation:
 
 ### Step 6: Provide Actionable Findings
 
-Structure findings in a clear, actionable format:
+**BE EXTREMELY CONCISE.** Senior engineers with limited time.
+
+**MAX 500 words.** Focus on critical issues only.
 
 **For PR Reviews:**
 ```
-## API Research Findings
-
-### Implementation Approach
-[Assessment of whether the API methods and patterns are appropriate]
-
-### Edge Cases to Consider
-[List specific edge cases from research with recommendations]
-
-### Suggested Improvements
-[Specific code changes or additional handling needed]
-
-### Testing Recommendations
-[What scenarios should be tested, including edge cases]
+**Approach:** [correct API method? yes/no]
+**Critical Edge Cases:** [3-5 max, file:line refs]
+**Fixes:** [specific changes needed, file:line]
+**Tests:** [3-5 specific test cases needed]
 ```
 
 **For Feature Planning:**
 ```
-## Google Calendar API Research
-
-### Recommended Approach
-[Specific API methods and patterns to use]
-
-### Required Functionality
-[API features needed and their limitations]
-
-### Edge Cases to Handle
-[Known pitfalls that must be addressed]
-
-### Good Defaults with Flexibility
-[Suggested parameter defaults that work for most cases while supporting advanced usage]
-
-### Implementation Complexity
-[Estimated complexity and any API limitations to be aware of]
+**API Method:** [which method + why]
+**Critical Edges:** [3-5 pitfalls to handle]
+**Complexity:** [low/med/high + 1 reason]
 ```
+
+**DO NOT:**
+- Write long explanations
+- Create documentation files
+- Explain Google Calendar basics
+- Provide code examples (unless critical fix)
+- List obvious edge cases
 
 ## Critical Focus Areas
 
