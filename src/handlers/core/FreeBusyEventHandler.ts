@@ -20,11 +20,17 @@ export class FreeBusyEventHandler extends BaseToolHandler {
     const result = await this.queryFreeBusy(oauth2Client, validArgs);
     const summaryText = this.generateAvailabilitySummary(result);
 
+    // CRITICAL FIX: Return BOTH structured JSON data AND text summary
+    // This allows machine parsing (scheduling agent) while keeping human readability
     return {
       content: [{
         type: "text",
-        text: summaryText,
-      }]
+        text: JSON.stringify(result),  // Return structured JSON for machine parsing
+      }],
+      // Also include the text summary in a metadata field for human readability
+      _meta: {
+        summary: summaryText
+      }
     };
   }
 
