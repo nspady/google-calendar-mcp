@@ -51,7 +51,9 @@ export const DEFAULT_EVENT_FIELDS: AllowedEventField[] = [
   'status',
   'htmlLink',
   'location',
-  'attendees'
+  'attendees',
+  'reminders',
+  'recurrence'
 ];
 
 /**
