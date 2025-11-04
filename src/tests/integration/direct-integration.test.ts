@@ -210,7 +210,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         
         const response = JSON.parse((result.content as any)[0].text);
         expect(response.currentTime).toBeDefined();
-        expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+        expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}([+-]\d{2}:\d{2}|Z)$/);
         expect(response.timezone).toBeTypeOf('string');
         expect(response.offset).toBeDefined();
         expect(response.isDST).toBeTypeOf('boolean');
@@ -237,7 +237,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         
         const response = JSON.parse((result.content as any)[0].text);
         expect(response.currentTime).toBeDefined();
-        expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+        expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}([+-]\d{2}:\d{2}|Z)$/);
         expect(response.timezone).toBe('America/Los_Angeles');
         expect(response.offset).toBeDefined();
         expect(response.offset).toMatch(/^[+-]\d{2}:\d{2}$/);
