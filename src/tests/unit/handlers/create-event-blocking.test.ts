@@ -14,6 +14,12 @@ describe('CreateEventHandler Blocking Logic', () => {
     const handler = new CreateEventHandler();
     mockAccounts = new Map([['test', mockOAuth2Client]]);
 
+    // Mock getAccountForCalendarWrite to return the test account
+    vi.spyOn(handler as any, 'getAccountForCalendarWrite').mockResolvedValue({
+      accountId: 'test',
+      client: mockOAuth2Client
+    });
+
     // Mock the conflict detection service
     const existingEvent: calendar_v3.Schema$Event = {
       id: 'existing-lunch-123',

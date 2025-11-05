@@ -211,6 +211,7 @@ describe('Google Calendar MCP Server', () => {
         summary: 'Meeting without timezone',
         start: '2024-08-15T10:00:00', // Timezone-naive datetime
         end: '2024-08-15T11:00:00', // Timezone-naive datetime
+        account: 'test',
       };
 
       // Mock calendar details with specific timezone
@@ -247,6 +248,7 @@ describe('Google Calendar MCP Server', () => {
         summary: 'Meeting with timezone in datetime',
         start: '2024-08-15T10:00:00-07:00', // Timezone-aware datetime
         end: '2024-08-15T11:00:00-07:00', // Timezone-aware datetime
+        account: 'test',
       };
 
       // Mock calendar details (should not be used since timezone is in datetime)

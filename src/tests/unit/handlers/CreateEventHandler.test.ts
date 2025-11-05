@@ -44,19 +44,25 @@ describe('CreateEventHandler', () => {
     handler = new CreateEventHandler();
     mockOAuth2Client = new OAuth2Client();
     mockAccounts = new Map([['test', mockOAuth2Client]]);
-    
+
     // Setup mock calendar
     mockCalendar = {
       events: {
         insert: vi.fn()
       }
     };
-    
+
     // Mock the getCalendar method
     vi.spyOn(handler as any, 'getCalendar').mockReturnValue(mockCalendar);
-    
+
     // Mock getCalendarTimezone
     vi.spyOn(handler as any, 'getCalendarTimezone').mockResolvedValue('America/Los_Angeles');
+
+    // Mock getAccountForCalendarWrite to return the test account
+    vi.spyOn(handler as any, 'getAccountForCalendarWrite').mockResolvedValue({
+      accountId: 'test',
+      client: mockOAuth2Client
+    });
   });
 
   describe('Basic Event Creation', () => {

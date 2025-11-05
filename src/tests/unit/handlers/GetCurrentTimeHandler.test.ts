@@ -21,7 +21,8 @@ describe('GetCurrentTimeHandler', () => {
       
       const response = JSON.parse(result.content[0].text as string);
       expect(response.currentTime).toBeDefined();
-      expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+      // After PR #127, returns time in requested timezone with offset, not UTC
+      expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$/);
       expect(response.timezone).toBe('America/Los_Angeles');
       expect(response.offset).toBeDefined();
       expect(response.isDST).toBeTypeOf('boolean');
@@ -37,7 +38,8 @@ describe('GetCurrentTimeHandler', () => {
       
       const response = JSON.parse(result.content[0].text as string);
       expect(response.currentTime).toBeDefined();
-      expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+      // After PR #127, returns time in requested timezone with offset, not UTC
+      expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$/);
       expect(response.timezone).toBe('America/New_York');
       expect(response.offset).toBeDefined();
       expect(response.isDST).toBeTypeOf('boolean');
@@ -117,7 +119,8 @@ describe('GetCurrentTimeHandler', () => {
       expect(response).toHaveProperty('timezone');
       expect(response).toHaveProperty('offset');
       expect(response).toHaveProperty('isDST');
-      expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+      // After PR #127, returns time in requested timezone with offset, not UTC
+      expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$/);
       expect(response.timezone).toBe('America/Los_Angeles');
       expect(response.isDST).toBeTypeOf('boolean');
       spy.mockRestore();
