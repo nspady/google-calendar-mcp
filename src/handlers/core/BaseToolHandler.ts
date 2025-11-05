@@ -5,6 +5,7 @@ import { GaxiosError } from 'gaxios';
 import { calendar_v3, google } from "googleapis";
 import { getCredentialsProjectId } from "../../auth/utils.js";
 import { CalendarRegistry } from "../../services/CalendarRegistry.js";
+import { validateAccountId } from "../../auth/paths.js";
 
 
 export abstract class BaseToolHandler<TArgs = any> {
@@ -31,7 +32,6 @@ export abstract class BaseToolHandler<TArgs = any> {
         // Account ID specified - validate and retrieve
         if (accountId) {
             // Validate account ID format
-            const { validateAccountId } = require('../../auth/paths.js');
             try {
                 validateAccountId(accountId);
             } catch (error) {
@@ -108,7 +108,6 @@ export abstract class BaseToolHandler<TArgs = any> {
         }
 
         // Validate and retrieve specified accounts
-        const { validateAccountId } = require('../../auth/paths.js');
         const result = new Map<string, OAuth2Client>();
 
         for (const id of ids) {

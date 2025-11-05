@@ -16,11 +16,24 @@ export class TokenManager {
   private tokenPath: string;
   private accountMode: string;
   private accounts: Map<string, OAuth2Client> = new Map();
+  private credentials: {
+    clientId: string;
+    clientSecret: string;
+    redirectUri: string;
+  };
 
   constructor(oauth2Client: OAuth2Client) {
     this.oauth2Client = oauth2Client;
     this.tokenPath = getSecureTokenPath();
     this.accountMode = getAccountMode();
+
+    // Store credentials to avoid accessing private properties later
+    this.credentials = {
+      clientId: (oauth2Client as any)._clientId,
+      clientSecret: (oauth2Client as any)._clientSecret,
+      redirectUri: (oauth2Client as any)._redirectUri
+    };
+
     this.setupTokenRefresh();
   }
 
@@ -81,33 +94,41 @@ export class TokenManager {
   }
 
   private setupTokenRefresh(): void {
-    this.oauth2Client.on("tokens", async (newTokens) => {
+    this.setupTokenRefreshForAccount(this.oauth2Client, this.accountMode);
+  }
+
+  /**
+   * Set up token refresh handler for a specific account
+   * This ensures that when tokens are refreshed, they are saved to the correct account in the token file
+   */
+  private setupTokenRefreshForAccount(client: OAuth2Client, accountId: string): void {
+    client.on("tokens", async (newTokens) => {
       try {
         const multiAccountTokens = await this.loadMultiAccountTokens();
-        const currentTokens = multiAccountTokens[this.accountMode] || {};
-        
+        const currentTokens = multiAccountTokens[accountId] || {};
+
         const updatedTokens = {
           ...currentTokens,
           ...newTokens,
           refresh_token: newTokens.refresh_token || currentTokens.refresh_token,
         };
-        
-        multiAccountTokens[this.accountMode] = updatedTokens;
+
+        multiAccountTokens[accountId] = updatedTokens;
         await this.saveMultiAccountTokens(multiAccountTokens);
-        
+
         if (process.env.NODE_ENV !== 'test') {
-          process.stderr.write(`Tokens updated and saved for ${this.accountMode} account\n`);
+          process.stderr.write(`Tokens updated and saved for ${accountId} account\n`);
         }
       } catch (error: unknown) {
         // Handle case where file might not exist yet
-        if (error instanceof Error && 'code' in error && error.code === 'ENOENT') { 
+        if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
           try {
             const multiAccountTokens: MultiAccountTokens = {
-              [this.accountMode]: newTokens
+              [accountId]: newTokens
             };
             await this.saveMultiAccountTokens(multiAccountTokens);
             if (process.env.NODE_ENV !== 'test') {
-              process.stderr.write(`New tokens saved for ${this.accountMode} account\n`);
+              process.stderr.write(`New tokens saved for ${accountId} account\n`);
             }
           } catch (writeError) {
             process.stderr.write("Error saving initial tokens: ");
@@ -350,12 +371,27 @@ export class TokenManager {
   /**
    * Load all authenticated accounts from token file
    * Returns a Map of account ID to OAuth2Client
+   *
+   * Reuses existing OAuth2Client instances to prevent memory leaks
+   * Sets up token refresh handlers for new accounts
    */
   async loadAllAccounts(): Promise<Map<string, OAuth2Client>> {
     try {
       const multiAccountTokens = await this.loadMultiAccountTokens();
-      this.accounts.clear();
 
+      // Remove accounts that no longer exist in token file
+      for (const accountId of this.accounts.keys()) {
+        if (!multiAccountTokens[accountId]) {
+          const client = this.accounts.get(accountId);
+          if (client) {
+            // Clean up event listeners before removing
+            client.removeAllListeners('tokens');
+          }
+          this.accounts.delete(accountId);
+        }
+      }
+
+      // Add or update accounts
       for (const [accountId, tokens] of Object.entries(multiAccountTokens)) {
         // Validate account ID
         try {
@@ -367,16 +403,26 @@ export class TokenManager {
             continue;
           }
 
-          // Create a new OAuth2Client for this account
-          // Use public properties to construct client
-          const client = new OAuth2Client(
-            (this.oauth2Client as any)._clientId,
-            (this.oauth2Client as any)._clientSecret,
-            (this.oauth2Client as any)._redirectUri
-          );
+          // Check if we already have a client for this account (reuse it to prevent memory leak)
+          let client = this.accounts.get(accountId);
+
+          if (!client) {
+            // Create a new OAuth2Client for this account using stored credentials
+            client = new OAuth2Client(
+              this.credentials.clientId,
+              this.credentials.clientSecret,
+              this.credentials.redirectUri
+            );
+
+            // Set up token refresh handler for this new client
+            this.setupTokenRefreshForAccount(client, accountId);
+
+            this.accounts.set(accountId, client);
+          }
+
+          // Update credentials (for both new and existing clients)
           client.setCredentials(tokens);
 
-          this.accounts.set(accountId, client);
         } catch (error) {
           // Skip invalid account IDs
           if (process.env.NODE_ENV !== 'test') {

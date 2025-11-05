@@ -1,4 +1,4 @@
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult, McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { DeleteEventInput } from "../../tools/registry.js";
@@ -19,11 +19,15 @@ export class DeleteEventHandler extends BaseToolHandler {
             // No account specified - find best account with write permissions
             const accountSelection = await this.getAccountForCalendarWrite(validArgs.calendarId, accounts);
             if (!accountSelection) {
-                // Fallback to first account if CalendarRegistry doesn't find one
-                oauth2Client = accounts.values().next().value;
-            } else {
-                oauth2Client = accountSelection.client;
+                const availableAccounts = Array.from(accounts.keys()).join(', ');
+                throw new McpError(
+                    ErrorCode.InvalidRequest,
+                    `No account has write access to calendar "${validArgs.calendarId}". ` +
+                    `Available accounts: ${availableAccounts}. Please ensure the calendar exists and ` +
+                    `you have the necessary permissions, or specify the 'account' parameter explicitly.`
+                );
             }
+            oauth2Client = accountSelection.client;
         }
 
         await this.deleteEvent(oauth2Client, validArgs);

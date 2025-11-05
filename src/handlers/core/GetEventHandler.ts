@@ -1,4 +1,4 @@
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult, McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
@@ -29,13 +29,16 @@ export class GetEventHandler extends BaseToolHandler {
             // No account specified - try to find account with access (prefer write access)
             const accountSelection = await this.getAccountForCalendarWrite(validArgs.calendarId, accounts);
             if (!accountSelection) {
-                // Fallback to first account
-                oauth2Client = accounts.values().next().value;
-                selectedAccountId = Array.from(accounts.keys())[0];
-            } else {
-                oauth2Client = accountSelection.client;
-                selectedAccountId = accountSelection.accountId;
+                const availableAccounts = Array.from(accounts.keys()).join(', ');
+                throw new McpError(
+                    ErrorCode.InvalidRequest,
+                    `No account has access to calendar "${validArgs.calendarId}". ` +
+                    `Available accounts: ${availableAccounts}. Please ensure the calendar exists and ` +
+                    `you have the necessary permissions, or specify the 'account' parameter explicitly.`
+                );
             }
+            oauth2Client = accountSelection.client;
+            selectedAccountId = accountSelection.accountId;
         }
 
         try {

@@ -160,6 +160,7 @@ describe('Google Calendar MCP Server', () => {
         end: '2024-08-15T11:00:00',
         attendees: [{ email: 'test@example.com' }],
         location: 'Conference Room 4',
+        account: 'test',
       };
 
       const mockApiResponse = {
