@@ -47,8 +47,26 @@ export class GetCurrentTimeHandler extends BaseToolHandler {
         return createStructuredResponse(response);
     }
 
+    /**
+     * Formats a Date object as an ISO 8601 string in a specific timezone with offset.
+     *
+     * This method uses Intl.DateTimeFormat to extract date/time components in the target
+     * timezone and constructs an ISO string with the timezone offset appended.
+     *
+     * @param date - The Date object to format
+     * @param timeZone - IANA timezone identifier (e.g., 'America/Los_Angeles', 'UTC')
+     * @returns ISO 8601 string with timezone offset (e.g., '2025-11-04T14:30:00.123-08:00' or '2025-11-04T14:30:00.123Z')
+     *
+     * @example
+     * formatISOInZone(new Date('2025-11-04T22:30:00.000Z'), 'America/Los_Angeles')
+     * // Returns: '2025-11-04T14:30:00.000-08:00'
+     *
+     * @example
+     * formatISOInZone(new Date('2025-11-04T14:30:00.000Z'), 'UTC')
+     * // Returns: '2025-11-04T14:30:00.000Z'
+     */
     private formatISOInZone(date: Date, timeZone: string): string {
-        const parts = new Intl.DateTimeFormat('en-CA', {
+        const parts = new Intl.DateTimeFormat('sv-SE', {
             timeZone,
             year: 'numeric',
             month: '2-digit',
@@ -86,30 +104,7 @@ export class GetCurrentTimeHandler extends BaseToolHandler {
             return false;
         }
     }
-    
-    private formatDateInTimeZone(date: Date, timeZone: string): string {
-        const offset = this.getTimezoneOffset(date, timeZone);
-        // Remove milliseconds from ISO string for proper RFC3339 format
-        const isoString = date.toISOString().replace(/\.\d{3}Z$/, '');
-        return isoString + offset;
-    }
-    
-    private formatHumanReadable(date: Date, timeZone: string): string {
-        const formatter = new Intl.DateTimeFormat('en-US', {
-            timeZone: timeZone,
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            timeZoneName: 'long'
-        });
-        
-        return formatter.format(date);
-    }
-    
+
     private getTimezoneOffset(_date: Date, timeZone: string): string {
         try {
             const offsetMinutes = this.getTimezoneOffsetMinutes(timeZone);

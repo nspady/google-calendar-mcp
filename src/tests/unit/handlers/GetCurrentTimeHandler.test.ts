@@ -20,7 +20,7 @@ describe('GetCurrentTimeHandler', () => {
       
       const response = JSON.parse(result.content[0].text as string);
       expect(response.currentTime).toBeDefined();
-      expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+      expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}([+-]\d{2}:\d{2}|Z)$/);
       expect(response.timezone).toBe('America/Los_Angeles');
       expect(response.offset).toBeDefined();
       expect(response.isDST).toBeTypeOf('boolean');
@@ -36,7 +36,7 @@ describe('GetCurrentTimeHandler', () => {
       
       const response = JSON.parse(result.content[0].text as string);
       expect(response.currentTime).toBeDefined();
-      expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+      expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}([+-]\d{2}:\d{2}|Z)$/);
       expect(response.timezone).toBe('America/New_York');
       expect(response.offset).toBeDefined();
       expect(response.isDST).toBeTypeOf('boolean');
@@ -116,7 +116,7 @@ describe('GetCurrentTimeHandler', () => {
       expect(response).toHaveProperty('timezone');
       expect(response).toHaveProperty('offset');
       expect(response).toHaveProperty('isDST');
-      expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+      expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}([+-]\d{2}:\d{2}|Z)$/);
       expect(response.timezone).toBe('America/Los_Angeles');
       expect(response.isDST).toBeTypeOf('boolean');
       spy.mockRestore();
@@ -131,7 +131,7 @@ describe('GetCurrentTimeHandler', () => {
       expect(response).toHaveProperty('timezone');
       expect(response).toHaveProperty('offset');
       expect(response).toHaveProperty('isDST');
-      expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+      expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}([+-]\d{2}:\d{2}|Z)$/);
       expect(response.timezone).toBe('UTC');
       expect(response.offset).toBe('Z');
       expect(response.isDST).toBe(false);
@@ -142,8 +142,8 @@ describe('GetCurrentTimeHandler', () => {
       const result = await handler.runTool({ timeZone: 'UTC' }, mockOAuth2Client);
       const response = JSON.parse(result.content[0].text as string);
 
-      // Should match ISO8601 pattern
-      expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+      // Should match ISO8601 pattern with timezone offset
+      expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}([+-]\d{2}:\d{2}|Z)$/);
       // Offset should be in the format +HH:MM, -HH:MM, or Z
       expect(response.offset).toMatch(/^([+-]\d{2}:\d{2}|Z)$/);
     });
