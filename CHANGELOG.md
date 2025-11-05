@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.0.7](https://github.com/nspady/google-calendar-mcp/compare/v2.0.6...v2.0.7) (2025-11-05)
+
+
+### Bug Fixes
+
+* add reminders and recurrence to default event fields ([#128](https://github.com/nspady/google-calendar-mcp/issues/128)) ([#130](https://github.com/nspady/google-calendar-mcp/issues/130)) ([5b32b9b](https://github.com/nspady/google-calendar-mcp/commit/5b32b9b6f30866c9382bbbea578c457a06ac6d3f))
+* return currentTime in requested timezone, not UTC ([#127](https://github.com/nspady/google-calendar-mcp/issues/127)) ([63f7aed](https://github.com/nspady/google-calendar-mcp/commit/63f7aed9f7725c90de858e1b75fa9a59d6f3c77f))
+
 ## [2.0.6](https://github.com/nspady/google-calendar-mcp/compare/v2.0.5...v2.0.6) (2025-10-22)
 
 
