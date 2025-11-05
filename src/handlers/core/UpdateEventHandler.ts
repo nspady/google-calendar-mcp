@@ -1,4 +1,4 @@
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult, McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { UpdateEventInput } from "../../tools/registry.js";
 import { BaseToolHandler } from "./BaseToolHandler.js";
@@ -24,8 +24,32 @@ export class UpdateEventHandler extends BaseToolHandler {
         this.conflictDetectionService = new ConflictDetectionService();
     }
     
-    async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
+    async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
         const validArgs = args as UpdateEventInput;
+
+        // Smart account selection: use specified account or find best account with write permissions
+        let oauth2Client: OAuth2Client;
+        let selectedAccountId: string | undefined;
+
+        if (args.account) {
+            // User specified account - use it
+            oauth2Client = this.getClientForAccount(args.account, accounts);
+            selectedAccountId = args.account;
+        } else {
+            // No account specified - find best account with write permissions
+            const accountSelection = await this.getAccountForCalendarWrite(validArgs.calendarId, accounts);
+            if (!accountSelection) {
+                const availableAccounts = Array.from(accounts.keys()).join(', ');
+                throw new McpError(
+                    ErrorCode.InvalidRequest,
+                    `No account has write access to calendar "${validArgs.calendarId}". ` +
+                    `Available accounts: ${availableAccounts}. Please ensure the calendar exists and ` +
+                    `you have the necessary permissions, or specify the 'account' parameter explicitly.`
+                );
+            }
+            oauth2Client = accountSelection.client;
+            selectedAccountId = accountSelection.accountId;
+        }
 
         // Check for conflicts if enabled
         let conflicts = null;
@@ -71,7 +95,7 @@ export class UpdateEventHandler extends BaseToolHandler {
 
         // Create structured response
         const response: UpdateEventResponse = {
-            event: convertGoogleEventToStructured(event, validArgs.calendarId)
+            event: convertGoogleEventToStructured(event, validArgs.calendarId, selectedAccountId)
         };
         
         // Add conflict information if present

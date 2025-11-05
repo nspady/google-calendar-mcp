@@ -6,24 +6,31 @@ import { TestDataFactory, TestEvent } from './test-data-factory.js';
 
 /**
  * Comprehensive Integration Tests for Google Calendar MCP
- * 
+ *
  * REQUIREMENTS TO RUN THESE TESTS:
  * 1. Valid Google OAuth credentials file at path specified by GOOGLE_OAUTH_CREDENTIALS env var
  * 2. Authenticated test account: Run `npm run dev auth:test` first
  * 3. TEST_CALENDAR_ID environment variable set to a real Google Calendar ID
  * 4. Network access to Google Calendar API
- * 
+ *
  * These tests exercise all MCP tools against a real test calendar and will:
  * - Create, modify, and delete real calendar events
  * - Make actual API calls to Google Calendar
  * - Require valid authentication tokens
- * 
+ *
  * Test Strategy:
  * 1. Create test events first
  * 2. Test read operations (list, search, freebusy)
  * 3. Test write operations (update)
  * 4. Clean up by deleting created events
  * 5. Track performance metrics throughout
+ *
+ * MULTI-ACCOUNT SUPPORT:
+ * - These integration tests focus on single-account scenarios
+ * - Multi-account functionality (account parameter, CalendarRegistry, smart account selection)
+ *   is thoroughly tested in unit tests (see multi-account.test.ts, CalendarRegistry.test.ts)
+ * - All tools support the optional 'account' parameter for multi-account scenarios
+ * - When account is not specified, tools use smart account selection (via CalendarRegistry)
  */
 
 describe('Google Calendar MCP - Direct Integration Tests', () => {
@@ -232,9 +239,9 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         });
         
         testFactory.endTimer('get-current-time-with-timezone', startTime, true);
-        
+
         expect(TestDataFactory.validateEventResponse(result)).toBe(true);
-        
+
         const response = JSON.parse((result.content as any)[0].text);
         expect(response.currentTime).toBeDefined();
         expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}([+-]\d{2}:\d{2}|Z)$/);
@@ -1114,8 +1121,8 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
             expect(responseWithMultipleNames.calendars.length).toBe(2);
           }
 
-          // Test 4: Invalid calendar name should provide helpful error
-          // Note: MCP tools return errors as responses (with error content), not as thrown exceptions
+          // Test 4: Invalid calendar name with multi-account support
+          // With multi-account support, invalid calendar names should throw an error
           const result = await client.callTool({
             name: 'list-events',
             arguments: {
@@ -1125,15 +1132,12 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
             }
           });
 
-          // Extract the error message from the MCP response
-          const resultText = (result.content as any)[0]?.text || JSON.stringify(result);
-
-          // Verify it contains our resolution error message
-          expect(resultText).toContain('Calendar(s) not found');
-          expect(resultText).toContain('ThisCalendarNameDefinitelyDoesNotExist_XYZ123');
-          expect(resultText).toContain('Available calendars');
-          console.log('✅ Helpful error message provided for invalid calendar name');
-          console.log(`   Error: ${resultText.substring(0, 150)}...`);
+          // Invalid calendar names should result in an error
+          expect(result.isError).toBe(true);
+          const errorText = (result.content as any)[0].text;
+          expect(errorText).toContain('MCP error');
+          expect(errorText).toContain('ThisCalendarNameDefinitelyDoesNotExist_XYZ123');
+          console.log('✅ Invalid calendar name throws appropriate error');
 
           testFactory.endTimer('list-events-calendar-name-resolution', startTime, true);
         } catch (error) {

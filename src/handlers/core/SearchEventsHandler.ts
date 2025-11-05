@@ -1,4 +1,4 @@
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult, McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { SearchEventsInput } from "../../tools/registry.js";
 import { BaseToolHandler } from "./BaseToolHandler.js";
@@ -9,17 +9,42 @@ import { createStructuredResponse, convertEventsToStructured } from "../../utils
 import { SearchEventsResponse } from "../../types/structured-responses.js";
 
 export class SearchEventsHandler extends BaseToolHandler {
-    async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
+    async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
         const validArgs = args as SearchEventsInput;
+
+        // Smart account selection: use specified account or find account with access to calendar
+        let oauth2Client: OAuth2Client;
+        let selectedAccountId: string | undefined;
+
+        if (args.account) {
+            // User specified account - use it
+            oauth2Client = this.getClientForAccount(args.account, accounts);
+            selectedAccountId = args.account;
+        } else {
+            // No account specified - try to find account with access
+            const accountSelection = await this.getAccountForCalendarWrite(validArgs.calendarId, accounts);
+            if (!accountSelection) {
+                const availableAccounts = Array.from(accounts.keys()).join(', ');
+                throw new McpError(
+                    ErrorCode.InvalidRequest,
+                    `No account has access to calendar "${validArgs.calendarId}". ` +
+                    `Available accounts: ${availableAccounts}. Please ensure the calendar exists and ` +
+                    `you have the necessary permissions, or specify the 'account' parameter explicitly.`
+                );
+            }
+            oauth2Client = accountSelection.client;
+            selectedAccountId = accountSelection.accountId;
+        }
+
         const events = await this.searchEvents(oauth2Client, validArgs);
-        
+
         const response: SearchEventsResponse = {
-            events: convertEventsToStructured(events, validArgs.calendarId),
+            events: convertEventsToStructured(events, validArgs.calendarId, selectedAccountId),
             totalCount: events.length,
             query: validArgs.query,
             calendarId: validArgs.calendarId
         };
-        
+
         if (validArgs.timeMin || validArgs.timeMax) {
             const timezone = validArgs.timeZone || await this.getCalendarTimezone(oauth2Client, validArgs.calendarId);
             response.timeRange = {
@@ -27,7 +52,7 @@ export class SearchEventsHandler extends BaseToolHandler {
                 end: validArgs.timeMax ? convertToRFC3339(validArgs.timeMax, timezone) : ''
             };
         }
-        
+
         return createStructuredResponse(response);
     }
 

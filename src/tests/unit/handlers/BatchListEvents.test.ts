@@ -31,6 +31,7 @@ interface ExtendedEvent extends calendar_v3.Schema$Event {
 
 describe('Batch List Events Functionality', () => {
   let mockOAuth2Client: OAuth2Client;
+  let mockAccounts: Map<string, OAuth2Client>;
   let listEventsHandler: ListEventsHandler;
   let mockCalendarApi: any;
 
@@ -40,6 +41,7 @@ describe('Batch List Events Functionality', () => {
 
     // Create mock OAuth2Client
     mockOAuth2Client = new OAuth2Client();
+    mockAccounts = new Map([['test', mockOAuth2Client]]);
     
     // Create mock calendar API
     mockCalendarApi = {
@@ -177,7 +179,7 @@ describe('Batch List Events Functionality', () => {
       };
 
       // Act
-      const result = await listEventsHandler.runTool(args, mockOAuth2Client);
+      const result = await listEventsHandler.runTool(args, mockAccounts);
 
       // Assert
       expect(mockCalendarApi.events.list).toHaveBeenCalledWith({
@@ -208,7 +210,7 @@ describe('Batch List Events Functionality', () => {
       };
 
       // Act
-      const result = await listEventsHandler.runTool(args, mockOAuth2Client);
+      const result = await listEventsHandler.runTool(args, mockAccounts);
 
       // Assert - no events means empty array in JSON
       expect(result.content).toHaveLength(1);
@@ -568,7 +570,7 @@ describe('Batch List Events Functionality', () => {
         timeMin: '2024-01-01T00:00:00Z'
       };
 
-      await expect(listEventsHandler.runTool(args, mockOAuth2Client))
+      await expect(listEventsHandler.runTool(args, mockAccounts))
         .rejects.toThrow('Authentication required');
     });
 
@@ -657,7 +659,7 @@ describe('Batch List Events Functionality', () => {
         data: { items: mockEvents }
       });
 
-      const result = await listEventsHandler.runTool(args, mockOAuth2Client);
+      const result = await listEventsHandler.runTool(args, mockAccounts);
 
       // Should call regular API, not batch
       expect(mockCalendarApi.events.list).toHaveBeenCalledWith({

@@ -1,4 +1,4 @@
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult, McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { DeleteEventInput } from "../../tools/registry.js";
@@ -6,8 +6,30 @@ import { DeleteEventResponse } from "../../types/structured-responses.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
 
 export class DeleteEventHandler extends BaseToolHandler {
-    async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
+    async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
         const validArgs = args as DeleteEventInput;
+
+        // Smart account selection: use specified account or find best account with write permissions
+        let oauth2Client: OAuth2Client;
+
+        if (args.account) {
+            // User specified account - use it
+            oauth2Client = this.getClientForAccount(args.account, accounts);
+        } else {
+            // No account specified - find best account with write permissions
+            const accountSelection = await this.getAccountForCalendarWrite(validArgs.calendarId, accounts);
+            if (!accountSelection) {
+                const availableAccounts = Array.from(accounts.keys()).join(', ');
+                throw new McpError(
+                    ErrorCode.InvalidRequest,
+                    `No account has write access to calendar "${validArgs.calendarId}". ` +
+                    `Available accounts: ${availableAccounts}. Please ensure the calendar exists and ` +
+                    `you have the necessary permissions, or specify the 'account' parameter explicitly.`
+                );
+            }
+            oauth2Client = accountSelection.client;
+        }
+
         await this.deleteEvent(oauth2Client, validArgs);
 
         const response: DeleteEventResponse = {

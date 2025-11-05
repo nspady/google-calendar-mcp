@@ -13,9 +13,10 @@ function getProjectRoot(): string {
   return path.resolve(projectRoot); // Ensure absolute path
 }
 
-// Get the current account mode (normal or test) - delegates to shared implementation
-export function getAccountMode(): 'normal' | 'test' {
-  return getSharedAccountMode() as 'normal' | 'test';
+// Get the current account mode - delegates to shared implementation
+// Now supports arbitrary account IDs instead of just 'normal' and 'test'
+export function getAccountMode(): string {
+  return getSharedAccountMode();
 }
 
 // Helper to detect if we're running in a test environment
