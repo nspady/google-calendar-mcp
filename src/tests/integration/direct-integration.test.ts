@@ -217,7 +217,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         
         const response = JSON.parse((result.content as any)[0].text);
         expect(response.currentTime).toBeDefined();
-        expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+        expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$/);
         expect(response.timezone).toBeTypeOf('string');
         expect(response.offset).toBeDefined();
         expect(response.isDST).toBeTypeOf('boolean');
@@ -239,12 +239,12 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         });
         
         testFactory.endTimer('get-current-time-with-timezone', startTime, true);
-        
+
         expect(TestDataFactory.validateEventResponse(result)).toBe(true);
-        
+
         const response = JSON.parse((result.content as any)[0].text);
         expect(response.currentTime).toBeDefined();
-        expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+        expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$/);
         expect(response.timezone).toBe('America/Los_Angeles');
         expect(response.offset).toBeDefined();
         expect(response.offset).toMatch(/^[+-]\d{2}:\d{2}$/);
@@ -1122,7 +1122,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           }
 
           // Test 4: Invalid calendar name with multi-account support
-          // With multi-account support, invalid calendar names return empty results after checking all accounts
+          // With multi-account support, invalid calendar names should throw an error
           const result = await client.callTool({
             name: 'list-events',
             arguments: {
@@ -1132,18 +1132,12 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
             }
           });
 
-          // With multi-account support, non-existent calendars return empty results
-          expect(TestDataFactory.validateEventResponse(result)).toBe(true);
-          const response = JSON.parse((result.content as any)[0].text);
-          expect(response.events).toBeDefined();
-          expect(response.totalCount).toBe(0);
-          // If multiple accounts were checked, should have accounts field
-          if (response.accounts) {
-            expect(Array.isArray(response.accounts)).toBe(true);
-            console.log('✅ Invalid calendar name returns empty result after checking all accounts');
-          } else {
-            console.log('✅ Invalid calendar name returns empty result');
-          }
+          // Invalid calendar names should result in an error
+          expect(result.isError).toBe(true);
+          const errorText = (result.content as any)[0].text;
+          expect(errorText).toContain('MCP error');
+          expect(errorText).toContain('ThisCalendarNameDefinitelyDoesNotExist_XYZ123');
+          console.log('✅ Invalid calendar name throws appropriate error');
 
           testFactory.endTimer('list-events-calendar-name-resolution', startTime, true);
         } catch (error) {
