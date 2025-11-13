@@ -27,11 +27,13 @@ export function getLegacyTokenPath() {
 /**
  * Get current account mode from environment
  * Uses same logic as utils.ts but compatible with both JS and TS
+ * Now supports arbitrary account IDs instead of just 'normal' and 'test'
  */
 export function getAccountMode() {
   // If set explicitly via environment variable use that instead
   const explicitMode = process.env.GOOGLE_ACCOUNT_MODE?.toLowerCase();
-  if (explicitMode === 'test' || explicitMode === 'normal') {
+  if (explicitMode) {
+    // Allow any account ID, not just 'normal' and 'test'
     return explicitMode;
   }
   
