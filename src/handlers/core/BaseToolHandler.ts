@@ -146,10 +146,24 @@ export abstract class BaseToolHandler<TArgs = any> {
         calendarId: string,
         accounts: Map<string, OAuth2Client>
     ): Promise<{ accountId: string; client: OAuth2Client } | null> {
+        return this.getAccountForCalendarAccess(calendarId, accounts, 'write');
+    }
+
+    /**
+     * Get the best account for a calendar depending on operation type
+     * @param calendarId Calendar ID
+     * @param accounts Available accounts
+     * @param operation 'read' or 'write'
+     */
+    protected async getAccountForCalendarAccess(
+        calendarId: string,
+        accounts: Map<string, OAuth2Client>,
+        operation: 'read' | 'write'
+    ): Promise<{ accountId: string; client: OAuth2Client } | null> {
         const result = await this.calendarRegistry.getAccountForCalendar(
             calendarId,
             accounts,
-            'write'
+            operation
         );
 
         if (!result) {

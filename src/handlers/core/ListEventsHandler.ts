@@ -29,6 +29,7 @@ export class ListEventsHandler extends BaseToolHandler {
     async runTool(args: ListEventsArgs, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
         // Get clients for specified accounts (supports single or multiple)
         const selectedAccounts = this.getClientsForAccounts(args.account, accounts);
+        const partialFailures: Array<{ accountId: string; reason: string }> = [];
 
         // MCP SDK has already validated the arguments against the tool schema
         const validArgs = args;
@@ -65,6 +66,12 @@ export class ListEventsHandler extends BaseToolHandler {
                     if (selectedAccounts.size === 1) {
                         throw error;
                     }
+                    const reason = error instanceof Error ? error.message : String(error);
+                    partialFailures.push({
+                        accountId,
+                        reason
+                    });
+                    process.stderr.write(`Warning: Failed to load events for account "${accountId}": ${reason}\n`);
                     // For multi-account, continue with other accounts
                     return { accountId, calendarIds: [], events: [] };
                 }
@@ -86,11 +93,18 @@ export class ListEventsHandler extends BaseToolHandler {
         const structuredEvents: StructuredEvent[] = allEvents.map(event =>
             convertGoogleEventToStructured(event, event.calendarId, event.accountId)
         );
+        const warnings: string[] = [];
+
+        if (partialFailures.length > 0) {
+            warnings.push(`Some accounts failed to return events: ${partialFailures.map(failure => `${failure.accountId}`).join(', ')}`);
+        }
 
         const response: ListEventsResponse = {
             events: structuredEvents,
             totalCount: allEvents.length,
             calendars: allQueriedCalendarIds.length > 1 ? allQueriedCalendarIds : undefined,
+            ...(partialFailures.length > 0 && { partialFailures }),
+            ...(warnings.length > 0 && { warnings }),
             ...(selectedAccounts.size > 1 && {
                 accounts: Array.from(selectedAccounts.keys()),
                 note: `Showing merged events from ${selectedAccounts.size} account(s), sorted chronologically`

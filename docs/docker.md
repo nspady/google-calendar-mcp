@@ -28,6 +28,9 @@ docker compose exec calendar-mcp npm run auth
 # Note: This step only needs to be done once unless the app is in testing mode
 # in which case the tokens expire after 7 days 
 
+# 5. Manage accounts from your browser
+# Visit http://localhost:3000/accounts to add, re-authenticate, or remove accounts
+
 # 5. Add to Claude Desktop config (see stdio Mode section below)
 ```
 

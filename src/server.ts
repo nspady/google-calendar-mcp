@@ -41,10 +41,6 @@ export class GoogleCalendarMcpServer {
 
     // 2. Load all authenticated accounts
     this.accounts = await this.tokenManager.loadAllAccounts();
-    if (this.accounts.size > 0) {
-      const accountList = Array.from(this.accounts.keys()).join(', ');
-      process.stderr.write(`Loaded ${this.accounts.size} account(s): ${accountList}\n`);
-    }
 
     // 3. Handle startup authentication based on transport type
     await this.handleStartupAuthentication();
@@ -61,6 +57,13 @@ export class GoogleCalendarMcpServer {
     if (process.env.NODE_ENV === 'test') {
       return;
     }
+
+    this.accounts = await this.tokenManager.loadAllAccounts();
+    if (this.accounts.size > 0) {
+      const accountList = Array.from(this.accounts.keys()).join(', ');
+      process.stderr.write(`Valid tokens found for account(s): ${accountList}\n`);
+      return;
+    }
     
     const accountMode = this.tokenManager.getAccountMode();
     
@@ -75,8 +78,10 @@ export class GoogleCalendarMcpServer {
           process.exit(1);
         }
         process.stderr.write(`Successfully authenticated user.\n`);
+        this.accounts = await this.tokenManager.loadAllAccounts();
       } else {
         process.stderr.write(`Valid ${accountMode} user tokens found, skipping authentication prompt.\n`);
+        this.accounts = await this.tokenManager.loadAllAccounts();
       }
     } else {
       // For HTTP mode, check for tokens but don't block startup
@@ -86,6 +91,7 @@ export class GoogleCalendarMcpServer {
         process.stderr.write('Visit the server URL in your browser to authenticate, or run "npm run auth" separately.\n');
       } else {
         process.stderr.write(`Valid ${accountMode} user tokens found.\n`);
+        this.accounts = await this.tokenManager.loadAllAccounts();
       }
     }
   }
@@ -95,9 +101,19 @@ export class GoogleCalendarMcpServer {
   }
 
   private async ensureAuthenticated(): Promise<void> {
+    const availableAccounts = await this.tokenManager.loadAllAccounts();
+    if (availableAccounts.size > 0) {
+      this.accounts = availableAccounts;
+      return;
+    }
+
     // Check if we already have valid tokens
     if (await this.tokenManager.validateTokens()) {
-      return;
+      const refreshedAccounts = await this.tokenManager.loadAllAccounts();
+      if (refreshedAccounts.size > 0) {
+        this.accounts = refreshedAccounts;
+        return;
+      }
     }
 
     // For stdio mode, authentication should have been handled at startup
@@ -131,9 +147,6 @@ export class GoogleCalendarMcpServer {
 
   private async executeWithHandler(handler: any, args: any): Promise<{ content: Array<{ type: "text"; text: string }> }> {
     await this.ensureAuthenticated();
-
-    // Reload accounts in case new ones were added during runtime
-    this.accounts = await this.tokenManager.loadAllAccounts();
 
     const result = await handler.runTool(args, this.accounts);
     return result;

@@ -22,7 +22,7 @@ export class SearchEventsHandler extends BaseToolHandler {
             selectedAccountId = args.account;
         } else {
             // No account specified - try to find account with access
-            const accountSelection = await this.getAccountForCalendarWrite(validArgs.calendarId, accounts);
+            const accountSelection = await this.getAccountForCalendarAccess(validArgs.calendarId, accounts, 'read');
             if (!accountSelection) {
                 const availableAccounts = Array.from(accounts.keys()).join(', ');
                 throw new McpError(

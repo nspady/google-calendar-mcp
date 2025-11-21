@@ -51,8 +51,8 @@ describe('SearchEventsHandler', () => {
     // Mock the getCalendar method
     vi.spyOn(handler as any, 'getCalendar').mockReturnValue(mockCalendar);
 
-    // Mock getAccountForCalendarWrite to return the test account
-    vi.spyOn(handler as any, 'getAccountForCalendarWrite').mockResolvedValue({
+    // Mock getAccountForCalendarAccess to return the test account
+    vi.spyOn(handler as any, 'getAccountForCalendarAccess').mockResolvedValue({
       accountId: 'test',
       client: mockOAuth2Client
     });
@@ -352,8 +352,8 @@ describe('SearchEventsHandler', () => {
 
   describe('Multi-Account Handling', () => {
     it('should throw error when no account has access', async () => {
-      // Mock getAccountForCalendarWrite to return null (no access)
-      vi.spyOn(handler as any, 'getAccountForCalendarWrite').mockResolvedValue(null);
+      // Mock getAccountForCalendarAccess to return null (no access)
+      vi.spyOn(handler as any, 'getAccountForCalendarAccess').mockResolvedValue(null);
 
       const args = {
         calendarId: 'primary',

@@ -1,6 +1,13 @@
 import { initializeOAuth2Client } from './auth/client.js';
 import { AuthServer } from './auth/server.js';
 
+// Check for command line arguments
+const args = process.argv.slice(2);
+if (args.length > 0) {
+  // Assume the first argument is the account mode
+  process.env.GOOGLE_ACCOUNT_MODE = args[0];
+}
+
 async function runAuthServer() {
   let authServer: AuthServer | null = null; // Keep reference for cleanup
   try {

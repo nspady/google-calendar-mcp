@@ -21,6 +21,7 @@ export class TokenManager {
     clientSecret: string;
     redirectUri: string;
   };
+  private writeQueue: Promise<void> = Promise.resolve();
 
   constructor(oauth2Client: OAuth2Client) {
     this.oauth2Client = oauth2Client;
@@ -87,10 +88,27 @@ export class TokenManager {
   }
 
   private async saveMultiAccountTokens(multiAccountTokens: MultiAccountTokens): Promise<void> {
-    await this.ensureTokenDirectoryExists();
-    await fs.writeFile(this.tokenPath, JSON.stringify(multiAccountTokens, null, 2), {
-      mode: 0o600,
+    return this.enqueueTokenWrite(async () => {
+      await this.ensureTokenDirectoryExists();
+      await fs.writeFile(this.tokenPath, JSON.stringify(multiAccountTokens, null, 2), {
+        mode: 0o600,
+      });
     });
+  }
+
+  private enqueueTokenWrite(operation: () => Promise<void>): Promise<void> {
+    const pendingWrite = this.writeQueue
+      .catch(() => undefined)
+      .then(operation);
+
+    this.writeQueue = pendingWrite
+      .catch(error => {
+        process.stderr.write(`Error writing token file: ${error instanceof Error ? error.message : error}\n`);
+        throw error;
+      })
+      .catch(() => undefined);
+
+    return pendingWrite;
   }
 
   private setupTokenRefresh(): void {

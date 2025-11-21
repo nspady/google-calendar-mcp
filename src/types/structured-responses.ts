@@ -177,6 +177,13 @@ export interface ListEventsResponse {
   events: StructuredEvent[];
   totalCount: number;
   calendars?: string[];
+  accounts?: string[];
+  note?: string;
+  warnings?: string[];
+  partialFailures?: Array<{
+    accountId: string;
+    reason: string;
+  }>;
 }
 
 /**
@@ -257,6 +264,11 @@ export interface CalendarInfo {
   conferenceProperties?: {
     allowedConferenceSolutionTypes?: string[];
   };
+  accountAccess?: Array<{
+    accountId: string;
+    accessRole: string;
+    primary: boolean;
+  }>;
 }
 
 /**
@@ -265,6 +277,7 @@ export interface CalendarInfo {
 export interface ListCalendarsResponse {
   calendars: CalendarInfo[];
   totalCount: number;
+  note?: string;
 }
 
 /**

@@ -139,7 +139,7 @@ npm run test:integration
 
 | Variable | Purpose | Default | Notes |
 |----------|---------|---------|-------|
-| `GOOGLE_ACCOUNT_MODE` | Account mode | `normal` | Use `test` for testing |
+| `GOOGLE_ACCOUNT_MODE` | Default account ID for auth flows | `normal` | Set to any lowercase account ID (e.g., `work`, `personal`) before running `npm run auth` |
 | `DEBUG_LLM_INTERACTIONS` | Debug logging | `false` | Set `true` for verbose LLM logs |
 | `ANTHROPIC_MODEL` | Claude model | `claude-3-5-haiku-20241022` | Must support MCP |
 | `OPENAI_MODEL` | OpenAI model | `gpt-4o-mini` | Must support function calling |
@@ -166,6 +166,8 @@ DEBUG_LLM_INTERACTIONS=false
 ANTHROPIC_MODEL=claude-3-5-haiku-20241022
 OPENAI_MODEL=gpt-4o-mini
 ```
+
+> **Tip:** You can authenticate multiple test accounts by running `GOOGLE_ACCOUNT_MODE=<accountId> npm run auth` for each ID. All tokens share the same storage file, so integration tests can switch accounts simply by passing the desired `account` parameter to the tool under test.
 
 2. **Obtain Google OAuth Credentials:**
    - Go to [Google Cloud Console](https://console.cloud.google.com)

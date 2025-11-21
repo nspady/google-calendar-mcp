@@ -43,8 +43,8 @@ describe('GetEventHandler', () => {
     // Mock the getCalendar method
     vi.spyOn(handler as any, 'getCalendar').mockReturnValue(mockCalendar);
 
-    // Mock getAccountForCalendarWrite to return the test account
-    vi.spyOn(handler as any, 'getAccountForCalendarWrite').mockResolvedValue({
+    // Mock getAccountForCalendarAccess to return the test account
+    vi.spyOn(handler as any, 'getAccountForCalendarAccess').mockResolvedValue({
       accountId: 'test',
       client: mockOAuth2Client
     });

@@ -4,35 +4,59 @@ This guide covers advanced features and use cases for the Google Calendar MCP Se
 
 ## Multi-Account Support
 
-The server supports managing multiple Google accounts (e.g., personal and a test calendar).
+The server allows you to connect multiple Google accounts simultaneously (e.g., personal, work, family) and interact with all of them seamlessly.
 
-### Setup Multiple Accounts
+### Add or Remove Accounts
 
-```bash
-# Authenticate normal account
-npm run auth
+| Workflow | How to Add Accounts |
+|----------|---------------------|
+| **CLI / stdio** | `GOOGLE_ACCOUNT_MODE=work npm run auth` or `node scripts/account-manager.js auth work` |
+| **HTTP / Docker** | Visit `http://localhost:3000/accounts` for the built-in account manager UI |
 
-# Authenticate test account
-npm run auth:test
-
-# Check status
-npm run account:status
-```
-
-### Account Management Commands
+Helpful CLI commands:
 
 ```bash
-npm run account:clear:normal    # Clear normal account tokens
-npm run account:clear:test      # Clear test account tokens
-npm run account:migrate         # Migrate from old token format
+# List stored accounts + token status
+node scripts/account-manager.js list
+
+# Clear a single account
+node scripts/account-manager.js clear work
 ```
 
-### Using Multiple Accounts
+### Using Accounts with Tools
 
-The server intelligently determines which account to use:
-- Normal operations use your primary account
-- Integration tests automatically use the test account
-- Accounts are isolated and secure
+- All handlers accept an optional `account` parameter (`string` or `string[]`).
+- If omitted:
+  - Read operations (`list-events`, `list-calendars`, `search-events`) will merge data from every authenticated account.
+  - Write operations pick the account that has the highest permission level on the target calendar.
+
+```javascript
+// Query across every authenticated account
+use_tool("list-events", {
+  timeMin: "2025-02-01T00:00:00",
+  timeMax: "2025-02-01T23:59:59"
+});
+
+// Restrict to specific accounts
+use_tool("list-events", {
+  account: ["work", "personal"],
+  timeMin: "2025-02-01T00:00:00",
+  timeMax: "2025-02-01T23:59:59"
+});
+
+// Explicitly pick an account for writes
+use_tool("create-event", {
+  calendarId: "team@company.com",
+  summary: "Status update",
+  account: "work",
+  start: "...",
+  end: "..."
+});
+```
+
+### Calendar Deduplication
+
+The Calendar Registry collects calendars from every account, de-duplicates shared calendars, and tracks the best account to use for read/write operations. Responses include `accountAccess` arrays so you can see every account that can reach a given calendar.
 
 ## Batch Operations
 
@@ -189,10 +213,10 @@ The server only requests necessary permissions:
 
 ### Token Security
 
-- Tokens encrypted at rest
-- Automatic token refresh
-- Secure credential storage
-- No tokens in logs or debug output
+- Tokens stored locally with owner-only permissions (`0600`) in `~/.config/google-calendar-mcp/tokens.json`
+- Automatic token refresh with durable multi-account storage
+- Credentials never leave your machine (no remote storage)
+- No tokens are written to logs or emitted over stdout/stderr
 
 ## Debugging
 

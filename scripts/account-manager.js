@@ -147,21 +147,28 @@ async function listAccounts() {
   }
 }
 
-async function authenticateAccount(accountMode) {
-  if (!['normal', 'test'].includes(accountMode)) {
-    error('Account mode must be "normal" or "test"');
+async function authenticateAccount(accountId) {
+  // Validate account ID format (same as src/auth/paths.js)
+  if (!/^[a-z0-9_-]{1,64}$/.test(accountId)) {
+    error('Invalid account ID. Must be 1-64 characters: lowercase letters, numbers, dashes, underscores only.');
     process.exit(1);
   }
   
-  log(`\n🔐 Authenticating ${colorize('cyan', accountMode)} account...`);
+  const isReserved = ['.', '..', 'con', 'prn', 'aux', 'nul', 'com1', 'com2', 'com3', 'com4', 'lpt1', 'lpt2', 'lpt3'].includes(accountId);
+  if (isReserved) {
+    error(`Account ID "${accountId}" is reserved and cannot be used.`);
+    process.exit(1);
+  }
+  
+  log(`\n🔐 Authenticating ${colorize('cyan', accountId)} account...`);
   
   try {
     await runCommand('npm', ['run', 'auth'], {
-      GOOGLE_ACCOUNT_MODE: accountMode
+      GOOGLE_ACCOUNT_MODE: accountId
     });
-    success(`Successfully authenticated ${accountMode} account!`);
+    success(`Successfully authenticated ${accountId} account!`);
   } catch (error) {
-    error(`Failed to authenticate ${accountMode} account: ${error.message}`);
+    error(`Failed to authenticate ${accountId} account: ${error.message}`);
     process.exit(1);
   }
 }
@@ -195,23 +202,24 @@ async function showStatus() {
   }
 }
 
-async function clearAccount(accountMode) {
-  if (!['normal', 'test'].includes(accountMode)) {
-    error('Account mode must be "normal" or "test"');
+async function clearAccount(accountId) {
+  // Validate account ID format
+  if (!/^[a-z0-9_-]{1,64}$/.test(accountId)) {
+    error('Invalid account ID. Must be 1-64 characters: lowercase letters, numbers, dashes, underscores only.');
     process.exit(1);
   }
   
-  log(`\n🗑️  Clearing ${colorize('cyan', accountMode)} account tokens...`);
+  log(`\n🗑️  Clearing ${colorize('cyan', accountId)} account tokens...`);
   
   try {
     const tokens = await loadTokens();
     
-    if (!tokens[accountMode]) {
-      warning(`No tokens found for ${accountMode} account`);
+    if (!tokens[accountId]) {
+      warning(`No tokens found for ${accountId} account`);
       return;
     }
     
-    delete tokens[accountMode];
+    delete tokens[accountId];
     
     const tokenPath = getSecureTokenPath();
     
@@ -244,22 +252,22 @@ async function runTests() {
 
 function showUsage() {
   log('\n' + colorize('bright', 'Google Calendar Account Manager'));
-  log('\nManage OAuth tokens for multiple Google accounts (normal & test)');
+  log('\nManage OAuth tokens for multiple Google accounts');
   log('\n' + colorize('bright', 'Usage:'));
   log('  node scripts/account-manager.js <command> [args]');
   log('\n' + colorize('bright', 'Commands:'));
   log('  list                    List available accounts and their status');
-  log('  auth <normal|test>      Authenticate the specified account');
+  log('  auth <account_id>       Authenticate the specified account (e.g., work, personal)');
   log('  status                  Show current account status and configuration');
-  log('  clear <normal|test>     Clear tokens for the specified account');
+  log('  clear <account_id>      Clear tokens for the specified account');
   log('  test                    Run integration tests with test account');
   log('  help                    Show this help message');
   log('\n' + colorize('bright', 'Examples:'));
-  log('  node scripts/account-manager.js auth test     # Authenticate test account');
-  log('  node scripts/account-manager.js test          # Run tests with test account');
+  log('  node scripts/account-manager.js auth work     # Authenticate work account');
+  log('  node scripts/account-manager.js auth personal # Authenticate personal account');
   log('  node scripts/account-manager.js status        # Check account status');
   log('\n' + colorize('bright', 'Environment Variables:'));
-  log('  GOOGLE_ACCOUNT_MODE     Set to "test" or "normal" (default: normal)');
+  log('  GOOGLE_ACCOUNT_MODE     Set to account ID (default: normal)');
   log('  TEST_CALENDAR_ID        Calendar ID to use for testing');
   log('  INVITEE_1, INVITEE_2    Email addresses for testing invitations');
   log('  CLAUDE_API_KEY          API key for Claude integration tests');
