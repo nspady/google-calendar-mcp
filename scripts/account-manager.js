@@ -2,18 +2,17 @@
 
 /**
  * Account Manager Script
- * 
- * This script helps manage OAuth tokens for multiple Google accounts:
- * - Normal account: For regular operations
- * - Test account: For integration testing
- * 
+ *
+ * This script helps manage OAuth tokens for multiple Google accounts.
+ * Supports arbitrary account IDs (e.g., "work", "personal", "family", "test").
+ * Each account ID must be 1-64 characters: lowercase letters, numbers, dashes, underscores.
+ *
  * Usage:
- *   node scripts/account-manager.js list                    # List available accounts
- *   node scripts/account-manager.js auth normal            # Authenticate normal account
- *   node scripts/account-manager.js auth test              # Authenticate test account
+ *   node scripts/account-manager.js list                    # List all authenticated accounts
+ *   node scripts/account-manager.js auth work              # Authenticate work account
+ *   node scripts/account-manager.js auth personal          # Authenticate personal account
  *   node scripts/account-manager.js status                 # Show current account status
- *   node scripts/account-manager.js clear normal           # Clear normal account tokens
- *   node scripts/account-manager.js clear test             # Clear test account tokens
+ *   node scripts/account-manager.js clear work             # Clear work account tokens
  *   node scripts/account-manager.js test                   # Run tests with test account
  */
 

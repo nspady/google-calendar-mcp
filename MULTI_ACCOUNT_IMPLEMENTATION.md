@@ -38,7 +38,7 @@ interface UnifiedCalendar {
 4. Write operations use `preferredAccount`
 5. Read operations use any account (fastest/most reliable)
 
-- [ ] `src/services/CalendarRegistry.ts` - Deduplication logic
+- [x] `src/services/CalendarRegistry.ts` - Deduplication logic
 - [ ] `src/services/CalendarRegistry.test.ts` - Permission ranking tests
 
 ---
@@ -58,7 +58,7 @@ interface UnifiedCalendar {
 ### Base Handler
 - [x] `src/handlers/core/BaseToolHandler.ts` - Accept accounts map
 - [x] `src/handlers/core/BaseToolHandler.ts` - `getClientForAccount(accountId)` method
-- [ ] `src/handlers/core/BaseToolHandler.ts` - Calendar registry integration (Phase 4)
+- [x] `src/handlers/core/BaseToolHandler.ts` - Calendar registry integration (write-selection helpers)
 
 ---
 
@@ -66,16 +66,16 @@ interface UnifiedCalendar {
 
 ### Account Parameter (All Tools)
 ```typescript
-account?: string  // Optional: single account (array support in Phase 4)
+account?: string | string[]  // Optional: single account or array for multi-account reads
 ```
 
 **Behavior:**
-- Omitted + 1 account → use that account automatically
-- Omitted + multiple accounts → error (must specify which account)
-- Specified → use specified account
+- Read tools (list-events, list-calendars, search-events) merge all authenticated accounts when omitted; specify one or more accounts to filter.
+- Mutation tools (create/update/delete) auto-select the account with write access to the target calendar when omitted; specifying an account forces that client.
+- Get-type tools (`get-event`) still require explicit account when more than one is present.
 
 ### Files Updated
-- [x] `src/tools/registry.ts` - Added `account` param to all 10 tool schemas
+- [x] `src/tools/registry.ts` - Added `account` param to all tool schemas (string | string[])
 - [x] `src/handlers/core/ListEventsHandler.ts` - Account parameter support
 - [x] `src/handlers/core/CreateEventHandler.ts` - Account parameter support
 - [x] `src/handlers/core/UpdateEventHandler.ts` - Account parameter support
@@ -126,14 +126,15 @@ account?: string  // Optional: single account (array support in Phase 4)
 
 Returns overlapping events across specified accounts.
 
-- [ ] `src/handlers/core/FindCalendarConflictsHandler.ts`
-- [ ] `src/handlers/core/FindCalendarConflictsHandler.test.ts`
-- [ ] Add to `src/tools/registry.ts`
+- [x] `src/handlers/core/FindCalendarConflictsHandler.ts`
+- [x] `src/handlers/core/FindCalendarConflictsHandler.test.ts`
+- [x] Add to `src/tools/registry.ts`
+- [x] Integration coverage in `src/tests/integration/multi-account.test.ts`
 
 ### Enhanced list-events
-- [ ] Support `account: ["work", "personal"]` → merged results
-- [ ] Tag each event with source account
-- [ ] Sort chronologically across accounts
+- [x] Support `account: ["work", "personal"]` → merged results
+- [x] Tag each event with source account
+- [x] Sort chronologically across accounts
 
 ---
 
@@ -146,7 +147,7 @@ Returns overlapping events across specified accounts.
 - [ ] `src/tests/unit/handlers/multi-account-*.test.ts` - Each handler
 
 ### Integration Tests
-- [ ] `src/tests/integration/multi-account.test.ts` - Real multi-account flows
+- [x] `src/tests/integration/multi-account.test.ts` - Real multi-account flows
 - [ ] Test calendar deduplication with real accounts
 - [ ] Test cross-account conflict detection
 - [ ] Test permission-based account selection

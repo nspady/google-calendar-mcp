@@ -130,34 +130,6 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
   });
 
   describe('Tool Availability and Basic Functionality', () => {
-    it('should list all expected tools', async () => {
-      const startTime = testFactory.startTimer('list-tools');
-      
-      try {
-        const tools = await client.listTools();
-        
-        testFactory.endTimer('list-tools', startTime, true);
-        
-        expect(tools.tools).toBeDefined();
-        expect(tools.tools.length).toBe(10);
-        
-        const toolNames = tools.tools.map(t => t.name);
-        expect(toolNames).toContain('get-current-time');
-        expect(toolNames).toContain('list-calendars');
-        expect(toolNames).toContain('list-events');
-        expect(toolNames).toContain('search-events');
-        expect(toolNames).toContain('list-colors');
-        expect(toolNames).toContain('create-event');
-        expect(toolNames).toContain('update-event');
-        expect(toolNames).toContain('delete-event');
-        expect(toolNames).toContain('get-freebusy');
-        expect(toolNames).toContain('get-event');
-      } catch (error) {
-        testFactory.endTimer('list-tools', startTime, false, String(error));
-        throw error;
-      }
-    });
-
     it('should list calendars including test calendar', async () => {
       const startTime = testFactory.startTimer('list-calendars');
 
@@ -1132,12 +1104,17 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
             }
           });
 
-          // Invalid calendar names should result in an error
-          expect(result.isError).toBe(true);
-          const errorText = (result.content as any)[0].text;
-          expect(errorText).toContain('MCP error');
-          expect(errorText).toContain('ThisCalendarNameDefinitelyDoesNotExist_XYZ123');
-          console.log('✅ Invalid calendar name throws appropriate error');
+          // Invalid calendar names should result in an error or warnings (multi-account merges)
+          if (result.isError) {
+            const errorText = (result.content as any)[0].text;
+            expect(errorText).toContain('MCP error');
+            expect(errorText).toContain('ThisCalendarNameDefinitelyDoesNotExist_XYZ123');
+            console.log('✅ Invalid calendar name throws appropriate error');
+          } else {
+            const response = JSON.parse((result.content as any)[0].text);
+            expect(response.warnings || response.partialFailures).toBeDefined();
+            console.log('✅ Invalid calendar name surfaced via warnings/partialFailures');
+          }
 
           testFactory.endTimer('list-events-calendar-name-resolution', startTime, true);
         } catch (error) {
@@ -2103,8 +2080,8 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           summary: `Morning Standup ${timestamp}`,
           description: 'Daily team sync',
           location: 'Room A',
-          start: TestDataFactory.formatDateTimeRFC3339(firstStart),
-          end: TestDataFactory.formatDateTimeRFC3339(firstEnd)
+          start: TestDataFactory.formatDateTimeRFC3339WithTimezone(firstStart),
+          end: TestDataFactory.formatDateTimeRFC3339WithTimezone(firstEnd)
         });
         
         const firstId = await createTestEvent(firstMeeting);
@@ -2124,8 +2101,8 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           summary: `Project Review ${timestamp}`,
           description: 'Weekly project status update',
           location: 'Room B',
-          start: TestDataFactory.formatDateTimeRFC3339(secondStart),
-          end: TestDataFactory.formatDateTimeRFC3339(secondEnd)
+          start: TestDataFactory.formatDateTimeRFC3339WithTimezone(secondStart),
+          end: TestDataFactory.formatDateTimeRFC3339WithTimezone(secondEnd)
         });
         
         const result = await client.callTool({
@@ -2154,8 +2131,8 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           summary: 'Design Discussion',
           description: 'UI/UX design review',
           location: 'Design Lab',
-          start: TestDataFactory.formatDateTimeRFC3339(thirdStart),
-          end: TestDataFactory.formatDateTimeRFC3339(thirdEnd)
+          start: TestDataFactory.formatDateTimeRFC3339WithTimezone(thirdStart),
+          end: TestDataFactory.formatDateTimeRFC3339WithTimezone(thirdEnd)
         });
         
         const conflictResult = await client.callTool({

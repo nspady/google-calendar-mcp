@@ -143,6 +143,8 @@ npm run test:integration
 | `DEBUG_LLM_INTERACTIONS` | Debug logging | `false` | Set `true` for verbose LLM logs |
 | `ANTHROPIC_MODEL` | Claude model | `claude-3-5-haiku-20241022` | Must support MCP |
 | `OPENAI_MODEL` | OpenAI model | `gpt-4o-mini` | Must support function calling |
+| `MULTI_ACCOUNT_TESTS` | Enable `multi-account.test.ts` | `false` | Set to `true` to run cross-account integration tests |
+| `MULTI_ACCOUNT_IDS` | Comma-separated account IDs | _unset_ | Example: `work,personal` (requires tokens for each account) |
 
 ### Complete Setup Example
 
@@ -168,6 +170,14 @@ OPENAI_MODEL=gpt-4o-mini
 ```
 
 > **Tip:** You can authenticate multiple test accounts by running `GOOGLE_ACCOUNT_MODE=<accountId> npm run auth` for each ID. All tokens share the same storage file, so integration tests can switch accounts simply by passing the desired `account` parameter to the tool under test.
+
+5. **Run multi-account integration tests (optional):**
+```bash
+export MULTI_ACCOUNT_TESTS=true
+export MULTI_ACCOUNT_IDS=work,personal
+vitest run src/tests/integration/multi-account.test.ts
+```
+These tests verify cross-account list-events merging and the new `find-calendar-conflicts` tool. Each account listed in `MULTI_ACCOUNT_IDS` must already be authenticated.
 
 2. **Obtain Google OAuth Credentials:**
    - Go to [Google Cloud Console](https://console.cloud.google.com)

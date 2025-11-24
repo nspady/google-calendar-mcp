@@ -4,7 +4,10 @@ A Model Context Protocol (MCP) server that provides Google Calendar integration 
 
 ## Features
 
+- **Multi-Account Support**: Connect and query multiple Google accounts simultaneously (e.g. work, personal)
 - **Multi-Calendar Support**: List events from multiple calendars simultaneously
+- **Multi-Account Access**: Connect personal, work, and test Google accounts at the same time
+- **Cross-Account Conflicts**: Detect overlapping events across any combination of calendars
 - **Event Management**: Create, update, delete, and search calendar events
 - **Recurring Events**: Advanced modification capabilities for recurring events
 - **Free/Busy Queries**: Check availability across calendars
@@ -111,6 +114,30 @@ npm run auth
 
 See [Authentication Guide](docs/authentication.md#moving-to-production-mode-recommended) for details.
 
+## Managing Multiple Accounts
+
+You can keep several Google accounts connected simultaneously and choose which one to use per tool call.
+
+1. **CLI / stdio workflows**
+   ```bash
+   # Authenticate a named account
+   GOOGLE_ACCOUNT_MODE=work npm run auth
+
+   # Or use the helper script
+   node scripts/account-manager.js auth personal
+
+   # See all stored accounts + token status
+   node scripts/account-manager.js list
+   ```
+   When no `account` parameter is supplied, read-only tools (like `list-events`) will merge results from every authenticated account. Mutation tools require an explicit `account` or will automatically pick the account with write permission to the requested calendar.
+
+2. **HTTP / Docker**
+   - Start the server with `npm run start:http` (or `docker compose up`)
+   - Visit `http://localhost:3000/accounts` to launch the built-in account manager UI
+   - Add, re-auth, or delete accounts directly in the browser
+
+Tokens for every account live in `~/.config/google-calendar-mcp/tokens.json` (or the directory pointed to `GOOGLE_CALENDAR_MCP_TOKEN_PATH`) with file mode `0600`.
+
 ## Example Usage
 
 Along with the normal capabilities you would expect for a calendar integration you can also do really dynamic, multi-step processes like:
@@ -154,6 +181,7 @@ Along with the normal capabilities you would expect for a calendar integration y
 | `delete-event` | Delete events |
 | `get-freebusy` | Check availability across calendars, including external calendars |
 | `list-colors` | List available event colors |
+| `find-calendar-conflicts` | Detect overlapping events across multiple accounts/calendars within a time window |
 
 ## Documentation
 
@@ -165,6 +193,7 @@ Along with the normal capabilities you would expect for a calendar integration y
 - [Architecture](docs/architecture.md) - Technical architecture overview
 - [Development](docs/development.md) - Contributing and testing
 - [Testing](docs/testing.md) - Unit and integration testing guide
+- [Multi-Account Updates](docs/multi-account-updates.md) - Current status and roadmap for multi-account support
 
 ## Configuration
 

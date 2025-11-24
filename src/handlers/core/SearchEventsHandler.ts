@@ -12,29 +12,13 @@ export class SearchEventsHandler extends BaseToolHandler {
     async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
         const validArgs = args as SearchEventsInput;
 
-        // Smart account selection: use specified account or find account with access to calendar
-        let oauth2Client: OAuth2Client;
-        let selectedAccountId: string | undefined;
-
-        if (args.account) {
-            // User specified account - use it
-            oauth2Client = this.getClientForAccount(args.account, accounts);
-            selectedAccountId = args.account;
-        } else {
-            // No account specified - try to find account with access
-            const accountSelection = await this.getAccountForCalendarAccess(validArgs.calendarId, accounts, 'read');
-            if (!accountSelection) {
-                const availableAccounts = Array.from(accounts.keys()).join(', ');
-                throw new McpError(
-                    ErrorCode.InvalidRequest,
-                    `No account has access to calendar "${validArgs.calendarId}". ` +
-                    `Available accounts: ${availableAccounts}. Please ensure the calendar exists and ` +
-                    `you have the necessary permissions, or specify the 'account' parameter explicitly.`
-                );
-            }
-            oauth2Client = accountSelection.client;
-            selectedAccountId = accountSelection.accountId;
-        }
+        // Get OAuth2Client with automatic account selection for read operations
+        const { client: oauth2Client, accountId: selectedAccountId } = await this.getClientWithAutoSelection(
+            args.account,
+            validArgs.calendarId,
+            accounts,
+            'read'
+        );
 
         const events = await this.searchEvents(oauth2Client, validArgs);
 

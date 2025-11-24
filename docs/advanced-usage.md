@@ -25,38 +25,86 @@ node scripts/account-manager.js clear work
 
 ### Using Accounts with Tools
 
-- All handlers accept an optional `account` parameter (`string` or `string[]`).
-- If omitted:
-  - Read operations (`list-events`, `list-calendars`, `search-events`) will merge data from every authenticated account.
-  - Write operations pick the account that has the highest permission level on the target calendar.
+All tools accept an optional `account` parameter. The behavior depends on the tool type:
+
+#### Account Parameter Behavior
+
+| Tool Type | Accepts Arrays? | `account` Omitted | `account: "work"` | `account: ["work", "personal"]` |
+|-----------|----------------|-------------------|-------------------|----------------------------------|
+| **Read-only** (list-events, list-calendars, find-calendar-conflicts) | ✅ Yes | Merges ALL accounts | Single account only | Merges specified accounts |
+| **Write** (create-event, update-event, delete-event) | ❌ No | Auto-selects best permission | Uses specified account | ❌ Error (not supported) |
+| **Get** (get-event, search-events) | ❌ No | Auto-selects account with access | Uses specified account | ❌ Error (not supported) |
+
+**Auto-selection logic:**
+- When `account` is omitted, the server automatically selects the account with appropriate permissions
+- Write operations require write/owner access
+- Read operations work with any access level (reader, writer, or owner)
+- If no account has the required permissions, you'll get a clear error message
+
+#### Examples
 
 ```javascript
-// Query across every authenticated account
+// Read-only tools: Query all authenticated accounts (auto-merge)
 use_tool("list-events", {
+  timeMin: "2025-02-01T00:00:00",
+  timeMax: "2025-02-01T23:59:59"
+  // No account parameter = merges all accounts
+});
+
+// Read-only tools: Query specific accounts
+use_tool("list-events", {
+  account: ["work", "personal"],  // Array supported!
   timeMin: "2025-02-01T00:00:00",
   timeMax: "2025-02-01T23:59:59"
 });
 
-// Restrict to specific accounts
-use_tool("list-events", {
-  account: ["work", "personal"],
-  timeMin: "2025-02-01T00:00:00",
-  timeMax: "2025-02-01T23:59:59"
-});
-
-// Explicitly pick an account for writes
+// Write tools: Explicitly pick account
 use_tool("create-event", {
   calendarId: "team@company.com",
   summary: "Status update",
-  account: "work",
-  start: "...",
-  end: "..."
+  account: "work",  // Must be single string, not array
+  start: "2025-02-01T10:00:00",
+  end: "2025-02-01T11:00:00"
+});
+
+// Write tools: Auto-select account (finds account with write access)
+use_tool("create-event", {
+  calendarId: "team@company.com",
+  summary: "Status update",
+  // No account parameter = auto-selects account with write permission
+  start: "2025-02-01T10:00:00",
+  end: "2025-02-01T11:00:00"
 });
 ```
 
 ### Calendar Deduplication
 
 The Calendar Registry collects calendars from every account, de-duplicates shared calendars, and tracks the best account to use for read/write operations. Responses include `accountAccess` arrays so you can see every account that can reach a given calendar.
+
+### Cross-Account Conflict Detection
+
+Use the `find-calendar-conflicts` tool to spot overlapping events across any combination of accounts/calendars:
+
+```javascript
+use_tool("find-calendar-conflicts", {
+  account: ["work", "personal"],
+  timeMin: "2025-03-01T00:00:00Z",
+  timeMax: "2025-03-07T23:59:59Z"
+});
+```
+
+You can narrow the search to a specific calendar (shared team calendar, for example):
+
+```javascript
+use_tool("find-calendar-conflicts", {
+  account: ["work"],
+  calendarId: "Team Calendar",
+  timeMin: "2025-03-02T00:00:00",
+  timeMax: "2025-03-02T23:59:59"
+});
+```
+
+Each conflict entry lists the overlapping window plus the structured event details (including `accountId` and `calendarId`) so the LLM can explain or remediate the clash.
 
 ## Batch Operations
 

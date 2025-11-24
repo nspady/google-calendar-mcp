@@ -320,3 +320,122 @@ describe('ListEventsHandler - Timezone Handling', () => {
     });
   });
 });
+
+describe('ListEventsHandler - Multi-account merging', () => {
+  let handler: ListEventsHandler;
+  let workClient: OAuth2Client;
+  let personalClient: OAuth2Client;
+  let accounts: Map<string, OAuth2Client>;
+
+  beforeEach(() => {
+    handler = new ListEventsHandler();
+    workClient = new OAuth2Client();
+    personalClient = new OAuth2Client();
+    accounts = new Map([
+      ['work', workClient],
+      ['personal', personalClient]
+    ]);
+
+    vi.spyOn(handler as any, 'resolveCalendarIds').mockImplementation(async (_client, ids: string[]) => ids);
+    vi.spyOn(handler as any, 'getCalendarTimezone').mockResolvedValue('UTC');
+  });
+
+  const setupCalendarMocks = (workEvents: any[], personalEvents: any[]) => {
+    const workCalendar = {
+      events: {
+        list: vi.fn().mockResolvedValue({
+          data: { items: workEvents }
+        })
+      }
+    };
+    const personalCalendar = {
+      events: {
+        list: vi.fn().mockResolvedValue({
+          data: { items: personalEvents }
+        })
+      }
+    };
+
+    vi.spyOn(handler as any, 'getCalendar').mockImplementation((client: OAuth2Client) => {
+      if (client === workClient) return workCalendar;
+      return personalCalendar;
+    });
+  };
+
+  it('merges and annotates events from multiple accounts', async () => {
+    setupCalendarMocks(
+      [
+        {
+          id: 'work-1',
+          summary: 'Work Planning',
+          start: { dateTime: '2025-03-01T09:00:00Z' },
+          end: { dateTime: '2025-03-01T10:00:00Z' }
+        }
+      ],
+      [
+        {
+          id: 'personal-1',
+          summary: 'Dentist',
+          start: { dateTime: '2025-03-01T08:00:00Z' },
+          end: { dateTime: '2025-03-01T08:30:00Z' }
+        }
+      ]
+    );
+
+    const result = await handler.runTool({
+      account: ['work', 'personal'],
+      calendarId: 'primary',
+      timeMin: '2025-03-01T00:00:00Z',
+      timeMax: '2025-03-02T00:00:00Z'
+    }, accounts);
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.accounts).toEqual(['work', 'personal']);
+    expect(parsed.events).toHaveLength(2);
+    expect(parsed.events[0].accountId).toBe('personal');
+    expect(parsed.events[1].accountId).toBe('work');
+    expect(parsed.note).toContain('merged events');
+  });
+
+  it('includes warnings when an account fails to load events', async () => {
+    const workCalendar = {
+      events: {
+        list: vi.fn().mockResolvedValue({
+          data: {
+            items: [
+              {
+                id: 'work-1',
+                summary: '1:1',
+                start: { dateTime: '2025-03-02T15:00:00Z' },
+                end: { dateTime: '2025-03-02T15:30:00Z' }
+              }
+            ]
+          }
+        })
+      }
+    };
+    const personalCalendar = {
+      events: {
+        list: vi.fn().mockRejectedValue(new Error('API failure'))
+      }
+    };
+
+    vi.spyOn(handler as any, 'getCalendar').mockImplementation((client: OAuth2Client) => {
+      if (client === workClient) return workCalendar;
+      return personalCalendar;
+    });
+
+    const result = await handler.runTool({
+      account: ['work', 'personal'],
+      calendarId: 'primary',
+      timeMin: '2025-03-02T00:00:00Z',
+      timeMax: '2025-03-03T00:00:00Z'
+    }, accounts);
+
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.totalCount).toBe(1);
+    expect(parsed.warnings).toBeDefined();
+    expect(parsed.partialFailures).toHaveLength(1);
+    expect(parsed.partialFailures[0].accountId).toBe('personal');
+  });
+});

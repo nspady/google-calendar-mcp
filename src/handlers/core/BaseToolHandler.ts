@@ -160,6 +160,13 @@ export abstract class BaseToolHandler<TArgs = any> {
         accounts: Map<string, OAuth2Client>,
         operation: 'read' | 'write'
     ): Promise<{ accountId: string; client: OAuth2Client } | null> {
+        // Fast path for single account - skip calendar registry lookup
+        if (accounts.size === 1) {
+            const [accountId, client] = accounts.entries().next().value;
+            return { accountId, client };
+        }
+
+        // Multi-account case - use calendar registry for permission-based selection
         const result = await this.calendarRegistry.getAccountForCalendar(
             calendarId,
             accounts,
@@ -178,6 +185,53 @@ export abstract class BaseToolHandler<TArgs = any> {
         return {
             accountId: result.accountId,
             client
+        };
+    }
+
+    /**
+     * Convenience method to get a single OAuth2Client with automatic account selection.
+     * Handles the common pattern where:
+     * - If account is specified, use it
+     * - If no account specified, auto-select based on calendar permissions
+     *
+     * This eliminates repetitive boilerplate in handler implementations.
+     *
+     * @param accountId Optional account ID from args
+     * @param calendarId Calendar ID to check permissions for (if auto-selecting)
+     * @param accounts Map of available accounts
+     * @param operation 'read' or 'write' operation type
+     * @returns OAuth2Client, selected account ID, and whether it was auto-selected
+     * @throws McpError if account not found or no suitable account available
+     */
+    protected async getClientWithAutoSelection(
+        accountId: string | undefined,
+        calendarId: string,
+        accounts: Map<string, OAuth2Client>,
+        operation: 'read' | 'write'
+    ): Promise<{ client: OAuth2Client; accountId: string; wasAutoSelected: boolean }> {
+        // Account explicitly specified - use it
+        if (accountId) {
+            const client = this.getClientForAccount(accountId, accounts);
+            return { client, accountId, wasAutoSelected: false };
+        }
+
+        // No account specified - auto-select based on calendar permissions
+        const accountSelection = await this.getAccountForCalendarAccess(calendarId, accounts, operation);
+        if (!accountSelection) {
+            const availableAccounts = Array.from(accounts.keys()).join(', ');
+            const accessType = operation === 'write' ? 'write' : 'read';
+            throw new McpError(
+                ErrorCode.InvalidRequest,
+                `No account has ${accessType} access to calendar "${calendarId}". ` +
+                `Available accounts: ${availableAccounts}. Please ensure the calendar exists and ` +
+                `you have the necessary permissions, or specify the 'account' parameter explicitly.`
+            );
+        }
+
+        return {
+            client: accountSelection.client,
+            accountId: accountSelection.accountId,
+            wasAutoSelected: true
         };
     }
 

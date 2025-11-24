@@ -198,8 +198,8 @@ describe('DeleteEventHandler', () => {
 
   describe('Multi-Account Handling', () => {
     it('should throw error when no account has write access', async () => {
-      // Mock getAccountForCalendarWrite to return null (no write access)
-      vi.spyOn(handler as any, 'getAccountForCalendarWrite').mockResolvedValue(null);
+      // Mock getAccountForCalendarAccess to return null (no write access)
+      vi.spyOn(handler as any, 'getAccountForCalendarAccess').mockResolvedValue(null);
 
       const args = {
         calendarId: 'primary',

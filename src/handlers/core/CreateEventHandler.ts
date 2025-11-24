@@ -21,29 +21,13 @@ export class CreateEventHandler extends BaseToolHandler {
     async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
         const validArgs = args as CreateEventInput;
 
-        // Smart account selection: use specified account or find best account with write permissions
-        let oauth2Client: OAuth2Client;
-        let selectedAccountId: string | undefined;
-
-        if (args.account) {
-            // User specified account - use it
-            oauth2Client = this.getClientForAccount(args.account, accounts);
-            selectedAccountId = args.account;
-        } else {
-            // No account specified - find best account with write permissions
-            const accountSelection = await this.getAccountForCalendarWrite(validArgs.calendarId, accounts);
-            if (!accountSelection) {
-                const availableAccounts = Array.from(accounts.keys()).join(', ');
-                throw new McpError(
-                    ErrorCode.InvalidRequest,
-                    `No account has write access to calendar "${validArgs.calendarId}". ` +
-                    `Available accounts: ${availableAccounts}. Please ensure the calendar exists and ` +
-                    `you have the necessary permissions, or specify the 'account' parameter explicitly.`
-                );
-            }
-            oauth2Client = accountSelection.client;
-            selectedAccountId = accountSelection.accountId;
-        }
+        // Get OAuth2Client with automatic account selection for write operations
+        const { client: oauth2Client, accountId: selectedAccountId } = await this.getClientWithAutoSelection(
+            args.account,
+            validArgs.calendarId,
+            accounts,
+            'write'
+        );
 
         // Create the event object for conflict checking
         const timezone = args.timeZone || await this.getCalendarTimezone(oauth2Client, validArgs.calendarId);

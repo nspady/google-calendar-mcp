@@ -10,7 +10,7 @@ import { EventSimilarityChecker } from "./EventSimilarityChecker.js";
 import { ConflictAnalyzer } from "./ConflictAnalyzer.js";
 import { CONFLICT_DETECTION_CONFIG } from "./config.js";
 import { getEventUrl } from "../../handlers/utils.js";
-import { convertToRFC3339 } from "../../handlers/utils/datetime.js";
+import { convertToRFC3339, hasTimezoneInDatetime } from "../../handlers/utils/datetime.js";
 
 /**
  * Service for detecting event conflicts and duplicates.
@@ -58,16 +58,19 @@ export class ConflictDetectionService {
       return result;
     }
 
+    // Normalize the event we're checking so comparisons use timezone-aware datetimes
+    const normalizedEvent = this.normalizeEventForComparison(event);
+
     // Get the time range for checking
-    let timeMin = event.start.dateTime || event.start.date;
-    let timeMax = event.end.dateTime || event.end.date;
+    let timeMin = normalizedEvent.start?.dateTime || normalizedEvent.start?.date;
+    let timeMax = normalizedEvent.end?.dateTime || normalizedEvent.end?.date;
 
     if (!timeMin || !timeMax) {
       return result;
     }
 
     // Extract timezone if present (prefer start time's timezone)
-    const timezone = event.start.timeZone || event.end.timeZone;
+    const timezone = normalizedEvent.start?.timeZone || normalizedEvent.end?.timeZone;
     
     
     // The Google Calendar API requires RFC3339 format for timeMin/timeMax
@@ -104,7 +107,7 @@ export class ConflictDetectionService {
         // Check for duplicates
         if (checkDuplicates) {
           const duplicates = this.findDuplicates(
-            event,
+            normalizedEvent,
             events,
             checkCalendarId,
             duplicateSimilarityThreshold
@@ -115,7 +118,7 @@ export class ConflictDetectionService {
         // Check for conflicts
         if (checkConflicts) {
           const conflicts = this.findConflicts(
-            event,
+            normalizedEvent,
             events,
             checkCalendarId,
             includeDeclinedEvents
@@ -130,6 +133,24 @@ export class ConflictDetectionService {
 
     result.hasConflicts = result.conflicts.length > 0 || result.duplicates.length > 0;
     return result;
+  }
+
+  /**
+   * Ensure the event used for comparison has timezone-aware datetimes so overlap/duplicate checks
+   * don't depend on the local machine timezone.
+   */
+  private normalizeEventForComparison(event: calendar_v3.Schema$Event): calendar_v3.Schema$Event {
+    const clone: calendar_v3.Schema$Event = JSON.parse(JSON.stringify(event));
+    const timezone = clone.start?.timeZone || clone.end?.timeZone;
+
+    if (clone.start?.dateTime && timezone && !hasTimezoneInDatetime(clone.start.dateTime)) {
+      clone.start.dateTime = convertToRFC3339(clone.start.dateTime, timezone);
+    }
+    if (clone.end?.dateTime && timezone && !hasTimezoneInDatetime(clone.end.dateTime)) {
+      clone.end.dateTime = convertToRFC3339(clone.end.dateTime, timezone);
+    }
+
+    return clone;
   }
 
   /**

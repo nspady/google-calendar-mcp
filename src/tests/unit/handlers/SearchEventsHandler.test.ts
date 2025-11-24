@@ -361,7 +361,7 @@ describe('SearchEventsHandler', () => {
       };
 
       await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
-        'No account has access to calendar "primary"'
+        'No account has read access to calendar "primary"'
       );
     });
 
