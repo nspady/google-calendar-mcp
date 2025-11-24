@@ -143,7 +143,7 @@ Returns overlapping events across specified accounts.
 ### Unit Tests
 - [ ] `src/tests/unit/auth/multi-account.test.ts` - Token loading
 - [ ] `src/tests/unit/auth/validation.test.ts` - Account ID validation (39 tests from PR #82 review)
-- [ ] `src/tests/unit/services/CalendarRegistry.test.ts` - Deduplication
+- [x] `src/tests/unit/services/CalendarRegistry.test.ts` - Deduplication
 - [ ] `src/tests/unit/handlers/multi-account-*.test.ts` - Each handler
 
 ### Integration Tests
