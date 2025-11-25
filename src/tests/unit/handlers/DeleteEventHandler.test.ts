@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DeleteEventHandler } from '../../../handlers/core/DeleteEventHandler.js';
 import { OAuth2Client } from 'google-auth-library';
+import { CalendarRegistry } from '../../../services/CalendarRegistry.js';
 
 // Mock the googleapis module
 vi.mock('googleapis', () => ({
@@ -21,6 +22,9 @@ describe('DeleteEventHandler', () => {
   let mockCalendar: any;
 
   beforeEach(() => {
+    // Reset the singleton to get a fresh instance for each test
+    CalendarRegistry.resetInstance();
+
     handler = new DeleteEventHandler();
     mockOAuth2Client = new OAuth2Client();
     mockAccounts = new Map([['test', mockOAuth2Client]]);
@@ -35,10 +39,12 @@ describe('DeleteEventHandler', () => {
     // Mock the getCalendar method
     vi.spyOn(handler as any, 'getCalendar').mockReturnValue(mockCalendar);
 
-    // Mock getAccountForCalendarWrite to return the test account
-    vi.spyOn(handler as any, 'getAccountForCalendarWrite').mockResolvedValue({
+    // Mock getClientWithAutoSelection to return the test account
+    vi.spyOn(handler as any, 'getClientWithAutoSelection').mockResolvedValue({
+      client: mockOAuth2Client,
       accountId: 'test',
-      client: mockOAuth2Client
+      calendarId: 'primary',
+      wasAutoSelected: true
     });
   });
 
@@ -198,8 +204,10 @@ describe('DeleteEventHandler', () => {
 
   describe('Multi-Account Handling', () => {
     it('should throw error when no account has write access', async () => {
-      // Mock getAccountForCalendarAccess to return null (no write access)
-      vi.spyOn(handler as any, 'getAccountForCalendarAccess').mockResolvedValue(null);
+      // Override the default mock to reject with access error
+      vi.spyOn(handler as any, 'getClientWithAutoSelection').mockRejectedValue(
+        new Error('No account has write access to calendar "primary"')
+      );
 
       const args = {
         calendarId: 'primary',
@@ -212,7 +220,13 @@ describe('DeleteEventHandler', () => {
     });
 
     it('should use specified account when provided', async () => {
-      const spy = vi.spyOn(handler as any, 'getClientForAccount');
+      // Verify getClientWithAutoSelection is called with the account parameter
+      const spy = vi.spyOn(handler as any, 'getClientWithAutoSelection').mockResolvedValue({
+        client: mockOAuth2Client,
+        accountId: 'test',
+        calendarId: 'primary',
+        wasAutoSelected: false
+      });
       mockCalendar.events.delete.mockResolvedValue({ data: {} });
 
       const args = {
@@ -223,7 +237,8 @@ describe('DeleteEventHandler', () => {
 
       await handler.runTool(args, mockAccounts);
 
-      expect(spy).toHaveBeenCalledWith('test', mockAccounts);
+      // Verify the account was passed to getClientWithAutoSelection
+      expect(spy).toHaveBeenCalledWith('test', 'primary', mockAccounts, 'write');
     });
   });
 });

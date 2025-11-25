@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CreateEventHandler } from '../../../handlers/core/CreateEventHandler.js';
 import { OAuth2Client } from 'google-auth-library';
 import { calendar_v3 } from 'googleapis';
+import { CalendarRegistry } from '../../../services/CalendarRegistry.js';
 
 // Mock ConflictDetectionService to avoid calling Google APIs
 vi.mock('../../../services/conflict-detection/ConflictDetectionService.js', () => ({
@@ -21,6 +22,8 @@ describe('CreateEventHandler - multi-account selection', () => {
   let accounts: Map<string, OAuth2Client>;
 
   beforeEach(() => {
+    // Reset the singleton to get a fresh instance for each test
+    CalendarRegistry.resetInstance();
     handler = new CreateEventHandler();
     workClient = new OAuth2Client();
     personalClient = new OAuth2Client();
@@ -38,10 +41,12 @@ describe('CreateEventHandler - multi-account selection', () => {
   };
 
   it('auto-selects account with write access when account is omitted', async () => {
-    // Mock registry lookup to pick work
-    vi.spyOn(handler as any, 'getAccountForCalendarAccess').mockResolvedValue({
+    // Mock getClientWithAutoSelection to return work account
+    vi.spyOn(handler as any, 'getClientWithAutoSelection').mockResolvedValue({
+      client: workClient,
       accountId: 'work',
-      client: workClient
+      calendarId: 'team@company.com',
+      wasAutoSelected: true
     });
 
     // Stub createEvent to avoid API call
@@ -60,7 +65,13 @@ describe('CreateEventHandler - multi-account selection', () => {
   });
 
   it('uses explicitly provided account even when registry would choose differently', async () => {
-    vi.spyOn(handler as any, 'getClientForAccount').mockReturnValue(personalClient);
+    // Mock getClientWithAutoSelection to return personal account when explicitly specified
+    vi.spyOn(handler as any, 'getClientWithAutoSelection').mockResolvedValue({
+      client: personalClient,
+      accountId: 'personal',
+      calendarId: 'team@company.com',
+      wasAutoSelected: false
+    });
     vi.spyOn(handler as any, 'createEvent').mockResolvedValue({
       id: 'evt-2',
       start: { dateTime: baseArgs.start },
@@ -75,7 +86,9 @@ describe('CreateEventHandler - multi-account selection', () => {
   });
 
   it('errors when no account has write access and none is specified', async () => {
-    vi.spyOn(handler as any, 'getAccountForCalendarWrite').mockResolvedValue(null);
+    // Don't mock getClientWithAutoSelection - let it fail naturally by not finding the calendar
+    // The CalendarRegistry singleton is reset in beforeEach, so it will try to fetch calendars
+    // which will fail since there are no real credentials
 
     await expect(handler.runTool(baseArgs, accounts)).rejects.toThrow(/No account has write access/i);
   });

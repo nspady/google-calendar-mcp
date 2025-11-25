@@ -3,6 +3,7 @@ import { UpdateEventHandler } from '../../../handlers/core/UpdateEventHandler.js
 import { OAuth2Client } from 'google-auth-library';
 import type { UpdateEventInput } from '../../../tools/registry.js';
 import type { RecurringEventHelpers } from '../../../handlers/core/RecurringEventHelpers.js';
+import { CalendarRegistry } from '../../../services/CalendarRegistry.js';
 
 // Mock the googleapis module
 vi.mock('googleapis', () => ({
@@ -89,6 +90,9 @@ describe('UpdateEventHandler', () => {
   let mockCalendar: any;
 
   beforeEach(() => {
+    // Reset the singleton to get a fresh instance for each test
+    CalendarRegistry.resetInstance();
+
     handler = new UpdateEventHandler();
     mockOAuth2Client = new OAuth2Client();
     mockAccounts = new Map([['test', mockOAuth2Client]]);
@@ -111,10 +115,12 @@ describe('UpdateEventHandler', () => {
     // Mock getCalendarTimezone
     vi.spyOn(handler as any, 'getCalendarTimezone').mockResolvedValue('America/Los_Angeles');
 
-    // Mock getAccountForCalendarWrite to return the test account
-    vi.spyOn(handler as any, 'getAccountForCalendarWrite').mockResolvedValue({
+    // Mock getClientWithAutoSelection to return the test account
+    vi.spyOn(handler as any, 'getClientWithAutoSelection').mockResolvedValue({
+      client: mockOAuth2Client,
       accountId: 'test',
-      client: mockOAuth2Client
+      calendarId: 'primary',
+      wasAutoSelected: true
     });
   });
 

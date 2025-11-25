@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FreeBusyEventHandler } from '../../../handlers/core/FreeBusyEventHandler.js';
 import { OAuth2Client } from 'google-auth-library';
+import { CalendarRegistry } from '../../../services/CalendarRegistry.js';
 
 // Mock the googleapis module
 vi.mock('googleapis', () => ({
@@ -29,6 +30,9 @@ describe('FreeBusyEventHandler', () => {
   let mockCalendar: any;
 
   beforeEach(() => {
+    // Reset the singleton to get a fresh instance for each test
+    CalendarRegistry.resetInstance();
+
     handler = new FreeBusyEventHandler();
     mockOAuth2Client = new OAuth2Client();
     mockAccounts = new Map([['test', mockOAuth2Client]]);
@@ -328,7 +332,9 @@ describe('FreeBusyEventHandler', () => {
       expect(response.calendars['invalid@calendar.com'].errors[0].reason).toBe('notFound');
     });
 
-    it('should handle API errors', async () => {
+    it('should handle API errors by returning error in response', async () => {
+      // With multi-account support, API errors are caught and logged per-account
+      // If all accounts fail, the calendar will show as notFound in the response
       const apiError = new Error('Bad Request');
       (apiError as any).code = 400;
       mockCalendar.freebusy.query.mockRejectedValue(apiError);
@@ -339,12 +345,14 @@ describe('FreeBusyEventHandler', () => {
         calendars: [{ id: 'primary' }]
       };
 
-      // Mock handleGoogleApiError to throw a specific error
-      vi.spyOn(handler as any, 'handleGoogleApiError').mockImplementation(() => {
-        throw new Error('Bad Request');
-      });
+      // The handler now catches errors per-account and returns notFound for calendars
+      // that couldn't be queried from any account
+      const result = await handler.runTool(args, mockAccounts);
+      const response = JSON.parse(result.content[0].text);
 
-      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow('Bad Request');
+      // Calendar should show as notFound since the query failed
+      expect(response.calendars['primary'].errors).toBeDefined();
+      expect(response.calendars['primary'].errors[0].reason).toBe('notFound');
     });
   });
 
@@ -365,8 +373,8 @@ describe('FreeBusyEventHandler', () => {
     });
 
     it('should use specified account when provided', async () => {
-      const spy = vi.spyOn(handler as any, 'getClientForAccount');
-      mockCalendar.freebusy.query.mockResolvedValue({ data: { calendars: {} } });
+      const spy = vi.spyOn(handler as any, 'getClientsForAccounts');
+      mockCalendar.freebusy.query.mockResolvedValue({ data: { calendars: { 'primary': { busy: [] } } } });
 
       const args = {
         timeMin: '2025-01-15T00:00:00',
@@ -377,6 +385,7 @@ describe('FreeBusyEventHandler', () => {
 
       await handler.runTool(args, mockAccounts);
 
+      // The handler now uses getClientsForAccounts which accepts account parameter
       expect(spy).toHaveBeenCalledWith('test', mockAccounts);
     });
   });

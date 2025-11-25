@@ -1,8 +1,9 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CreateEventHandler } from '../../../handlers/core/CreateEventHandler.js';
 import { OAuth2Client } from 'google-auth-library';
 import { calendar_v3 } from 'googleapis';
 import { CONFLICT_DETECTION_CONFIG } from '../../../services/conflict-detection/config.js';
+import { CalendarRegistry } from '../../../services/CalendarRegistry.js';
 
 describe('CreateEventHandler Blocking Logic', () => {
   const mockOAuth2Client = {
@@ -10,14 +11,21 @@ describe('CreateEventHandler Blocking Logic', () => {
   } as unknown as OAuth2Client;
   let mockAccounts: Map<string, OAuth2Client>;
 
+  beforeEach(() => {
+    // Reset the singleton to get a fresh instance for each test
+    CalendarRegistry.resetInstance();
+  });
+
   it('should show full event details when blocking due to high similarity', async () => {
     const handler = new CreateEventHandler();
     mockAccounts = new Map([['test', mockOAuth2Client]]);
 
-    // Mock getAccountForCalendarWrite to return the test account
-    vi.spyOn(handler as any, 'getAccountForCalendarWrite').mockResolvedValue({
+    // Mock getClientWithAutoSelection to return the test account
+    vi.spyOn(handler as any, 'getClientWithAutoSelection').mockResolvedValue({
+      client: mockOAuth2Client,
       accountId: 'test',
-      client: mockOAuth2Client
+      calendarId: 'primary',
+      wasAutoSelected: true
     });
 
     // Mock the conflict detection service

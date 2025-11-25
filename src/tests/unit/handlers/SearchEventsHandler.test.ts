@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SearchEventsHandler } from '../../../handlers/core/SearchEventsHandler.js';
 import { OAuth2Client } from 'google-auth-library';
+import { CalendarRegistry } from '../../../services/CalendarRegistry.js';
 
 // Mock the googleapis module
 vi.mock('googleapis', () => ({
@@ -37,6 +38,9 @@ describe('SearchEventsHandler', () => {
   let mockCalendar: any;
 
   beforeEach(() => {
+    // Reset the singleton to get a fresh instance for each test
+    CalendarRegistry.resetInstance();
+
     handler = new SearchEventsHandler();
     mockOAuth2Client = new OAuth2Client();
     mockAccounts = new Map([['test', mockOAuth2Client]]);
@@ -51,10 +55,12 @@ describe('SearchEventsHandler', () => {
     // Mock the getCalendar method
     vi.spyOn(handler as any, 'getCalendar').mockReturnValue(mockCalendar);
 
-    // Mock getAccountForCalendarAccess to return the test account
-    vi.spyOn(handler as any, 'getAccountForCalendarAccess').mockResolvedValue({
+    // Mock getClientWithAutoSelection to return the test account
+    vi.spyOn(handler as any, 'getClientWithAutoSelection').mockResolvedValue({
+      client: mockOAuth2Client,
       accountId: 'test',
-      client: mockOAuth2Client
+      calendarId: 'primary',
+      wasAutoSelected: true
     });
 
     // Mock getCalendarTimezone
@@ -352,8 +358,10 @@ describe('SearchEventsHandler', () => {
 
   describe('Multi-Account Handling', () => {
     it('should throw error when no account has access', async () => {
-      // Mock getAccountForCalendarAccess to return null (no access)
-      vi.spyOn(handler as any, 'getAccountForCalendarAccess').mockResolvedValue(null);
+      // Override the default mock to reject with access error
+      vi.spyOn(handler as any, 'getClientWithAutoSelection').mockRejectedValue(
+        new Error('No account has read access to calendar "primary"')
+      );
 
       const args = {
         calendarId: 'primary',
@@ -366,7 +374,13 @@ describe('SearchEventsHandler', () => {
     });
 
     it('should use specified account when provided', async () => {
-      const spy = vi.spyOn(handler as any, 'getClientForAccount');
+      // Verify getClientWithAutoSelection is called with the account parameter
+      const spy = vi.spyOn(handler as any, 'getClientWithAutoSelection').mockResolvedValue({
+        client: mockOAuth2Client,
+        accountId: 'test',
+        calendarId: 'primary',
+        wasAutoSelected: false
+      });
       mockCalendar.events.list.mockResolvedValue({ data: { items: [] } });
 
       const args = {
@@ -377,7 +391,8 @@ describe('SearchEventsHandler', () => {
 
       await handler.runTool(args, mockAccounts);
 
-      expect(spy).toHaveBeenCalledWith('test', mockAccounts);
+      // Verify the account was passed to getClientWithAutoSelection
+      expect(spy).toHaveBeenCalledWith('test', 'primary', mockAccounts, 'read');
     });
   });
 });
