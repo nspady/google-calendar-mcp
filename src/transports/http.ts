@@ -5,6 +5,7 @@ import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { TokenManager } from "../auth/tokenManager.js";
+import { CalendarRegistry } from "../services/CalendarRegistry.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -253,6 +254,9 @@ export class HttpTransportHandler {
           await this.tokenManager.saveTokens(tokens);
           this.tokenManager.setAccountMode(originalMode);
 
+          // Invalidate calendar registry cache since accounts changed
+          CalendarRegistry.getInstance().clearCache();
+
           // Get user email
           oauth2Client.setCredentials(tokens);
           const tokenInfo = await oauth2Client.getTokenInfo(tokens.access_token || '');
@@ -355,6 +359,9 @@ export class HttpTransportHandler {
           this.tokenManager.setAccountMode(accountId);
           await this.tokenManager.clearTokens();
           this.tokenManager.setAccountMode(originalMode);
+
+          // Invalidate calendar registry cache since accounts changed
+          CalendarRegistry.getInstance().clearCache();
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({

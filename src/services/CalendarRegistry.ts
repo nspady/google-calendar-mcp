@@ -34,11 +34,36 @@ const PERMISSION_RANK: Record<string, number> = {
 };
 
 /**
- * CalendarRegistry service for managing calendar deduplication and permission-based account selection
+ * CalendarRegistry service for managing calendar deduplication and permission-based account selection.
+ * Implemented as a singleton to ensure cache is shared across all handlers
+ * and can be properly invalidated when accounts change.
  */
 export class CalendarRegistry {
+  private static instance: CalendarRegistry | null = null;
+
   private cache: Map<string, { data: UnifiedCalendar[]; timestamp: number }> = new Map();
   private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+  /**
+   * Get the singleton instance of CalendarRegistry
+   */
+  static getInstance(): CalendarRegistry {
+    if (!CalendarRegistry.instance) {
+      CalendarRegistry.instance = new CalendarRegistry();
+    }
+    return CalendarRegistry.instance;
+  }
+
+  /**
+   * Reset the singleton instance (useful for testing or when accounts change)
+   * Clears the cache and resets the instance
+   */
+  static resetInstance(): void {
+    if (CalendarRegistry.instance) {
+      CalendarRegistry.instance.clearCache();
+    }
+    CalendarRegistry.instance = null;
+  }
 
   /**
    * Get calendar client for a specific account
@@ -99,7 +124,7 @@ export class CalendarRegistry {
           accessRole: (cal.accessRole as CalendarAccess['accessRole']) || 'reader',
           primary: cal.primary || false,
           summary: cal.summary || cal.id,
-          summaryOverride: cal.summaryOverride
+          summaryOverride: cal.summaryOverride ?? undefined
         };
 
         const existing = calendarMap.get(cal.id) || [];
@@ -203,5 +228,103 @@ export class CalendarRegistry {
    */
   clearCache(): void {
     this.cache.clear();
+  }
+
+  /**
+   * Resolve a calendar name or ID to a calendar ID and preferred account
+   * Searches across all accounts for matching calendars by name
+   * Returns the account with highest permissions for the matched calendar
+   *
+   * @param nameOrId Calendar name (summary/summaryOverride) or ID
+   * @param accounts Map of available accounts
+   * @param operationType 'read' or 'write' operation type
+   * @returns Calendar ID and account info, or null if not found
+   */
+  async resolveCalendarNameToId(
+    nameOrId: string,
+    accounts: Map<string, OAuth2Client>,
+    operationType: 'read' | 'write' = 'read'
+  ): Promise<{ calendarId: string; accountId: string; accessRole: string } | null> {
+    // If it looks like an ID (contains @ or is 'primary'), use getAccountForCalendar
+    if (nameOrId === 'primary' || nameOrId.includes('@')) {
+      const result = await this.getAccountForCalendar(nameOrId, accounts, operationType);
+      if (result) {
+        return { calendarId: nameOrId, ...result };
+      }
+      return null;
+    }
+
+    // It's a name - search across all calendars
+    const unified = await this.getUnifiedCalendars(accounts);
+    const lowerName = nameOrId.toLowerCase();
+
+    // Search for matching calendar by name
+    // Priority: exact summaryOverride > case-insensitive summaryOverride > exact summary > case-insensitive summary
+    let match: UnifiedCalendar | undefined;
+
+    // Priority 1: Exact match on any account's summaryOverride
+    match = unified.find(cal =>
+      cal.accounts.some(a => a.summaryOverride === nameOrId)
+    );
+
+    // Priority 2: Case-insensitive match on summaryOverride
+    if (!match) {
+      match = unified.find(cal =>
+        cal.accounts.some(a => a.summaryOverride?.toLowerCase() === lowerName)
+      );
+    }
+
+    // Priority 3: Exact match on displayName (primary account's name)
+    if (!match) {
+      match = unified.find(cal => cal.displayName === nameOrId);
+    }
+
+    // Priority 4: Case-insensitive match on displayName
+    if (!match) {
+      match = unified.find(cal => cal.displayName.toLowerCase() === lowerName);
+    }
+
+    // Priority 5: Exact match on any account's summary
+    if (!match) {
+      match = unified.find(cal =>
+        cal.accounts.some(a => a.summary === nameOrId)
+      );
+    }
+
+    // Priority 6: Case-insensitive match on summary
+    if (!match) {
+      match = unified.find(cal =>
+        cal.accounts.some(a => a.summary.toLowerCase() === lowerName)
+      );
+    }
+
+    if (!match) {
+      return null;
+    }
+
+    // Check write access if needed
+    if (operationType === 'write') {
+      const preferredAccess = match.accounts.find(a => a.accountId === match!.preferredAccount);
+      if (!preferredAccess || (preferredAccess.accessRole !== 'owner' && preferredAccess.accessRole !== 'writer')) {
+        return null; // No write access available
+      }
+      return {
+        calendarId: match.calendarId,
+        accountId: preferredAccess.accountId,
+        accessRole: preferredAccess.accessRole
+      };
+    }
+
+    // For read operations, return preferred account
+    const preferredAccess = match.accounts.find(a => a.accountId === match!.preferredAccount);
+    if (!preferredAccess) {
+      return null;
+    }
+
+    return {
+      calendarId: match.calendarId,
+      accountId: preferredAccess.accountId,
+      accessRole: preferredAccess.accessRole
+    };
   }
 }
