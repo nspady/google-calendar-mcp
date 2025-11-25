@@ -95,8 +95,22 @@ export class ListEventsHandler extends BaseToolHandler {
         );
         const warnings: string[] = [];
 
+        // Build detailed warnings for partial failures
         if (partialFailures.length > 0) {
-            warnings.push(`Some accounts failed to return events: ${partialFailures.map(failure => `${failure.accountId}`).join(', ')}`);
+            for (const failure of partialFailures) {
+                warnings.push(`Account "${failure.accountId}" failed: ${failure.reason}`);
+            }
+        }
+
+        // Build note based on results
+        let note: string | undefined;
+        if (selectedAccounts.size > 1) {
+            const successfulAccounts = selectedAccounts.size - partialFailures.length;
+            if (partialFailures.length > 0) {
+                note = `⚠️ Partial results: Retrieved events from ${successfulAccounts} of ${selectedAccounts.size} account(s). ${partialFailures.length} account(s) failed - see warnings for details.`;
+            } else {
+                note = `Showing merged events from ${selectedAccounts.size} account(s), sorted chronologically`;
+            }
         }
 
         const response: ListEventsResponse = {
@@ -105,10 +119,8 @@ export class ListEventsHandler extends BaseToolHandler {
             calendars: allQueriedCalendarIds.length > 1 ? allQueriedCalendarIds : undefined,
             ...(partialFailures.length > 0 && { partialFailures }),
             ...(warnings.length > 0 && { warnings }),
-            ...(selectedAccounts.size > 1 && {
-                accounts: Array.from(selectedAccounts.keys()),
-                note: `Showing merged events from ${selectedAccounts.size} account(s), sorted chronologically`
-            })
+            ...(selectedAccounts.size > 1 && { accounts: Array.from(selectedAccounts.keys()) }),
+            ...(note && { note })
         };
 
         return createStructuredResponse(response);
