@@ -9,9 +9,18 @@ import { validateAccountId } from "../../auth/paths.js";
 
 
 export abstract class BaseToolHandler<TArgs = any> {
-    protected calendarRegistry: CalendarRegistry = new CalendarRegistry();
+    protected calendarRegistry: CalendarRegistry = CalendarRegistry.getInstance();
 
     abstract runTool(args: TArgs, accounts: Map<string, OAuth2Client>): Promise<CallToolResult>;
+
+    /**
+     * Normalize account ID to lowercase for case-insensitive matching
+     * @param accountId Account ID to normalize
+     * @returns Lowercase account ID
+     */
+    private normalizeAccountId(accountId: string): string {
+        return accountId.toLowerCase();
+    }
 
     /**
      * Get OAuth2Client for a specific account or determine default account
@@ -31,9 +40,12 @@ export abstract class BaseToolHandler<TArgs = any> {
 
         // Account ID specified - validate and retrieve
         if (accountId) {
-            // Validate account ID format
+            // Normalize to lowercase for case-insensitive matching
+            const normalizedId = this.normalizeAccountId(accountId);
+
+            // Validate account ID format (after normalization)
             try {
-                validateAccountId(accountId);
+                validateAccountId(normalizedId);
             } catch (error) {
                 throw new McpError(
                     ErrorCode.InvalidRequest,
@@ -42,12 +54,12 @@ export abstract class BaseToolHandler<TArgs = any> {
             }
 
             // Get client for specified account
-            const client = accounts.get(accountId);
+            const client = accounts.get(normalizedId);
             if (!client) {
                 const availableAccounts = Array.from(accounts.keys()).join(', ');
                 throw new McpError(
                     ErrorCode.InvalidRequest,
-                    `Account "${accountId}" not found. Available accounts: ${availableAccounts}`
+                    `Account "${normalizedId}" not found. Available accounts: ${availableAccounts}`
                 );
             }
 
@@ -111,8 +123,11 @@ export abstract class BaseToolHandler<TArgs = any> {
         const result = new Map<string, OAuth2Client>();
 
         for (const id of ids) {
+            // Normalize to lowercase for case-insensitive matching
+            const normalizedId = this.normalizeAccountId(id);
+
             try {
-                validateAccountId(id);
+                validateAccountId(normalizedId);
             } catch (error) {
                 throw new McpError(
                     ErrorCode.InvalidRequest,
@@ -120,16 +135,16 @@ export abstract class BaseToolHandler<TArgs = any> {
                 );
             }
 
-            const client = accounts.get(id);
+            const client = accounts.get(normalizedId);
             if (!client) {
                 const availableAccounts = Array.from(accounts.keys()).join(', ');
                 throw new McpError(
                     ErrorCode.InvalidRequest,
-                    `Account "${id}" not found. Available accounts: ${availableAccounts}`
+                    `Account "${normalizedId}" not found. Available accounts: ${availableAccounts}`
                 );
             }
 
-            result.set(id, client);
+            result.set(normalizedId, client);
         }
 
         return result;
@@ -162,8 +177,11 @@ export abstract class BaseToolHandler<TArgs = any> {
     ): Promise<{ accountId: string; client: OAuth2Client } | null> {
         // Fast path for single account - skip calendar registry lookup
         if (accounts.size === 1) {
-            const [accountId, client] = accounts.entries().next().value;
-            return { accountId, client };
+            const entry = accounts.entries().next().value;
+            if (entry) {
+                const [accountId, client] = entry;
+                return { accountId, client };
+            }
         }
 
         // Multi-account case - use calendar registry for permission-based selection
@@ -195,42 +213,66 @@ export abstract class BaseToolHandler<TArgs = any> {
      * - If no account specified, auto-select based on calendar permissions
      *
      * This eliminates repetitive boilerplate in handler implementations.
+     * Supports both calendar IDs and calendar names for resolution.
      *
      * @param accountId Optional account ID from args
-     * @param calendarId Calendar ID to check permissions for (if auto-selecting)
+     * @param calendarNameOrId Calendar name or ID to check permissions for (if auto-selecting)
      * @param accounts Map of available accounts
      * @param operation 'read' or 'write' operation type
-     * @returns OAuth2Client, selected account ID, and whether it was auto-selected
+     * @returns OAuth2Client, selected account ID, resolved calendar ID, and whether it was auto-selected
      * @throws McpError if account not found or no suitable account available
      */
     protected async getClientWithAutoSelection(
         accountId: string | undefined,
-        calendarId: string,
+        calendarNameOrId: string,
         accounts: Map<string, OAuth2Client>,
         operation: 'read' | 'write'
-    ): Promise<{ client: OAuth2Client; accountId: string; wasAutoSelected: boolean }> {
+    ): Promise<{ client: OAuth2Client; accountId: string; calendarId: string; wasAutoSelected: boolean }> {
         // Account explicitly specified - use it
         if (accountId) {
-            const client = this.getClientForAccount(accountId, accounts);
-            return { client, accountId, wasAutoSelected: false };
+            // Normalize account ID to lowercase
+            const normalizedAccountId = this.normalizeAccountId(accountId);
+            const client = this.getClientForAccount(normalizedAccountId, accounts);
+
+            // If calendar looks like a name (not ID), resolve it using this account
+            let resolvedCalendarId = calendarNameOrId;
+            if (calendarNameOrId !== 'primary' && !calendarNameOrId.includes('@')) {
+                resolvedCalendarId = await this.resolveCalendarId(client, calendarNameOrId);
+            }
+
+            return { client, accountId: normalizedAccountId, calendarId: resolvedCalendarId, wasAutoSelected: false };
         }
 
-        // No account specified - auto-select based on calendar permissions
-        const accountSelection = await this.getAccountForCalendarAccess(calendarId, accounts, operation);
-        if (!accountSelection) {
+        // No account specified - use CalendarRegistry to resolve name and find best account
+        const resolution = await this.calendarRegistry.resolveCalendarNameToId(
+            calendarNameOrId,
+            accounts,
+            operation
+        );
+
+        if (!resolution) {
             const availableAccounts = Array.from(accounts.keys()).join(', ');
             const accessType = operation === 'write' ? 'write' : 'read';
             throw new McpError(
                 ErrorCode.InvalidRequest,
-                `No account has ${accessType} access to calendar "${calendarId}". ` +
+                `No account has ${accessType} access to calendar "${calendarNameOrId}". ` +
                 `Available accounts: ${availableAccounts}. Please ensure the calendar exists and ` +
                 `you have the necessary permissions, or specify the 'account' parameter explicitly.`
             );
         }
 
+        const client = accounts.get(resolution.accountId);
+        if (!client) {
+            throw new McpError(
+                ErrorCode.InternalError,
+                `Failed to retrieve client for account "${resolution.accountId}"`
+            );
+        }
+
         return {
-            client: accountSelection.client,
-            accountId: accountSelection.accountId,
+            client,
+            accountId: resolution.accountId,
+            calendarId: resolution.calendarId,
             wasAutoSelected: true
         };
     }
