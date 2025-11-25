@@ -169,7 +169,7 @@ ANTHROPIC_MODEL=claude-3-5-haiku-20241022
 OPENAI_MODEL=gpt-4o-mini
 ```
 
-> **Tip:** You can authenticate multiple test accounts by running `GOOGLE_ACCOUNT_MODE=<accountId> npm run auth` for each ID. All tokens share the same storage file, so integration tests can switch accounts simply by passing the desired `account` parameter to the tool under test.
+> **Tip:** Authenticate multiple accounts with `npm run account auth <accountId>` for each ID. All tokens share the same storage file, so integration tests can switch accounts by passing the `account` parameter.
 
 5. **Run multi-account integration tests (optional):**
 ```bash

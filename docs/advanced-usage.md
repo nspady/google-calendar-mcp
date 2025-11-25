@@ -10,17 +10,14 @@ The server allows you to connect multiple Google accounts simultaneously (e.g., 
 
 | Workflow | How to Add Accounts |
 |----------|---------------------|
-| **CLI / stdio** | `GOOGLE_ACCOUNT_MODE=work npm run auth` or `node scripts/account-manager.js auth work` |
-| **HTTP / Docker** | Visit `http://localhost:3000/accounts` for the built-in account manager UI |
-
-Helpful CLI commands:
+| **CLI / stdio** | `npm run account auth work` |
+| **HTTP / Docker** | Visit `http://localhost:3000/accounts` |
 
 ```bash
-# List stored accounts + token status
-node scripts/account-manager.js list
-
-# Clear a single account
-node scripts/account-manager.js clear work
+npm run account auth work      # Authenticate "work" account
+npm run account auth personal  # Authenticate "personal" account
+npm run account list           # List all accounts + status
+npm run account clear work     # Remove an account
 ```
 
 ### Using Accounts with Tools

@@ -116,27 +116,19 @@ See [Authentication Guide](docs/authentication.md#moving-to-production-mode-reco
 
 ## Managing Multiple Accounts
 
-You can keep several Google accounts connected simultaneously and choose which one to use per tool call.
+Connect multiple Google accounts and use them simultaneously.
 
-1. **CLI / stdio workflows**
-   ```bash
-   # Authenticate a named account
-   GOOGLE_ACCOUNT_MODE=work npm run auth
+**CLI / stdio:**
+```bash
+npm run account auth work      # Add "work" account
+npm run account auth personal  # Add "personal" account
+npm run account list           # List all accounts
+```
 
-   # Or use the helper script
-   node scripts/account-manager.js auth personal
+**HTTP / Docker:**
+Visit `http://localhost:3000/accounts` to manage accounts in the browser.
 
-   # See all stored accounts + token status
-   node scripts/account-manager.js list
-   ```
-   When no `account` parameter is supplied, read-only tools (like `list-events`) will merge results from every authenticated account. Mutation tools require an explicit `account` or will automatically pick the account with write permission to the requested calendar.
-
-2. **HTTP / Docker**
-   - Start the server with `npm run start:http` (or `docker compose up`)
-   - Visit `http://localhost:3000/accounts` to launch the built-in account manager UI
-   - Add, re-auth, or delete accounts directly in the browser
-
-Tokens for every account live in `~/.config/google-calendar-mcp/tokens.json` (or the directory pointed to `GOOGLE_CALENDAR_MCP_TOKEN_PATH`) with file mode `0600`.
+When no `account` parameter is supplied to a tool, read-only tools merge results from all accounts, while write tools auto-select the account with appropriate permissions.
 
 ## Example Usage
 

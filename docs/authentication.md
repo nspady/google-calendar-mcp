@@ -135,33 +135,16 @@ The server will guide you through the authentication flow again.
 
 ## Managing Multiple Accounts
 
-The Google Calendar MCP server supports connecting multiple Google accounts simultaneously (e.g., "work", "personal", "family").
+The server supports connecting multiple Google accounts simultaneously (e.g., "work", "personal", "family").
 
 ### Using the CLI (Stdio / Claude Desktop)
 
-You can add as many accounts as you need using the account manager script.
-
-1.  **Authenticate your primary account:**
-    ```bash
-    node scripts/account-manager.js auth normal
-    ```
-
-2.  **Add additional accounts:**
-    Give each account a unique name (e.g., "work", "personal").
-    ```bash
-    node scripts/account-manager.js auth work
-    node scripts/account-manager.js auth personal
-    ```
-
-3.  **List authenticated accounts:**
-    ```bash
-    node scripts/account-manager.js list
-    ```
-
-4.  **Remove an account:**
-    ```bash
-    node scripts/account-manager.js clear work
-    ```
+```bash
+npm run account auth work      # Add "work" account
+npm run account auth personal  # Add "personal" account
+npm run account list           # List all accounts + status
+npm run account clear work     # Remove an account
+```
 
 ### Using the Web UI (Docker / HTTP)
 

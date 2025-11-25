@@ -235,41 +235,22 @@ async function clearAccount(accountId) {
   }
 }
 
-async function runTests() {
-  log('\n🧪 Running integration tests with test account...');
-  
-  try {
-    await runCommand('npm', ['test'], {
-      GOOGLE_ACCOUNT_MODE: 'test'
-    });
-    success('Tests completed successfully!');
-  } catch (error) {
-    error(`Tests failed: ${error.message}`);
-    process.exit(1);
-  }
-}
-
 function showUsage() {
   log('\n' + colorize('bright', 'Google Calendar Account Manager'));
   log('\nManage OAuth tokens for multiple Google accounts');
   log('\n' + colorize('bright', 'Usage:'));
-  log('  node scripts/account-manager.js <command> [args]');
+  log('  npm run account <command> [args]');
   log('\n' + colorize('bright', 'Commands:'));
   log('  list                    List available accounts and their status');
   log('  auth <account_id>       Authenticate the specified account (e.g., work, personal)');
   log('  status                  Show current account status and configuration');
   log('  clear <account_id>      Clear tokens for the specified account');
-  log('  test                    Run integration tests with test account');
   log('  help                    Show this help message');
   log('\n' + colorize('bright', 'Examples:'));
-  log('  node scripts/account-manager.js auth work     # Authenticate work account');
-  log('  node scripts/account-manager.js auth personal # Authenticate personal account');
-  log('  node scripts/account-manager.js status        # Check account status');
-  log('\n' + colorize('bright', 'Environment Variables:'));
-  log('  GOOGLE_ACCOUNT_MODE     Set to account ID (default: normal)');
-  log('  TEST_CALENDAR_ID        Calendar ID to use for testing');
-  log('  INVITEE_1, INVITEE_2    Email addresses for testing invitations');
-  log('  CLAUDE_API_KEY          API key for Claude integration tests');
+  log('  npm run account auth work      # Authenticate work account');
+  log('  npm run account auth personal  # Authenticate personal account');
+  log('  npm run account list           # List all accounts');
+  log('  npm run account status         # Check account status');
 }
 
 async function main() {
@@ -282,7 +263,7 @@ async function main() {
       break;
     case 'auth':
       if (!arg) {
-        error('Please specify account mode: normal or test');
+        error('Please specify account ID (e.g., work, personal)');
         process.exit(1);
       }
       await authenticateAccount(arg);
@@ -292,13 +273,10 @@ async function main() {
       break;
     case 'clear':
       if (!arg) {
-        error('Please specify account mode: normal or test');
+        error('Please specify account ID (e.g., work, personal)');
         process.exit(1);
       }
       await clearAccount(arg);
-      break;
-    case 'test':
-      await runTests();
       break;
     case 'help':
     case '--help':
