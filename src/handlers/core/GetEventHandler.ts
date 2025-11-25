@@ -18,7 +18,8 @@ export class GetEventHandler extends BaseToolHandler {
         const validArgs = args;
 
         // Get OAuth2Client with automatic account selection for read operations
-        const { client: oauth2Client, accountId: selectedAccountId } = await this.getClientWithAutoSelection(
+        // Also resolves calendar name to ID if a name was provided
+        const { client: oauth2Client, accountId: selectedAccountId, calendarId: resolvedCalendarId } = await this.getClientWithAutoSelection(
             args.account,
             validArgs.calendarId,
             accounts,
@@ -26,14 +27,16 @@ export class GetEventHandler extends BaseToolHandler {
         );
 
         try {
-            const event = await this.getEvent(oauth2Client, validArgs);
+            // Get the event with resolved calendar ID
+            const argsWithResolvedCalendar = { ...validArgs, calendarId: resolvedCalendarId };
+            const event = await this.getEvent(oauth2Client, argsWithResolvedCalendar);
 
             if (!event) {
-                throw new Error(`Event with ID '${validArgs.eventId}' not found in calendar '${validArgs.calendarId}'.`);
+                throw new Error(`Event with ID '${validArgs.eventId}' not found in calendar '${resolvedCalendarId}'.`);
             }
 
             const response: GetEventResponse = {
-                event: convertGoogleEventToStructured(event, validArgs.calendarId, selectedAccountId)
+                event: convertGoogleEventToStructured(event, resolvedCalendarId, selectedAccountId)
             };
 
             return createStructuredResponse(response);

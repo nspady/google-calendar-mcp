@@ -10,19 +10,22 @@ export class DeleteEventHandler extends BaseToolHandler {
         const validArgs = args as DeleteEventInput;
 
         // Get OAuth2Client with automatic account selection for write operations
-        const { client: oauth2Client } = await this.getClientWithAutoSelection(
+        // Also resolves calendar name to ID if a name was provided
+        const { client: oauth2Client, calendarId: resolvedCalendarId } = await this.getClientWithAutoSelection(
             args.account,
             validArgs.calendarId,
             accounts,
             'write'
         );
 
-        await this.deleteEvent(oauth2Client, validArgs);
+        // Delete the event with resolved calendar ID
+        const argsWithResolvedCalendar = { ...validArgs, calendarId: resolvedCalendarId };
+        await this.deleteEvent(oauth2Client, argsWithResolvedCalendar);
 
         const response: DeleteEventResponse = {
             success: true,
             eventId: validArgs.eventId,
-            calendarId: validArgs.calendarId,
+            calendarId: resolvedCalendarId,
             message: "Event deleted successfully"
         };
 

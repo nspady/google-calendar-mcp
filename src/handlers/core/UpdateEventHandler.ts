@@ -28,7 +28,8 @@ export class UpdateEventHandler extends BaseToolHandler {
         const validArgs = args as UpdateEventInput;
 
         // Get OAuth2Client with automatic account selection for write operations
-        const { client: oauth2Client, accountId: selectedAccountId } = await this.getClientWithAutoSelection(
+        // Also resolves calendar name to ID if a name was provided
+        const { client: oauth2Client, accountId: selectedAccountId, calendarId: resolvedCalendarId } = await this.getClientWithAutoSelection(
             args.account,
             validArgs.calendarId,
             accounts,
@@ -41,7 +42,7 @@ export class UpdateEventHandler extends BaseToolHandler {
             // Get the existing event to merge with updates
             const calendar = this.getCalendar(oauth2Client);
             const existingEvent = await calendar.events.get({
-                calendarId: validArgs.calendarId,
+                calendarId: resolvedCalendarId,
                 eventId: validArgs.eventId
             });
 
@@ -50,7 +51,7 @@ export class UpdateEventHandler extends BaseToolHandler {
             }
 
             // Create updated event object for conflict checking
-            const timezone = validArgs.timeZone || await this.getCalendarTimezone(oauth2Client, validArgs.calendarId);
+            const timezone = validArgs.timeZone || await this.getCalendarTimezone(oauth2Client, resolvedCalendarId);
             const eventToCheck: calendar_v3.Schema$Event = {
                 ...existingEvent.data,
                 id: validArgs.eventId,
@@ -65,21 +66,22 @@ export class UpdateEventHandler extends BaseToolHandler {
             conflicts = await this.conflictDetectionService.checkConflicts(
                 oauth2Client,
                 eventToCheck,
-                validArgs.calendarId,
+                resolvedCalendarId,
                 {
                     checkDuplicates: false, // Don't check duplicates for updates
                     checkConflicts: true,
-                    calendarsToCheck: validArgs.calendarsToCheck || [validArgs.calendarId]
+                    calendarsToCheck: validArgs.calendarsToCheck || [resolvedCalendarId]
                 }
             );
         }
 
-        // Update the event
-        const event = await this.updateEventWithScope(oauth2Client, validArgs);
+        // Update the event with resolved calendar ID
+        const argsWithResolvedCalendar = { ...validArgs, calendarId: resolvedCalendarId };
+        const event = await this.updateEventWithScope(oauth2Client, argsWithResolvedCalendar);
 
         // Create structured response
         const response: UpdateEventResponse = {
-            event: convertGoogleEventToStructured(event, validArgs.calendarId, selectedAccountId)
+            event: convertGoogleEventToStructured(event, resolvedCalendarId, selectedAccountId)
         };
         
         // Add conflict information if present

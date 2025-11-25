@@ -13,24 +13,27 @@ export class SearchEventsHandler extends BaseToolHandler {
         const validArgs = args as SearchEventsInput;
 
         // Get OAuth2Client with automatic account selection for read operations
-        const { client: oauth2Client, accountId: selectedAccountId } = await this.getClientWithAutoSelection(
+        // Also resolves calendar name to ID if a name was provided
+        const { client: oauth2Client, accountId: selectedAccountId, calendarId: resolvedCalendarId } = await this.getClientWithAutoSelection(
             args.account,
             validArgs.calendarId,
             accounts,
             'read'
         );
 
-        const events = await this.searchEvents(oauth2Client, validArgs);
+        // Search events with resolved calendar ID
+        const argsWithResolvedCalendar = { ...validArgs, calendarId: resolvedCalendarId };
+        const events = await this.searchEvents(oauth2Client, argsWithResolvedCalendar);
 
         const response: SearchEventsResponse = {
-            events: convertEventsToStructured(events, validArgs.calendarId, selectedAccountId),
+            events: convertEventsToStructured(events, resolvedCalendarId, selectedAccountId),
             totalCount: events.length,
             query: validArgs.query,
-            calendarId: validArgs.calendarId
+            calendarId: resolvedCalendarId
         };
 
         if (validArgs.timeMin || validArgs.timeMax) {
-            const timezone = validArgs.timeZone || await this.getCalendarTimezone(oauth2Client, validArgs.calendarId);
+            const timezone = validArgs.timeZone || await this.getCalendarTimezone(oauth2Client, resolvedCalendarId);
             response.timeRange = {
                 start: validArgs.timeMin ? convertToRFC3339(validArgs.timeMin, timezone) : '',
                 end: validArgs.timeMax ? convertToRFC3339(validArgs.timeMax, timezone) : ''
