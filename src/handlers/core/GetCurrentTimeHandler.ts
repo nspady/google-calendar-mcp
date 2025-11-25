@@ -14,7 +14,7 @@ export class GetCurrentTimeHandler extends BaseToolHandler {
         // Use specified account or default to first account
         const oauth2Client = args.account
             ? this.getClientForAccount(args.account, accounts)
-            : accounts.values().next().value;
+            : accounts.values().next().value as OAuth2Client;
         
         const now = new Date();
         
