@@ -432,7 +432,9 @@ export const ToolSchemas = {
   }),
 
   'get-freebusy': z.object({
-    account: singleAccountSchema,
+    account: multiAccountSchema.describe(
+      "Account ID(s) to query from (e.g., 'work' or ['work', 'personal']). Optional - if omitted, queries from all authenticated accounts to maximize calendar accessibility."
+    ),
     calendars: z.array(z.object({
       id: z.string().describe("ID of the calendar (use 'primary' for the main calendar)")
     })).describe(
