@@ -39,6 +39,18 @@ const commands = {
     args: ['build/auth-server.js'],
     env: { GOOGLE_ACCOUNT_MODE: 'test' }
   },
+  'auth:test-primary': {
+    description: 'Authenticate test-primary account (for multi-account testing)',
+    cmd: 'node',
+    args: ['build/auth-server.js'],
+    env: { GOOGLE_ACCOUNT_MODE: 'test-primary' }
+  },
+  'auth:test-secondary': {
+    description: 'Authenticate test-secondary account (for multi-account testing)',
+    cmd: 'node',
+    args: ['build/auth-server.js'],
+    env: { GOOGLE_ACCOUNT_MODE: 'test-secondary' }
+  },
   'account:status': {
     description: 'Check account status and configuration',
     cmd: 'node',
@@ -80,6 +92,11 @@ const commands = {
     description: 'Run complete integration test suite',
     cmd: 'npm',
     args: ['run', 'test:integration']
+  },
+  'test:integration:multi-account': {
+    description: 'Run multi-account integration tests (requires 2 authenticated accounts)',
+    cmd: 'npx',
+    args: ['vitest', 'run', 'src/tests/integration/multi-account-integration.test.ts']
   },
   'test:watch:all': {
     description: 'Run all tests in watch mode',
