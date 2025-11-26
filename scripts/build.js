@@ -44,10 +44,20 @@ if (isWatch) {
     esbuild.build(buildOptions),
     esbuild.build(authServerBuildOptions)
   ]);
-  
+
   // Make the file executable on non-Windows platforms
   if (process.platform !== 'win32') {
     const { chmod } = await import('fs/promises');
     await chmod(buildOptions.outfile, 0o755);
   }
+
+  // Copy static files (HTML, etc.) to build directory
+  const { mkdir, copyFile } = await import('fs/promises');
+  const webDir = join(__dirname, '../build/web');
+  await mkdir(webDir, { recursive: true });
+  await copyFile(
+    join(__dirname, '../src/web/accounts.html'),
+    join(webDir, 'accounts.html')
+  );
+  process.stderr.write('Static files copied to build directory\n');
 } 

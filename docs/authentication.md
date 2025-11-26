@@ -133,6 +133,28 @@ npm run auth
 
 The server will guide you through the authentication flow again.
 
+## Managing Multiple Accounts
+
+The server supports connecting multiple Google accounts simultaneously (e.g., "work", "personal", "family").
+
+### Using the CLI (Stdio / Claude Desktop)
+
+```bash
+npm run account auth work      # Add "work" account
+npm run account auth personal  # Add "personal" account
+npm run account list           # List all accounts + status
+npm run account clear work     # Remove an account
+```
+
+### Using the Web UI (Docker / HTTP)
+
+If you are running the server in HTTP mode or via Docker, you can manage accounts through the built-in web interface.
+
+1.  Open your browser to `http://localhost:3000/accounts` (or the port you configured).
+2.  Use the **Add Account** form to enter an account ID (e.g., "work").
+3.  Click **Add Account** and complete the Google OAuth flow in the popup window.
+4.  The account will appear in the list below. You can also re-authenticate or remove accounts from this view.
+
 ## Important Notes
 
 ### Test Mode Limitations

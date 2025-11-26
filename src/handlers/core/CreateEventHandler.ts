@@ -1,4 +1,4 @@
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult, McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { CreateEventInput } from "../../tools/registry.js";
 import { BaseToolHandler } from "./BaseToolHandler.js";
@@ -8,7 +8,7 @@ import { validateEventId } from "../../utils/event-id-validator.js";
 import { ConflictDetectionService } from "../../services/conflict-detection/index.js";
 import { CONFLICT_DETECTION_CONFIG } from "../../services/conflict-detection/config.js";
 import { createStructuredResponse, convertConflictsToStructured, createWarningsArray } from "../../utils/response-builder.js";
-import { CreateEventResponse, convertGoogleEventToStructured, DuplicateInfo } from "../../types/structured-responses.js";
+import { CreateEventResponse, convertGoogleEventToStructured } from "../../types/structured-responses.js";
 
 export class CreateEventHandler extends BaseToolHandler {
     private conflictDetectionService: ConflictDetectionService;
@@ -18,11 +18,20 @@ export class CreateEventHandler extends BaseToolHandler {
         this.conflictDetectionService = new ConflictDetectionService();
     }
     
-    async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
+    async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
         const validArgs = args as CreateEventInput;
 
+        // Get OAuth2Client with automatic account selection for write operations
+        // Also resolves calendar name to ID if a name was provided
+        const { client: oauth2Client, accountId: selectedAccountId, calendarId: resolvedCalendarId } = await this.getClientWithAutoSelection(
+            args.account,
+            validArgs.calendarId,
+            accounts,
+            'write'
+        );
+
         // Create the event object for conflict checking
-        const timezone = args.timeZone || await this.getCalendarTimezone(oauth2Client, validArgs.calendarId);
+        const timezone = args.timeZone || await this.getCalendarTimezone(oauth2Client, resolvedCalendarId);
         const eventToCheck: calendar_v3.Schema$Event = {
             summary: args.summary,
             description: args.description,
@@ -32,39 +41,25 @@ export class CreateEventHandler extends BaseToolHandler {
             location: args.location,
         };
         
-        // Check for conflicts and duplicates
+        // Check for conflicts and duplicates using resolved calendar ID
         const conflicts = await this.conflictDetectionService.checkConflicts(
             oauth2Client,
             eventToCheck,
-            validArgs.calendarId,
+            resolvedCalendarId,
             {
                 checkDuplicates: true,
                 checkConflicts: true,
-                calendarsToCheck: validArgs.calendarsToCheck || [validArgs.calendarId],
+                calendarsToCheck: validArgs.calendarsToCheck || [resolvedCalendarId],
                 duplicateSimilarityThreshold: validArgs.duplicateSimilarityThreshold || CONFLICT_DETECTION_CONFIG.DEFAULT_DUPLICATE_THRESHOLD
             }
         );
-        
+
         // Block creation if exact or near-exact duplicate found
         const exactDuplicate = conflicts.duplicates.find(
             dup => dup.event.similarity >= CONFLICT_DETECTION_CONFIG.DUPLICATE_THRESHOLDS.BLOCKING
         );
-        
+
         if (exactDuplicate && validArgs.allowDuplicates !== true) {
-            // Create a duplicate error response
-            const duplicateInfo: DuplicateInfo = {
-                event: {
-                    id: exactDuplicate.event.id || '',
-                    title: exactDuplicate.event.title,
-                    start: exactDuplicate.event.start || '',
-                    end: exactDuplicate.event.end || '',
-                    url: exactDuplicate.event.url,
-                    similarity: exactDuplicate.event.similarity
-                },
-                calendarId: exactDuplicate.calendarId || '',
-                suggestion: exactDuplicate.suggestion
-            };
-            
             // Throw an error that will be handled by MCP SDK
             throw new Error(
                 `Duplicate event detected (${Math.round(exactDuplicate.event.similarity * 100)}% similar). ` +
@@ -72,19 +67,20 @@ export class CreateEventHandler extends BaseToolHandler {
                 `To create anyway, set allowDuplicates to true.`
             );
         }
-        
-        // Create the event
-        const event = await this.createEvent(oauth2Client, validArgs);
-        
+
+        // Create the event with resolved calendar ID
+        const argsWithResolvedCalendar = { ...validArgs, calendarId: resolvedCalendarId };
+        const event = await this.createEvent(oauth2Client, argsWithResolvedCalendar);
+
         // Generate structured response with conflict warnings
         const structuredConflicts = convertConflictsToStructured(conflicts);
         const response: CreateEventResponse = {
-            event: convertGoogleEventToStructured(event, validArgs.calendarId),
+            event: convertGoogleEventToStructured(event, resolvedCalendarId, selectedAccountId),
             conflicts: structuredConflicts.conflicts,
             duplicates: structuredConflicts.duplicates,
             warnings: createWarningsArray(conflicts)
         };
-        
+
         return createStructuredResponse(response);
     }
 

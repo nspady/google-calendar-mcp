@@ -1,4 +1,4 @@
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult, McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { SearchEventsInput } from "../../tools/registry.js";
 import { BaseToolHandler } from "./BaseToolHandler.js";
@@ -9,25 +9,37 @@ import { createStructuredResponse, convertEventsToStructured } from "../../utils
 import { SearchEventsResponse } from "../../types/structured-responses.js";
 
 export class SearchEventsHandler extends BaseToolHandler {
-    async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
+    async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
         const validArgs = args as SearchEventsInput;
-        const events = await this.searchEvents(oauth2Client, validArgs);
-        
+
+        // Get OAuth2Client with automatic account selection for read operations
+        // Also resolves calendar name to ID if a name was provided
+        const { client: oauth2Client, accountId: selectedAccountId, calendarId: resolvedCalendarId } = await this.getClientWithAutoSelection(
+            args.account,
+            validArgs.calendarId,
+            accounts,
+            'read'
+        );
+
+        // Search events with resolved calendar ID
+        const argsWithResolvedCalendar = { ...validArgs, calendarId: resolvedCalendarId };
+        const events = await this.searchEvents(oauth2Client, argsWithResolvedCalendar);
+
         const response: SearchEventsResponse = {
-            events: convertEventsToStructured(events, validArgs.calendarId),
+            events: convertEventsToStructured(events, resolvedCalendarId, selectedAccountId),
             totalCount: events.length,
             query: validArgs.query,
-            calendarId: validArgs.calendarId
+            calendarId: resolvedCalendarId
         };
-        
+
         if (validArgs.timeMin || validArgs.timeMax) {
-            const timezone = validArgs.timeZone || await this.getCalendarTimezone(oauth2Client, validArgs.calendarId);
+            const timezone = validArgs.timeZone || await this.getCalendarTimezone(oauth2Client, resolvedCalendarId);
             response.timeRange = {
                 start: validArgs.timeMin ? convertToRFC3339(validArgs.timeMin, timezone) : '',
                 end: validArgs.timeMax ? convertToRFC3339(validArgs.timeMax, timezone) : ''
             };
         }
-        
+
         return createStructuredResponse(response);
     }
 

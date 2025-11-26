@@ -15,6 +15,7 @@ import { UpdateEventHandler } from "../handlers/core/UpdateEventHandler.js";
 import { DeleteEventHandler } from "../handlers/core/DeleteEventHandler.js";
 import { FreeBusyEventHandler } from "../handlers/core/FreeBusyEventHandler.js";
 import { GetCurrentTimeHandler } from "../handlers/core/GetCurrentTimeHandler.js";
+import { FindCalendarConflictsHandler } from "../handlers/core/FindCalendarConflictsHandler.js";
 
 // Define shared schema fields for reuse
 // Note: Event datetime fields (start/end) are NOT shared to avoid $ref generation
@@ -60,11 +61,36 @@ const sharedExtendedPropertySchema = z
     "Filter by shared extended properties (key=value). Matches events that have all specified properties."
   );
 
+// Single account schema - for write operations (create, update, delete)
+const singleAccountSchema = z.string()
+  .regex(/^[a-z0-9_-]{1,64}$/, "Account ID must be 1-64 characters: lowercase letters, numbers, dashes, underscores only")
+  .optional()
+  .describe(
+    "Account ID to use for this operation (e.g., 'work', 'personal'). Optional when only one account is authenticated - will auto-select the account with appropriate permissions. Use 'list-calendars' to see available accounts."
+  );
+
+// Multi-account schema - for read operations (list, search, get)
+const multiAccountSchema = z.union([
+  z.string()
+    .regex(/^[a-z0-9_-]{1,64}$/, "Account ID must be 1-64 characters: lowercase letters, numbers, dashes, underscores only"),
+  z.array(z.string()
+    .regex(/^[a-z0-9_-]{1,64}$/, "Account ID must be 1-64 characters: lowercase letters, numbers, dashes, underscores only"))
+    .min(1, "At least one account ID is required")
+    .max(10, "Maximum 10 accounts allowed per request")
+])
+  .optional()
+  .describe(
+    "Account ID(s) to query (e.g., 'work' or ['work', 'personal']). Optional - if omitted, queries all authenticated accounts and merges results. Use 'list-calendars' to see available accounts."
+  );
+
 // Define all tool schemas with TypeScript inference
 export const ToolSchemas = {
-  'list-calendars': z.object({}),
+  'list-calendars': z.object({
+    account: multiAccountSchema
+  }),
 
   'list-events': z.object({
+    account: multiAccountSchema,
     calendarId: z.union([
       z.string().describe(
         "Calendar identifier(s) to query. Accepts calendar IDs (e.g., 'primary', 'user@gmail.com') OR calendar names (e.g., 'Work', 'Personal'). Single calendar: 'primary'. Multiple calendars: array ['Work', 'Personal'] or JSON string '[\"Work\", \"Personal\"]'"
@@ -87,6 +113,7 @@ export const ToolSchemas = {
   }),
   
   'search-events': z.object({
+    account: singleAccountSchema,
     calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
     query: z.string().describe(
       "Free text search query (searches summary, description, location, attendees, etc.)"
@@ -126,6 +153,7 @@ export const ToolSchemas = {
   }),
   
   'get-event': z.object({
+    account: singleAccountSchema,
     calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
     eventId: z.string().describe("ID of the event to retrieve"),
     fields: z.array(z.enum(ALLOWED_EVENT_FIELDS)).optional().describe(
@@ -133,9 +161,12 @@ export const ToolSchemas = {
     )
   }),
 
-  'list-colors': z.object({}),
-  
+  'list-colors': z.object({
+    account: singleAccountSchema,
+  }),
+
   'create-event': z.object({
+    account: singleAccountSchema,
     calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
     eventId: z.string().optional().describe("Optional custom event ID (5-1024 characters, base32hex encoding: lowercase letters a-v and digits 0-9 only). If not provided, Google Calendar will generate one."),
     summary: z.string().describe("Title of the event"),
@@ -249,6 +280,7 @@ export const ToolSchemas = {
   }),
   
   'update-event': z.object({
+    account: singleAccountSchema,
     calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
     eventId: z.string().describe("ID of the event to update"),
     summary: z.string().optional().describe("Updated title of the event"),
@@ -391,14 +423,18 @@ export const ToolSchemas = {
   ),
   
   'delete-event': z.object({
+    account: singleAccountSchema,
     calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
     eventId: z.string().describe("ID of the event to delete"),
     sendUpdates: z.enum(["all", "externalOnly", "none"]).default("all").describe(
       "Whether to send cancellation notifications"
     )
   }),
-  
+
   'get-freebusy': z.object({
+    account: multiAccountSchema.describe(
+      "Account ID(s) to query from (e.g., 'work' or ['work', 'personal']). Optional - if omitted, queries from all authenticated accounts to maximize calendar accessibility."
+    ),
     calendars: z.array(z.object({
       id: z.string().describe("ID of the calendar (use 'primary' for the main calendar)")
     })).describe(
@@ -428,8 +464,18 @@ export const ToolSchemas = {
   }),
   
   'get-current-time': z.object({
+    account: singleAccountSchema,
     timeZone: z.string().optional().describe(
       "Optional IANA timezone (e.g., 'America/Los_Angeles', 'Europe/London', 'UTC'). If not provided, uses the primary Google Calendar's default timezone."
+    )
+  }),
+
+  'find-calendar-conflicts': z.object({
+    account: multiAccountSchema.describe("Accounts to check. Omit to use all authenticated accounts."),
+    timeMin: timeMinSchema.describe("Start of the window to analyze for overlaps."),
+    timeMax: timeMaxSchema.describe("End of the window to analyze for overlaps."),
+    calendarId: z.string().optional().describe(
+      "Calendar identifier or name to inspect (defaults to 'primary' for each account when omitted)."
     )
   })
 } as const;
@@ -450,6 +496,7 @@ export type UpdateEventInput = ToolInputs['update-event'];
 export type DeleteEventInput = ToolInputs['delete-event'];
 export type GetFreeBusyInput = ToolInputs['get-freebusy'];
 export type GetCurrentTimeInput = ToolInputs['get-current-time'];
+export type FindCalendarConflictsInput = ToolInputs['find-calendar-conflicts'];
 
 interface ToolDefinition {
   name: keyof typeof ToolSchemas;
@@ -604,6 +651,12 @@ export class ToolRegistry {
       description: "Get current time in the primary Google Calendar's timezone (or a requested timezone).",
       schema: ToolSchemas['get-current-time'],
       handler: GetCurrentTimeHandler
+    },
+    {
+      name: "find-calendar-conflicts",
+      description: "Detect overlapping events across multiple accounts/calendars within a time range.",
+      schema: ToolSchemas['find-calendar-conflicts'],
+      handler: FindCalendarConflictsHandler
     }
   ];
 

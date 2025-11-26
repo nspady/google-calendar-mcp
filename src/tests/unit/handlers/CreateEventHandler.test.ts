@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CreateEventHandler } from '../../../handlers/core/CreateEventHandler.js';
 import { OAuth2Client } from 'google-auth-library';
+import { CalendarRegistry } from '../../../services/CalendarRegistry.js';
 
 // Mock the googleapis module
 vi.mock('googleapis', () => ({
@@ -37,24 +38,37 @@ vi.mock('../../../utils/datetime.js', () => ({
 describe('CreateEventHandler', () => {
   let handler: CreateEventHandler;
   let mockOAuth2Client: OAuth2Client;
+  let mockAccounts: Map<string, OAuth2Client>;
   let mockCalendar: any;
 
   beforeEach(() => {
+    // Reset the singleton to get a fresh instance for each test
+    CalendarRegistry.resetInstance();
+
     handler = new CreateEventHandler();
     mockOAuth2Client = new OAuth2Client();
-    
+    mockAccounts = new Map([['test', mockOAuth2Client]]);
+
     // Setup mock calendar
     mockCalendar = {
       events: {
         insert: vi.fn()
       }
     };
-    
+
     // Mock the getCalendar method
     vi.spyOn(handler as any, 'getCalendar').mockReturnValue(mockCalendar);
-    
+
     // Mock getCalendarTimezone
     vi.spyOn(handler as any, 'getCalendarTimezone').mockResolvedValue('America/Los_Angeles');
+
+    // Mock getClientWithAutoSelection to return the test account
+    vi.spyOn(handler as any, 'getClientWithAutoSelection').mockResolvedValue({
+      client: mockOAuth2Client,
+      accountId: 'test',
+      calendarId: 'primary',
+      wasAutoSelected: true
+    });
   });
 
   describe('Basic Event Creation', () => {
@@ -76,7 +90,7 @@ describe('CreateEventHandler', () => {
         end: '2025-01-15T11:00:00'
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.insert).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -128,7 +142,7 @@ describe('CreateEventHandler', () => {
         }
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.insert).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -172,7 +186,7 @@ describe('CreateEventHandler', () => {
         end: '2025-01-15T11:00:00'
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.insert).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -198,7 +212,7 @@ describe('CreateEventHandler', () => {
         end: '2025-01-15T11:00:00'
       };
 
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow(
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
         'Invalid event ID: length must be between 5 and 1024 characters'
       );
 
@@ -215,7 +229,7 @@ describe('CreateEventHandler', () => {
         end: '2025-01-15T11:00:00'
       };
 
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow(
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
         'Invalid event ID: can only contain letters, numbers, and hyphens'
       );
 
@@ -235,7 +249,7 @@ describe('CreateEventHandler', () => {
         end: '2025-01-15T11:00:00'
       };
 
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow(
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
         "Event ID 'existing-event' already exists. Please use a different ID."
       );
     });
@@ -253,7 +267,7 @@ describe('CreateEventHandler', () => {
         end: '2025-01-15T11:00:00'
       };
 
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow(
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
         "Event ID 'existing-event' already exists. Please use a different ID."
       );
     });
@@ -277,7 +291,7 @@ describe('CreateEventHandler', () => {
         transparency: 'transparent' as const
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.insert).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -305,7 +319,7 @@ describe('CreateEventHandler', () => {
         visibility: 'private' as const
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.insert).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -335,7 +349,7 @@ describe('CreateEventHandler', () => {
         anyoneCanAddSelf: true
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.insert).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -365,7 +379,7 @@ describe('CreateEventHandler', () => {
         sendUpdates: 'externalOnly' as const
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.insert).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -402,7 +416,7 @@ describe('CreateEventHandler', () => {
         }
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.insert).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -448,7 +462,7 @@ describe('CreateEventHandler', () => {
         }
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.insert).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -498,7 +512,7 @@ describe('CreateEventHandler', () => {
         ]
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.insert).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -555,7 +569,7 @@ describe('CreateEventHandler', () => {
         ]
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.insert).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -602,7 +616,7 @@ describe('CreateEventHandler', () => {
         }
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.insert).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -635,7 +649,7 @@ describe('CreateEventHandler', () => {
         throw new Error('Handled API Error');
       });
 
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow('Handled API Error');
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow('Handled API Error');
     });
 
     it('should handle missing response data', async () => {
@@ -648,7 +662,7 @@ describe('CreateEventHandler', () => {
         end: '2025-01-15T11:00:00'
       };
 
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow(
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
         'Failed to create event, no data returned'
       );
     });
@@ -702,7 +716,7 @@ describe('CreateEventHandler', () => {
         sendUpdates: 'all' as const
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       const callArgs = mockCalendar.events.insert.mock.calls[0][0];
       

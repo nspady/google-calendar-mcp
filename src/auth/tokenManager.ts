@@ -6,20 +6,35 @@ import { mkdir } from 'fs/promises';
 import { dirname } from 'path';
 
 // Interface for multi-account token storage
+// Now supports arbitrary account IDs
 interface MultiAccountTokens {
-  normal?: Credentials;
-  test?: Credentials;
+  [accountId: string]: Credentials;
 }
 
 export class TokenManager {
   private oauth2Client: OAuth2Client;
   private tokenPath: string;
-  private accountMode: 'normal' | 'test';
+  private accountMode: string;
+  private accounts: Map<string, OAuth2Client> = new Map();
+  private credentials: {
+    clientId: string;
+    clientSecret: string;
+    redirectUri: string;
+  };
+  private writeQueue: Promise<void> = Promise.resolve();
 
   constructor(oauth2Client: OAuth2Client) {
     this.oauth2Client = oauth2Client;
     this.tokenPath = getSecureTokenPath();
     this.accountMode = getAccountMode();
+
+    // Store credentials to avoid accessing private properties later
+    this.credentials = {
+      clientId: (oauth2Client as any)._clientId,
+      clientSecret: (oauth2Client as any)._clientSecret,
+      redirectUri: (oauth2Client as any)._redirectUri
+    };
+
     this.setupTokenRefresh();
   }
 
@@ -29,12 +44,12 @@ export class TokenManager {
   }
 
   // Method to get current account mode
-  public getAccountMode(): 'normal' | 'test' {
+  public getAccountMode(): string {
     return this.accountMode;
   }
 
-  // Method to switch account mode (useful for testing)
-  public setAccountMode(mode: 'normal' | 'test'): void {
+  // Method to switch account mode (supports arbitrary account IDs)
+  public setAccountMode(mode: string): void {
     this.accountMode = mode;
   }
 
@@ -73,40 +88,65 @@ export class TokenManager {
   }
 
   private async saveMultiAccountTokens(multiAccountTokens: MultiAccountTokens): Promise<void> {
-    await this.ensureTokenDirectoryExists();
-    await fs.writeFile(this.tokenPath, JSON.stringify(multiAccountTokens, null, 2), {
-      mode: 0o600,
+    return this.enqueueTokenWrite(async () => {
+      await this.ensureTokenDirectoryExists();
+      await fs.writeFile(this.tokenPath, JSON.stringify(multiAccountTokens, null, 2), {
+        mode: 0o600,
+      });
     });
   }
 
+  private enqueueTokenWrite(operation: () => Promise<void>): Promise<void> {
+    const pendingWrite = this.writeQueue
+      .catch(() => undefined)
+      .then(operation);
+
+    this.writeQueue = pendingWrite
+      .catch(error => {
+        process.stderr.write(`Error writing token file: ${error instanceof Error ? error.message : error}\n`);
+        throw error;
+      })
+      .catch(() => undefined);
+
+    return pendingWrite;
+  }
+
   private setupTokenRefresh(): void {
-    this.oauth2Client.on("tokens", async (newTokens) => {
+    this.setupTokenRefreshForAccount(this.oauth2Client, this.accountMode);
+  }
+
+  /**
+   * Set up token refresh handler for a specific account
+   * This ensures that when tokens are refreshed, they are saved to the correct account in the token file
+   */
+  private setupTokenRefreshForAccount(client: OAuth2Client, accountId: string): void {
+    client.on("tokens", async (newTokens) => {
       try {
         const multiAccountTokens = await this.loadMultiAccountTokens();
-        const currentTokens = multiAccountTokens[this.accountMode] || {};
-        
+        const currentTokens = multiAccountTokens[accountId] || {};
+
         const updatedTokens = {
           ...currentTokens,
           ...newTokens,
           refresh_token: newTokens.refresh_token || currentTokens.refresh_token,
         };
-        
-        multiAccountTokens[this.accountMode] = updatedTokens;
+
+        multiAccountTokens[accountId] = updatedTokens;
         await this.saveMultiAccountTokens(multiAccountTokens);
-        
+
         if (process.env.NODE_ENV !== 'test') {
-          process.stderr.write(`Tokens updated and saved for ${this.accountMode} account\n`);
+          process.stderr.write(`Tokens updated and saved for ${accountId} account\n`);
         }
       } catch (error: unknown) {
         // Handle case where file might not exist yet
-        if (error instanceof Error && 'code' in error && error.code === 'ENOENT') { 
+        if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
           try {
             const multiAccountTokens: MultiAccountTokens = {
-              [this.accountMode]: newTokens
+              [accountId]: newTokens
             };
             await this.saveMultiAccountTokens(multiAccountTokens);
             if (process.env.NODE_ENV !== 'test') {
-              process.stderr.write(`New tokens saved for ${this.accountMode} account\n`);
+              process.stderr.write(`New tokens saved for ${accountId} account\n`);
             }
           } catch (writeError) {
             process.stderr.write("Error saving initial tokens: ");
@@ -256,7 +296,7 @@ export class TokenManager {
     }
   }
 
-  async validateTokens(accountMode?: 'normal' | 'test'): Promise<boolean> {
+  async validateTokens(accountMode?: string): Promise<boolean> {
     // For unit tests that don't need real authentication, they should mock at the handler level
     // Integration tests always need real tokens
 
@@ -340,9 +380,157 @@ export class TokenManager {
     }
   }
 
-  // Method to switch to a different account (useful for runtime switching)
-  async switchAccount(newMode: 'normal' | 'test'): Promise<boolean> {
+  // Method to switch to a different account (supports arbitrary account IDs)
+  async switchAccount(newMode: string): Promise<boolean> {
     this.accountMode = newMode;
     return this.loadSavedTokens();
+  }
+
+  /**
+   * Load all authenticated accounts from token file
+   * Returns a Map of account ID to OAuth2Client
+   *
+   * Reuses existing OAuth2Client instances to prevent memory leaks
+   * Sets up token refresh handlers for new accounts
+   */
+  async loadAllAccounts(): Promise<Map<string, OAuth2Client>> {
+    try {
+      const multiAccountTokens = await this.loadMultiAccountTokens();
+
+      // Remove accounts that no longer exist in token file
+      for (const accountId of this.accounts.keys()) {
+        if (!multiAccountTokens[accountId]) {
+          const client = this.accounts.get(accountId);
+          if (client) {
+            // Clean up event listeners before removing
+            client.removeAllListeners('tokens');
+          }
+          this.accounts.delete(accountId);
+        }
+      }
+
+      // Add or update accounts
+      for (const [accountId, tokens] of Object.entries(multiAccountTokens)) {
+        // Validate account ID
+        try {
+          const { validateAccountId } = await import('./paths.js') as any;
+          validateAccountId(accountId);
+
+          // Skip invalid token entries
+          if (!tokens || typeof tokens !== 'object' || !tokens.access_token) {
+            continue;
+          }
+
+          // Check if we already have a client for this account (reuse it to prevent memory leak)
+          let client = this.accounts.get(accountId);
+
+          if (!client) {
+            // Create a new OAuth2Client for this account using stored credentials
+            client = new OAuth2Client(
+              this.credentials.clientId,
+              this.credentials.clientSecret,
+              this.credentials.redirectUri
+            );
+
+            // Set up token refresh handler for this new client
+            this.setupTokenRefreshForAccount(client, accountId);
+
+            this.accounts.set(accountId, client);
+          }
+
+          // Update credentials (for both new and existing clients)
+          client.setCredentials(tokens);
+
+        } catch (error) {
+          // Skip invalid account IDs
+          if (process.env.NODE_ENV !== 'test') {
+            process.stderr.write(`Skipping invalid account "${accountId}": ${error}\n`);
+          }
+          continue;
+        }
+      }
+
+      return this.accounts;
+    } catch (error: any) {
+      // Check for file not found error (works with both Error objects and plain objects)
+      if (error && error.code === 'ENOENT') {
+        // No token file exists, return empty map
+        return new Map();
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get OAuth2Client for a specific account
+   * @param accountId The account ID to retrieve
+   * @throws Error if account not found or invalid
+   */
+  getClient(accountId: string): OAuth2Client {
+    // Validate account ID first
+    const { validateAccountId } = require('./paths.js');
+    validateAccountId(accountId);
+
+    const client = this.accounts.get(accountId);
+    if (!client) {
+      throw new Error(`Account "${accountId}" not found. Please authenticate this account first.`);
+    }
+
+    return client;
+  }
+
+  /**
+   * List all authenticated accounts with their email addresses and status
+   */
+  async listAccounts(): Promise<Array<{ id: string; email: string; status: string }>> {
+    try {
+      const multiAccountTokens = await this.loadMultiAccountTokens();
+      const accountList: Array<{ id: string; email: string; status: string }> = [];
+
+      for (const [accountId, tokens] of Object.entries(multiAccountTokens)) {
+        // Skip invalid entries
+        if (!tokens || typeof tokens !== 'object') {
+          continue;
+        }
+
+        // Get email address
+        let email = 'unknown';
+        try {
+          const client = new OAuth2Client(
+            (this.oauth2Client as any)._clientId,
+            (this.oauth2Client as any)._clientSecret,
+            (this.oauth2Client as any)._redirectUri
+          );
+          client.setCredentials(tokens);
+          email = await this.getUserEmail(client);
+        } catch (error) {
+          // Email retrieval failed, use unknown
+        }
+
+        // Determine status
+        let status = 'active';
+        if (tokens.expiry_date && tokens.expiry_date < Date.now()) {
+          status = 'expired';
+        }
+
+        accountList.push({ id: accountId, email, status });
+      }
+
+      return accountList;
+    } catch (error) {
+      return [];
+    }
+  }
+
+  /**
+   * Get user email address from OAuth2Client
+   */
+  private async getUserEmail(client: OAuth2Client): Promise<string> {
+    try {
+      const tokenInfo = await client.getTokenInfo(client.credentials.access_token || '');
+      return tokenInfo.email || 'unknown';
+    } catch (error) {
+      return 'unknown';
+    }
   }
 } 

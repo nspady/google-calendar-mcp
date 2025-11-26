@@ -36,6 +36,7 @@
     "start": "node build/index.js",
     "build": "node scripts/build.js",
     "auth": "node build/auth-server.js",
+    "account": "node scripts/account-manager.js",
     "dev": "node scripts/dev.js",
     "lint": "tsc --noEmit -p tsconfig.lint.json",
     "test": "vitest run src/tests/unit",
