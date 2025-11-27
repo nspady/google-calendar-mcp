@@ -17,7 +17,10 @@ describe('CalendarRegistry', () => {
   let accounts: Map<string, OAuth2Client>;
 
   beforeEach(() => {
-    registry = new CalendarRegistry();
+    // Reset singleton instance to ensure clean state for each test
+    CalendarRegistry.resetInstance();
+    registry = CalendarRegistry.getInstance();
+
     workClient = new OAuth2Client('client-id', 'client-secret');
     personalClient = new OAuth2Client('client-id', 'client-secret');
 
@@ -30,6 +33,21 @@ describe('CalendarRegistry', () => {
     ]);
 
     registry.clearCache();
+  });
+
+  describe('singleton behavior', () => {
+    it('should return the same instance from multiple getInstance() calls', () => {
+      const instance1 = CalendarRegistry.getInstance();
+      const instance2 = CalendarRegistry.getInstance();
+      expect(instance1).toBe(instance2);
+    });
+
+    it('should return a new instance after resetInstance()', () => {
+      const instance1 = CalendarRegistry.getInstance();
+      CalendarRegistry.resetInstance();
+      const instance2 = CalendarRegistry.getInstance();
+      expect(instance1).not.toBe(instance2);
+    });
   });
 
   describe('getUnifiedCalendars', () => {
@@ -388,6 +406,184 @@ describe('CalendarRegistry', () => {
       // Second call should fetch fresh data
       await registry.getUnifiedCalendars(accounts);
       expect(mockCalendar).toHaveBeenCalledTimes(4); // 2 + 2
+    });
+  });
+
+  describe('resolveCalendarNameToId', () => {
+    beforeEach(() => {
+      const mockWorkCalendar = vi.fn().mockResolvedValue({
+        data: {
+          items: [
+            {
+              id: 'work@gmail.com',
+              summary: 'Work Calendar',
+              accessRole: 'owner',
+              primary: true
+            },
+            {
+              id: 'team@group.calendar.google.com',
+              summary: 'Team Events',
+              summaryOverride: 'My Team',
+              accessRole: 'writer'
+            }
+          ]
+        }
+      });
+
+      const mockPersonalCalendar = vi.fn().mockResolvedValue({
+        data: {
+          items: [
+            {
+              id: 'personal@gmail.com',
+              summary: 'Personal Calendar',
+              accessRole: 'owner',
+              primary: true
+            },
+            {
+              id: 'team@group.calendar.google.com',
+              summary: 'Team Events',
+              summaryOverride: 'Shared Team',
+              accessRole: 'reader'
+            }
+          ]
+        }
+      });
+
+      vi.mocked(google.calendar).mockImplementation((config: any) => {
+        const token = config.auth.credentials.access_token;
+        return {
+          calendarList: {
+            list: token === 'work-token' ? mockWorkCalendar : mockPersonalCalendar
+          }
+        } as any;
+      });
+    });
+
+    it('should resolve calendar by exact summaryOverride match', async () => {
+      const result = await registry.resolveCalendarNameToId('My Team', accounts, 'read');
+
+      expect(result).toEqual({
+        calendarId: 'team@group.calendar.google.com',
+        accountId: 'work',
+        accessRole: 'writer'
+      });
+    });
+
+    it('should resolve calendar by case-insensitive summaryOverride match', async () => {
+      const result = await registry.resolveCalendarNameToId('my team', accounts, 'read');
+
+      expect(result).toEqual({
+        calendarId: 'team@group.calendar.google.com',
+        accountId: 'work',
+        accessRole: 'writer'
+      });
+    });
+
+    it('should resolve calendar by exact summary match', async () => {
+      const result = await registry.resolveCalendarNameToId('Team Events', accounts, 'read');
+
+      expect(result).toEqual({
+        calendarId: 'team@group.calendar.google.com',
+        accountId: 'work',
+        accessRole: 'writer'
+      });
+    });
+
+    it('should resolve calendar by case-insensitive summary match', async () => {
+      const result = await registry.resolveCalendarNameToId('team events', accounts, 'read');
+
+      expect(result).toEqual({
+        calendarId: 'team@group.calendar.google.com',
+        accountId: 'work',
+        accessRole: 'writer'
+      });
+    });
+
+    it('should return calendar ID directly when input looks like an ID', async () => {
+      const result = await registry.resolveCalendarNameToId('team@group.calendar.google.com', accounts, 'read');
+
+      expect(result).toEqual({
+        calendarId: 'team@group.calendar.google.com',
+        accountId: 'work',
+        accessRole: 'writer'
+      });
+    });
+
+    it('should return null for write operations on read-only calendar', async () => {
+      // The team calendar has writer access from 'work', but let's test a different scenario
+      const result = await registry.resolveCalendarNameToId('Shared Team', accounts, 'write');
+
+      // 'Shared Team' is personal's summaryOverride with reader access
+      // work has 'My Team' as override with writer access
+      // The preferred account is 'work' (writer > reader), so this should return work's access
+      expect(result).toEqual({
+        calendarId: 'team@group.calendar.google.com',
+        accountId: 'work',
+        accessRole: 'writer'
+      });
+    });
+
+    it('should return null for non-existent calendar name', async () => {
+      const result = await registry.resolveCalendarNameToId('Non Existent Calendar', accounts, 'read');
+
+      expect(result).toBeNull();
+    });
+
+    it('should handle "primary" as special calendar ID', async () => {
+      // Primary isn't in our mock data, so should return null
+      const result = await registry.resolveCalendarNameToId('primary', accounts, 'read');
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('concurrent access', () => {
+    it('should prevent duplicate API calls during concurrent requests', async () => {
+      const mockCalendar = vi.fn().mockImplementation(() =>
+        new Promise(resolve => {
+          // Simulate API latency
+          setTimeout(() => resolve({ data: { items: [] } }), 50);
+        })
+      );
+
+      vi.mocked(google.calendar).mockImplementation(() => ({
+        calendarList: { list: mockCalendar }
+      } as any));
+
+      // Make concurrent requests
+      const [result1, result2, result3] = await Promise.all([
+        registry.getUnifiedCalendars(accounts),
+        registry.getUnifiedCalendars(accounts),
+        registry.getUnifiedCalendars(accounts)
+      ]);
+
+      // All should return the same result
+      expect(result1).toEqual(result2);
+      expect(result2).toEqual(result3);
+
+      // API should only be called once per account (2 total), not 6 times
+      expect(mockCalendar).toHaveBeenCalledTimes(2);
+    });
+
+    it('should allow new API calls after in-flight request completes', async () => {
+      const mockCalendar = vi.fn().mockResolvedValue({
+        data: { items: [] }
+      });
+
+      vi.mocked(google.calendar).mockImplementation(() => ({
+        calendarList: { list: mockCalendar }
+      } as any));
+
+      // First request
+      await registry.getUnifiedCalendars(accounts);
+      expect(mockCalendar).toHaveBeenCalledTimes(2);
+
+      // Clear cache to force new API call
+      registry.clearCache();
+
+      // Second request should make new API calls
+      await registry.getUnifiedCalendars(accounts);
+      expect(mockCalendar).toHaveBeenCalledTimes(4);
     });
   });
 });

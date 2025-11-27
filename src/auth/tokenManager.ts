@@ -134,53 +134,40 @@ export class TokenManager {
 
   /**
    * Set up token refresh handler for a specific account
-   * This ensures that when tokens are refreshed, they are saved to the correct account in the token file
+   * Uses enqueueTokenWrite to prevent race conditions when multiple accounts refresh simultaneously
    */
   private setupTokenRefreshForAccount(client: OAuth2Client, accountId: string): void {
     client.on("tokens", async (newTokens) => {
       try {
-        const multiAccountTokens = await this.loadMultiAccountTokens();
-        const currentTokens = multiAccountTokens[accountId] || {};
+        // Wrap entire read-modify-write in the queue to prevent race conditions
+        await this.enqueueTokenWrite(async () => {
+          const multiAccountTokens = await this.loadMultiAccountTokens();
+          const currentTokens = multiAccountTokens[accountId] || {};
 
-        const updatedTokens = {
-          ...currentTokens,
-          ...newTokens,
-          refresh_token: newTokens.refresh_token || currentTokens.refresh_token,
-        };
+          const updatedTokens = {
+            ...currentTokens,
+            ...newTokens,
+            refresh_token: newTokens.refresh_token || currentTokens.refresh_token,
+          };
 
-        multiAccountTokens[accountId] = updatedTokens;
-        await this.saveMultiAccountTokens(multiAccountTokens);
+          multiAccountTokens[accountId] = updatedTokens;
+          await this.ensureTokenDirectoryExists();
+          await fs.writeFile(this.tokenPath, JSON.stringify(multiAccountTokens, null, 2), {
+            mode: 0o600,
+          });
+        });
 
         if (process.env.NODE_ENV !== 'test') {
           process.stderr.write(`Tokens updated and saved for ${accountId} account\n`);
         }
       } catch (error: unknown) {
-        // Handle case where file might not exist yet
-        if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-          try {
-            const multiAccountTokens: MultiAccountTokens = {
-              [accountId]: newTokens
-            };
-            await this.saveMultiAccountTokens(multiAccountTokens);
-            if (process.env.NODE_ENV !== 'test') {
-              process.stderr.write(`New tokens saved for ${accountId} account\n`);
-            }
-          } catch (writeError) {
-            process.stderr.write("Error saving initial tokens: ");
-            if (writeError) {
-              process.stderr.write(writeError.toString());
-            }
-            process.stderr.write("\n");
-          }
-        } else {
-          process.stderr.write("Error saving updated tokens: ");
-          if (error instanceof Error) {
-            process.stderr.write(error.message);
-          } else if (typeof error === 'string') {
-            process.stderr.write(error);
-          }
-          process.stderr.write("\n");
+        process.stderr.write("Error saving updated tokens: ");
+        if (error instanceof Error) {
+          process.stderr.write(error.message);
+        } else if (typeof error === 'string') {
+          process.stderr.write(error);
         }
+        process.stderr.write("\n");
       }
     });
   }
@@ -349,17 +336,23 @@ export class TokenManager {
 
   async saveTokens(tokens: Credentials, email?: string): Promise<void> {
     try {
-        const multiAccountTokens = await this.loadMultiAccountTokens();
-        const cachedTokens: CachedCredentials = { ...tokens };
+        // Wrap entire read-modify-write in the queue to prevent race conditions
+        await this.enqueueTokenWrite(async () => {
+          const multiAccountTokens = await this.loadMultiAccountTokens();
+          const cachedTokens: CachedCredentials = { ...tokens };
 
-        // Cache the email if provided
-        if (email) {
-          cachedTokens.cached_email = email;
-        }
+          // Cache the email if provided
+          if (email) {
+            cachedTokens.cached_email = email;
+          }
 
-        multiAccountTokens[this.accountMode] = cachedTokens;
+          multiAccountTokens[this.accountMode] = cachedTokens;
 
-        await this.saveMultiAccountTokens(multiAccountTokens);
+          await this.ensureTokenDirectoryExists();
+          await fs.writeFile(this.tokenPath, JSON.stringify(multiAccountTokens, null, 2), {
+            mode: 0o600,
+          });
+        });
         this.oauth2Client.setCredentials(tokens);
         process.stderr.write(`Tokens saved successfully for ${this.accountMode} account to: ${this.tokenPath}\n`);
     } catch (error: unknown) {
@@ -371,18 +364,24 @@ export class TokenManager {
   async clearTokens(): Promise<void> {
     try {
       this.oauth2Client.setCredentials({}); // Clear in memory
-      
-      const multiAccountTokens = await this.loadMultiAccountTokens();
-      delete multiAccountTokens[this.accountMode];
-      
-      // If no accounts left, delete the entire file
-      if (Object.keys(multiAccountTokens).length === 0) {
-        await fs.unlink(this.tokenPath);
-        process.stderr.write(`All tokens cleared, file deleted\n`);
-      } else {
-        await this.saveMultiAccountTokens(multiAccountTokens);
-        process.stderr.write(`Tokens cleared for ${this.accountMode} account\n`);
-      }
+
+      // Wrap entire read-modify-write in the queue to prevent race conditions
+      await this.enqueueTokenWrite(async () => {
+        const multiAccountTokens = await this.loadMultiAccountTokens();
+        delete multiAccountTokens[this.accountMode];
+
+        // If no accounts left, delete the entire file
+        if (Object.keys(multiAccountTokens).length === 0) {
+          await fs.unlink(this.tokenPath);
+          process.stderr.write(`All tokens cleared, file deleted\n`);
+        } else {
+          await this.ensureTokenDirectoryExists();
+          await fs.writeFile(this.tokenPath, JSON.stringify(multiAccountTokens, null, 2), {
+            mode: 0o600,
+          });
+          process.stderr.write(`Tokens cleared for ${this.accountMode} account\n`);
+        }
+      });
     } catch (error: unknown) {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
         // File already gone, which is fine

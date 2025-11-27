@@ -11,6 +11,19 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
+ * Security headers for HTML responses
+ * Note: HTTP mode is designed for localhost development/testing only.
+ * For production deployments, use stdio mode with Claude Desktop.
+ */
+const SECURITY_HEADERS = {
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'",
+  'X-Frame-Options': 'DENY',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'X-XSS-Protection': '1; mode=block'
+};
+
+/**
  * Escape HTML special characters to prevent XSS
  */
 function escapeHtml(text: string): string {
@@ -103,9 +116,13 @@ export class HttpTransportHandler {
         return;
       }
 
-      // Handle CORS
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      // Handle CORS - restrict to localhost only for security
+      // HTTP mode is designed for local development/testing only
+      const allowedCorsOrigin = origin && allowedOrigins.some(allowed => origin.startsWith(allowed))
+        ? origin
+        : `http://${host}:${port}`;
+      res.setHeader('Access-Control-Allow-Origin', allowedCorsOrigin);
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type, mcp-session-id');
       
       if (req.method === 'OPTIONS') {
@@ -140,7 +157,10 @@ export class HttpTransportHandler {
           }
 
           const html = await fs.readFile(htmlPath, 'utf-8');
-          res.writeHead(200, { 'Content-Type': 'text/html' });
+          res.writeHead(200, {
+            'Content-Type': 'text/html; charset=utf-8',
+            ...SECURITY_HEADERS
+          });
           res.end(html);
         } catch (error) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -199,6 +219,7 @@ export class HttpTransportHandler {
           }
 
           // Generate OAuth URL for this account
+          // Use configured host/port instead of req.headers.host to prevent host header injection
           const { OAuth2Client } = await import('google-auth-library');
           const { loadCredentials } = await import('../auth/client.js');
 
@@ -206,7 +227,7 @@ export class HttpTransportHandler {
           const oauth2Client = new OAuth2Client(
             client_id,
             client_secret,
-            `http://${req.headers.host}/oauth2callback?account=${accountId}`
+            `http://${host}:${port}/oauth2callback?account=${accountId}`
           );
 
           const authUrl = oauth2Client.generateAuthUrl({
@@ -233,7 +254,8 @@ export class HttpTransportHandler {
       // GET /oauth2callback - OAuth callback handler
       if (req.method === 'GET' && req.url?.startsWith('/oauth2callback')) {
         try {
-          const url = new URL(req.url, `http://${req.headers.host}`);
+          // Use configured host/port instead of req.headers.host for security
+          const url = new URL(req.url, `http://${host}:${port}`);
           const code = url.searchParams.get('code');
           const accountId = url.searchParams.get('account');
 
@@ -250,6 +272,7 @@ export class HttpTransportHandler {
           }
 
           // Exchange code for tokens
+          // Use configured host/port for redirect URI to match what was used in auth URL
           const { OAuth2Client } = await import('google-auth-library');
           const { loadCredentials } = await import('../auth/client.js');
 
@@ -257,7 +280,7 @@ export class HttpTransportHandler {
           const oauth2Client = new OAuth2Client(
             client_id,
             client_secret,
-            `http://${req.headers.host}/oauth2callback?account=${accountId}`
+            `http://${host}:${port}/oauth2callback?account=${accountId}`
           );
 
           const { tokens } = await oauth2Client.getToken(code);
@@ -288,7 +311,13 @@ export class HttpTransportHandler {
           const safeAccountId = escapeHtml(accountId);
           const safeEmail = escapeHtml(email);
 
-          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          // Compute allowed origin for postMessage (localhost only)
+          const postMessageOrigin = `http://${host}:${port}`;
+
+          res.writeHead(200, {
+            'Content-Type': 'text/html; charset=utf-8',
+            ...SECURITY_HEADERS
+          });
           res.end(`
             <!DOCTYPE html>
             <html>
@@ -375,9 +404,9 @@ export class HttpTransportHandler {
                 <button onclick="window.close()">Close Window</button>
               </div>
               <script>
-                // Try to communicate back to opener
+                // Try to communicate back to opener with specific origin (security)
                 if (window.opener) {
-                  window.opener.postMessage({ type: 'auth-success', accountId: '${safeAccountId}' }, '*');
+                  window.opener.postMessage({ type: 'auth-success', accountId: '${safeAccountId}' }, '${postMessageOrigin}');
                 }
                 // Auto-close after 3 seconds
                 setTimeout(() => window.close(), 3000);
@@ -387,7 +416,10 @@ export class HttpTransportHandler {
           `);
         } catch (error) {
           const safeError = escapeHtml(error instanceof Error ? error.message : String(error));
-          res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.writeHead(500, {
+            'Content-Type': 'text/html; charset=utf-8',
+            ...SECURITY_HEADERS
+          });
           res.end(`
             <!DOCTYPE html>
             <html>
@@ -511,6 +543,7 @@ export class HttpTransportHandler {
           validateAccountId(accountId);
 
           // Generate OAuth URL for re-authentication
+          // Use configured host/port instead of req.headers.host to prevent host header injection
           const { OAuth2Client } = await import('google-auth-library');
           const { loadCredentials } = await import('../auth/client.js');
 
@@ -518,7 +551,7 @@ export class HttpTransportHandler {
           const oauth2Client = new OAuth2Client(
             client_id,
             client_secret,
-            `http://${req.headers.host}/oauth2callback?account=${accountId}`
+            `http://${host}:${port}/oauth2callback?account=${accountId}`
           );
 
           const authUrl = oauth2Client.generateAuthUrl({

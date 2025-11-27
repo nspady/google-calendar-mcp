@@ -36,7 +36,9 @@ docker compose exec calendar-mcp npm run auth
 
 ## Two Modes
 
-The server supports two transport modes: **stdio** (for local Claude Desktop) and **HTTP** (for remote/web access).
+The server supports two transport modes: **stdio** (for local Claude Desktop) and **HTTP** (for local development/testing).
+
+> **⚠️ Security Note:** HTTP mode is designed for **localhost-only** development and testing. It does not include authentication and should never be exposed to untrusted networks. For production use with Claude Desktop, always use **stdio mode**.
 
 ### stdio Mode (Recommended for Claude Desktop)
 **Direct process integration for Claude Desktop:**
@@ -88,8 +90,10 @@ Add to your Claude Desktop config file:
 #### Step 3: Restart Claude Desktop
 Restart Claude Desktop to load the new configuration. The server should now work without authentication prompts.
 
-### HTTP Mode
-**For testing, debugging, and web integration (Claude Desktop uses stdio):**
+### HTTP Mode (Local Development Only)
+**For local testing, debugging, and development (Claude Desktop uses stdio):**
+
+> **Important:** HTTP mode binds to `127.0.0.1` by default and is only accessible from localhost. This is intentional for security - the server has no authentication layer.
 
 #### Step 1: Configure Environment
 ```bash
@@ -104,11 +108,12 @@ cp /path/to/your/gcp-oauth.keys.json ./gcp-oauth.keys.json
 chmod 644 ./gcp-oauth.keys.json
 
 # Configure for HTTP mode
-# Copy .env.example which has defaults (TRANSPORT=stdio, HOST=0.0.0.0, PORT=3000)
+# Copy .env.example which has defaults (TRANSPORT=stdio, HOST=127.0.0.1, PORT=3000)
 cp .env.example .env
 
 # Change TRANSPORT to http (other defaults are already correct)
 # Update TRANSPORT=stdio to TRANSPORT=http in .env
+# Note: HOST defaults to 127.0.0.1 for security (localhost only)
 
 ```
 

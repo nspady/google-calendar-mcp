@@ -44,6 +44,9 @@ export class CalendarRegistry {
   private cache: Map<string, { data: UnifiedCalendar[]; timestamp: number }> = new Map();
   private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+  // Track in-flight requests to prevent duplicate API calls during concurrent access
+  private inFlightRequests: Map<string, Promise<UnifiedCalendar[]>> = new Map();
+
   /**
    * Get the singleton instance of CalendarRegistry
    */
@@ -82,16 +85,43 @@ export class CalendarRegistry {
   }
 
   /**
-   * Fetch all calendars from all accounts and build unified registry
+   * Fetch all calendars from all accounts and build unified registry.
+   * Uses in-flight request tracking to prevent duplicate API calls during concurrent access.
    */
   async getUnifiedCalendars(accounts: Map<string, OAuth2Client>): Promise<UnifiedCalendar[]> {
-    // Check cache
     const cacheKey = Array.from(accounts.keys()).sort().join(',');
+
+    // Check if there's already an in-flight request for this cache key
+    const inFlight = this.inFlightRequests.get(cacheKey);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    // Check cache
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
       return cached.data;
     }
 
+    // Create new request and track it
+    const requestPromise = this.fetchAndBuildUnifiedCalendars(accounts, cacheKey);
+    this.inFlightRequests.set(cacheKey, requestPromise);
+
+    try {
+      return await requestPromise;
+    } finally {
+      // Remove from in-flight tracking once complete
+      this.inFlightRequests.delete(cacheKey);
+    }
+  }
+
+  /**
+   * Internal method to fetch calendars and build the unified registry
+   */
+  private async fetchAndBuildUnifiedCalendars(
+    accounts: Map<string, OAuth2Client>,
+    cacheKey: string
+  ): Promise<UnifiedCalendar[]> {
     // Fetch calendars from all accounts in parallel
     const calendarsByAccount = await Promise.all(
       Array.from(accounts.entries()).map(async ([accountId, client]) => {
@@ -224,10 +254,11 @@ export class CalendarRegistry {
   }
 
   /**
-   * Clear cache (useful for testing or when accounts change)
+   * Clear cache and in-flight requests (useful for testing or when accounts change)
    */
   clearCache(): void {
     this.cache.clear();
+    this.inFlightRequests.clear();
   }
 
   /**
