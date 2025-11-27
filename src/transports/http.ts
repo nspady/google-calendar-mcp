@@ -10,6 +10,20 @@ import { CalendarRegistry } from "../services/CalendarRegistry.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/**
+ * Escape HTML special characters to prevent XSS
+ */
+function escapeHtml(text: string): string {
+  const htmlEscapes: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  };
+  return text.replace(/[&<>"']/g, char => htmlEscapes[char]);
+}
+
 export interface HttpTransportConfig {
   port?: number;
   host?: string;
@@ -248,73 +262,114 @@ export class HttpTransportHandler {
 
           const { tokens } = await oauth2Client.getToken(code);
 
-          // Save tokens for this account
+          // Get user email before saving tokens
+          oauth2Client.setCredentials(tokens);
+          let email = 'unknown';
+          try {
+            const tokenInfo = await oauth2Client.getTokenInfo(tokens.access_token || '');
+            email = tokenInfo.email || 'unknown';
+          } catch {
+            // Email retrieval failed, continue with 'unknown'
+          }
+
+          // Save tokens for this account with cached email
           const originalMode = this.tokenManager.getAccountMode();
-          this.tokenManager.setAccountMode(accountId);
-          await this.tokenManager.saveTokens(tokens);
-          this.tokenManager.setAccountMode(originalMode);
+          try {
+            this.tokenManager.setAccountMode(accountId);
+            await this.tokenManager.saveTokens(tokens, email !== 'unknown' ? email : undefined);
+          } finally {
+            this.tokenManager.setAccountMode(originalMode);
+          }
 
           // Invalidate calendar registry cache since accounts changed
           CalendarRegistry.getInstance().clearCache();
 
-          // Get user email
-          oauth2Client.setCredentials(tokens);
-          const tokenInfo = await oauth2Client.getTokenInfo(tokens.access_token || '');
-          const email = tokenInfo.email || 'unknown';
+          // Use HTML-escaped values in response
+          const safeAccountId = escapeHtml(accountId);
+          const safeEmail = escapeHtml(email);
 
-          res.writeHead(200, { 'Content-Type': 'text/html' });
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
           res.end(`
             <!DOCTYPE html>
             <html>
             <head>
+              <meta charset="utf-8">
               <title>Authentication Successful</title>
               <style>
                 body {
-                  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
                   display: flex;
                   justify-content: center;
                   align-items: center;
                   height: 100vh;
                   margin: 0;
-                  background: #f5f5f5;
+                  background: #faf8f5;
+                  color: #3d3832;
                 }
                 .container {
                   text-align: center;
-                  padding: 2rem;
-                  background: white;
-                  border-radius: 8px;
-                  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                  max-width: 500px;
+                  padding: 3rem 4rem;
+                  background: #fffdfb;
+                  border-radius: 14px;
+                  box-shadow: 0 8px 24px rgba(61, 56, 50, 0.12);
+                  border: 1px solid #f0ece7;
+                  min-width: 400px;
+                  max-width: 600px;
                 }
-                h1 { color: #4CAF50; margin-bottom: 1rem; }
-                p { color: #666; margin: 0.5rem 0; }
+                h1 {
+                  color: #5d8a66;
+                  margin-bottom: 1.5rem;
+                  font-size: 1.75rem;
+                  font-weight: 600;
+                  letter-spacing: -0.02em;
+                }
+                p {
+                  color: #6b6560;
+                  margin: 0.75rem 0;
+                  font-size: 1rem;
+                }
                 .account-info {
-                  background: #f9f9f9;
-                  padding: 1rem;
-                  border-radius: 4px;
-                  margin: 1rem 0;
+                  background: #faf8f5;
+                  padding: 1.5rem;
+                  border-radius: 10px;
+                  margin: 1.5rem 0;
+                  border: 1px solid #e8e4df;
                 }
-                .account-id { font-weight: 600; color: #333; }
-                .email { color: #1976d2; }
+                .account-id {
+                  font-weight: 600;
+                  color: #3d3832;
+                  font-size: 1.1rem;
+                }
+                .email {
+                  color: #c17f59;
+                  font-size: 1rem;
+                }
                 button {
-                  margin-top: 1rem;
+                  margin-top: 1.5rem;
                   padding: 0.75rem 1.5rem;
-                  background: #1976d2;
+                  background: #c17f59;
                   color: white;
                   border: none;
-                  border-radius: 4px;
-                  font-size: 1rem;
+                  border-radius: 6px;
+                  font-size: 0.95rem;
+                  font-weight: 500;
                   cursor: pointer;
+                  box-shadow: 0 1px 2px rgba(193, 127, 89, 0.2);
+                  transition: all 0.15s ease;
                 }
-                button:hover { background: #1565c0; }
+                button:hover {
+                  background: #a86d4a;
+                  box-shadow: 0 2px 4px rgba(193, 127, 89, 0.25);
+                  transform: translateY(-1px);
+                }
               </style>
             </head>
             <body>
               <div class="container">
-                <h1>✓ Authentication Successful!</h1>
+                <h1>Authentication Successful</h1>
                 <div class="account-info">
-                  <p class="account-id">Account: ${accountId}</p>
-                  <p class="email">${email}</p>
+                  <p class="account-id">Account: ${safeAccountId}</p>
+                  <p class="email">${safeEmail}</p>
                 </div>
                 <p>You can now close this window and return to the account manager.</p>
                 <button onclick="window.close()">Close Window</button>
@@ -322,7 +377,7 @@ export class HttpTransportHandler {
               <script>
                 // Try to communicate back to opener
                 if (window.opener) {
-                  window.opener.postMessage({ type: 'auth-success', accountId: '${accountId}' }, '*');
+                  window.opener.postMessage({ type: 'auth-success', accountId: '${safeAccountId}' }, '*');
                 }
                 // Auto-close after 3 seconds
                 setTimeout(() => window.close(), 3000);
@@ -331,13 +386,80 @@ export class HttpTransportHandler {
             </html>
           `);
         } catch (error) {
-          res.writeHead(500, { 'Content-Type': 'text/html' });
+          const safeError = escapeHtml(error instanceof Error ? error.message : String(error));
+          res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
           res.end(`
+            <!DOCTYPE html>
             <html>
-            <body style="font-family: sans-serif; padding: 2rem;">
-              <h1>Authentication Failed</h1>
-              <p>Error: ${error instanceof Error ? error.message : String(error)}</p>
-              <button onclick="window.close()">Close Window</button>
+            <head>
+              <meta charset="utf-8">
+              <title>Authentication Failed</title>
+              <style>
+                body {
+                  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                  display: flex;
+                  justify-content: center;
+                  align-items: center;
+                  height: 100vh;
+                  margin: 0;
+                  background: #faf8f5;
+                  color: #3d3832;
+                }
+                .container {
+                  text-align: center;
+                  padding: 3rem 4rem;
+                  background: #fffdfb;
+                  border-radius: 14px;
+                  box-shadow: 0 8px 24px rgba(61, 56, 50, 0.12);
+                  border: 1px solid #f0ece7;
+                  min-width: 400px;
+                  max-width: 600px;
+                }
+                h1 {
+                  color: #b85c5c;
+                  margin-bottom: 1.5rem;
+                  font-size: 1.75rem;
+                  font-weight: 600;
+                }
+                p {
+                  color: #6b6560;
+                  margin: 0.75rem 0;
+                  font-size: 1rem;
+                }
+                .error-box {
+                  background: #fceaea;
+                  padding: 1rem;
+                  border-radius: 8px;
+                  margin: 1rem 0;
+                  border: 1px solid rgba(184, 92, 92, 0.2);
+                  color: #b85c5c;
+                  font-size: 0.9rem;
+                  word-break: break-word;
+                }
+                button {
+                  margin-top: 1.5rem;
+                  padding: 0.75rem 1.5rem;
+                  background: #c17f59;
+                  color: white;
+                  border: none;
+                  border-radius: 6px;
+                  font-size: 0.95rem;
+                  font-weight: 500;
+                  cursor: pointer;
+                  transition: all 0.15s ease;
+                }
+                button:hover {
+                  background: #a86d4a;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <h1>Authentication Failed</h1>
+                <div class="error-box">${safeError}</div>
+                <p>Please try again or check the server logs.</p>
+                <button onclick="window.close()">Close Window</button>
+              </div>
             </body>
             </html>
           `);

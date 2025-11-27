@@ -5,170 +5,463 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Google Calendar MCP - Account Management</title>
     <style>
+        :root {
+            --bg-warm: #faf8f5;
+            --bg-warm-dark: #f5f2ed;
+            --card-bg: #fffdfb;
+            --text-primary: #3d3832;
+            --text-secondary: #6b6560;
+            --text-muted: #9a948e;
+            --border-warm: #e8e4df;
+            --border-warm-light: #f0ece7;
+            --accent-primary: #c17f59;
+            --accent-primary-hover: #a86d4a;
+            --accent-success: #5d8a66;
+            --accent-success-light: #e8f2ea;
+            --accent-warning: #c49052;
+            --accent-warning-light: #fdf6ed;
+            --accent-danger: #b85c5c;
+            --accent-danger-light: #fceaea;
+            --shadow-sm: 0 1px 2px rgba(61, 56, 50, 0.04);
+            --shadow-md: 0 4px 12px rgba(61, 56, 50, 0.08);
+            --shadow-lg: 0 8px 24px rgba(61, 56, 50, 0.12);
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background: #f5f5f5;
-            color: #333;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: var(--bg-warm);
+            color: var(--text-primary);
             line-height: 1.6;
+            min-height: 100vh;
         }
+
         .container {
-            max-width: 800px;
+            max-width: 720px;
             margin: 0 auto;
-            padding: 2rem;
+            padding: 3rem 1.5rem;
         }
+
         header {
             text-align: center;
-            margin-bottom: 2rem;
+            margin-bottom: 2.5rem;
         }
+
         h1 {
-            font-size: 2rem;
+            font-size: 1.75rem;
+            font-weight: 600;
+            color: var(--text-primary);
             margin-bottom: 0.5rem;
+            letter-spacing: -0.02em;
         }
+
         .subtitle {
-            color: #666;
-            font-size: 0.9rem;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            font-weight: 400;
         }
+
         .card {
-            background: white;
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            background: var(--card-bg);
+            border-radius: var(--radius-lg);
+            padding: 1.75rem;
+            margin-bottom: 1.25rem;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-warm-light);
         }
+
         .card h2 {
-            font-size: 1.3rem;
-            margin-bottom: 1rem;
-            color: #444;
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 1.25rem;
+            color: var(--text-primary);
+            letter-spacing: -0.01em;
         }
+
         .account-list {
             display: flex;
             flex-direction: column;
-            gap: 1rem;
+            gap: 0.75rem;
         }
+
         .account-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1rem;
-            background: #f9f9f9;
-            border-radius: 6px;
-            border: 1px solid #e5e5e5;
+            background: var(--bg-warm);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-warm);
+            overflow: hidden;
+            transition: box-shadow 0.2s ease, border-color 0.2s ease;
         }
+
+        .account-item:hover {
+            box-shadow: var(--shadow-sm);
+            border-color: var(--border-warm);
+        }
+
+        .account-header {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            transition: background 0.15s ease;
+            gap: 0.75rem;
+        }
+
+        .account-header:hover {
+            background: var(--bg-warm-dark);
+        }
+
+        .account-header.expanded {
+            border-bottom: 1px solid var(--border-warm);
+            background: var(--bg-warm-dark);
+        }
+
         .account-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .account-expand {
+            color: var(--text-muted);
+            transition: transform 0.2s ease;
+            font-size: 0.7rem;
+            opacity: 0.7;
+        }
+
+        .account-expand.expanded {
+            transform: rotate(90deg);
+        }
+
+        .account-details {
             flex: 1;
         }
-        .account-id {
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 0.25rem;
+
+        .account-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
         }
+
         .account-email {
-            color: #666;
+            font-weight: 500;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+        }
+
+        .account-separator {
+            color: var(--text-muted);
             font-size: 0.9rem;
         }
+
+        .account-id {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 400;
+        }
+
+        .account-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.25rem;
+            flex-wrap: wrap;
+        }
+
         .account-status {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 4px;
-            font-size: 0.85rem;
+            display: inline-flex;
+            align-items: center;
+            padding: 0.15rem 0.5rem;
+            border-radius: 20px;
+            font-size: 0.7rem;
             font-weight: 500;
-            margin-top: 0.5rem;
+            text-transform: lowercase;
         }
+
         .status-active {
-            background: #e7f5e7;
-            color: #2d7c2d;
+            background: var(--accent-success-light);
+            color: var(--accent-success);
         }
+
         .status-expired {
-            background: #fff3e0;
-            color: #e65100;
+            background: var(--accent-warning-light);
+            color: var(--accent-warning);
         }
+
+        .calendar-count {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
         .account-actions {
             display: flex;
             gap: 0.5rem;
+            margin-left: auto;
         }
-        button {
-            padding: 0.5rem 1rem;
-            border: none;
+
+        .calendar-list {
+            display: none;
+            padding: 0.5rem 1rem 0.75rem;
+            background: var(--card-bg);
+            max-height: 280px;
+            overflow-y: auto;
+        }
+
+        .calendar-list.expanded {
+            display: block;
+        }
+
+        .calendar-list::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .calendar-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .calendar-list::-webkit-scrollbar-thumb {
+            background: var(--border-warm);
+            border-radius: 3px;
+        }
+
+        .calendar-item {
+            display: flex;
+            align-items: center;
+            padding: 0.35rem 0.5rem;
             border-radius: 4px;
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: background 0.2s;
+            transition: background 0.12s ease;
+        }
+
+        .calendar-item:hover {
+            background: var(--bg-warm);
+        }
+
+        .calendar-color {
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+            margin-right: 0.6rem;
+            flex-shrink: 0;
+        }
+
+        .calendar-name {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-right: 0.4rem;
+        }
+
+        .calendar-name.primary {
+            color: var(--text-primary);
             font-weight: 500;
         }
+
+        .calendar-badges {
+            display: flex;
+            gap: 0.25rem;
+            flex-shrink: 0;
+        }
+
+        .access-badge {
+            padding: 0.1rem 0.35rem;
+            border-radius: 3px;
+            font-size: 0.6rem;
+            font-weight: 500;
+            text-transform: lowercase;
+            letter-spacing: 0.01em;
+            opacity: 0.7;
+        }
+
+        .access-owner {
+            background: transparent;
+            color: var(--text-muted);
+        }
+
+        .access-writer {
+            background: transparent;
+            color: var(--accent-success);
+        }
+
+        .access-reader {
+            background: transparent;
+            color: var(--text-muted);
+        }
+
+        .access-freeBusyReader {
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 0.55rem;
+        }
+
+        .primary-badge {
+            background: var(--accent-primary);
+            color: white;
+            opacity: 1;
+        }
+
+        .calendar-loading {
+            text-align: center;
+            padding: 1rem;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        .calendar-error {
+            text-align: center;
+            padding: 1rem;
+            color: var(--accent-danger);
+            font-size: 0.8rem;
+        }
+
+        button {
+            padding: 0.6rem 1.1rem;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            font-weight: 500;
+        }
+
         .btn-primary {
-            background: #1976d2;
+            background: var(--accent-primary);
             color: white;
+            box-shadow: 0 1px 2px rgba(193, 127, 89, 0.2);
         }
+
         .btn-primary:hover {
-            background: #1565c0;
+            background: var(--accent-primary-hover);
+            box-shadow: 0 2px 4px rgba(193, 127, 89, 0.25);
+            transform: translateY(-1px);
         }
+
         .btn-danger {
-            background: #d32f2f;
-            color: white;
+            background: transparent;
+            color: var(--accent-danger);
+            border: 1px solid var(--border-warm);
         }
+
         .btn-danger:hover {
-            background: #c62828;
+            background: var(--accent-danger-light);
+            border-color: var(--accent-danger);
         }
+
         .btn-warning {
-            background: #f57c00;
+            background: var(--accent-warning);
             color: white;
+            box-shadow: 0 1px 2px rgba(196, 144, 82, 0.2);
         }
+
         .btn-warning:hover {
-            background: #ef6c00;
+            background: #b5823f;
+            box-shadow: 0 2px 4px rgba(196, 144, 82, 0.25);
+            transform: translateY(-1px);
         }
+
         .add-account-form {
             display: flex;
             gap: 1rem;
             align-items: flex-end;
         }
+
         .form-group {
             flex: 1;
         }
+
         label {
             display: block;
             margin-bottom: 0.5rem;
             font-weight: 500;
-            color: #555;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
         }
+
         input[type="text"] {
             width: 100%;
-            padding: 0.75rem;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            padding: 0.7rem 0.9rem;
+            border: 1px solid var(--border-warm);
+            border-radius: var(--radius-sm);
             font-size: 0.9rem;
+            background: var(--bg-warm);
+            color: var(--text-primary);
+            transition: all 0.15s ease;
         }
+
+        input[type="text"]::placeholder {
+            color: var(--text-muted);
+        }
+
         input[type="text"]:focus {
             outline: none;
-            border-color: #1976d2;
+            border-color: var(--accent-primary);
+            background: var(--card-bg);
+            box-shadow: 0 0 0 3px rgba(193, 127, 89, 0.1);
         }
+
         .empty-state {
             text-align: center;
-            padding: 2rem;
-            color: #999;
+            padding: 2.5rem 1rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
         }
+
         .loading {
             text-align: center;
-            padding: 2rem;
-            color: #666;
+            padding: 2.5rem 1rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
         }
+
         .error {
-            background: #ffebee;
-            color: #c62828;
-            padding: 1rem;
-            border-radius: 4px;
+            background: var(--accent-danger-light);
+            color: var(--accent-danger);
+            padding: 1rem 1.25rem;
+            border-radius: var(--radius-sm);
             margin-bottom: 1rem;
+            font-size: 0.9rem;
+            border: 1px solid rgba(184, 92, 92, 0.2);
         }
+
         .success {
-            background: #e7f5e7;
-            color: #2d7c2d;
-            padding: 1rem;
-            border-radius: 4px;
+            background: var(--accent-success-light);
+            color: var(--accent-success);
+            padding: 1rem 1.25rem;
+            border-radius: var(--radius-sm);
             margin-bottom: 1rem;
+            font-size: 0.9rem;
+            border: 1px solid rgba(93, 138, 102, 0.2);
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 2rem 1rem;
+            }
+
+            .add-account-form {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .account-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.75rem;
+            }
+
+            .account-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
         }
     </style>
 </head>
@@ -209,6 +502,9 @@
     <script>
         const API_BASE = '/api/accounts';
 
+        // Cache for calendar data
+        const calendarCache = new Map();
+
         function showMessage(message, type = 'success') {
             const messageDiv = document.getElementById('message');
             messageDiv.className = type;
@@ -221,6 +517,9 @@
 
         async function loadAccounts() {
             try {
+                // Clear calendar cache when reloading accounts
+                calendarCache.clear();
+
                 const response = await fetch(API_BASE);
                 if (!response.ok) {
                     throw new Error(`Failed to load accounts: ${response.statusText}`);
@@ -241,23 +540,91 @@
                 return;
             }
 
-            accountList.innerHTML = accounts.map(account => `
-                <div class="account-item">
-                    <div class="account-info">
-                        <div class="account-id">${escapeHtml(account.id)}</div>
-                        <div class="account-email">${escapeHtml(account.email)}</div>
-                        <span class="account-status status-${account.status}">
-                            ${account.status}
-                        </span>
+            accountList.innerHTML = accounts.map(account => {
+                const calendars = account.calendars || [];
+                const owned = calendars.filter(c => c.accessRole === 'owner').length;
+                const shared = calendars.length - owned;
+                const calendarSummary = calendars.length > 0
+                    ? `${calendars.length} calendars (${owned} owned, ${shared} shared)`
+                    : '';
+
+                return `
+                <div class="account-item" data-account-id="${escapeHtml(account.id)}">
+                    <div class="account-header" onclick="toggleAccount('${escapeHtml(account.id)}')">
+                        <div class="account-info">
+                            <span class="account-expand">▶</span>
+                            <div class="account-details">
+                                <div class="account-title">
+                                    <span class="account-email">${escapeHtml(account.email)}</span>
+                                    <span class="account-separator">–</span>
+                                    <span class="account-id">${escapeHtml(account.id)}</span>
+                                    <span class="account-status status-${account.status}">${account.status}</span>
+                                </div>
+                                <div class="account-meta">
+                                    <span class="calendar-count">${calendarSummary}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="account-actions" onclick="event.stopPropagation()">
+                            ${account.status === 'expired' ?
+                                `<button class="btn-warning" onclick="reauthAccount('${escapeHtml(account.id)}')">Re-auth</button>` :
+                                ''}
+                            <button class="btn-danger" onclick="removeAccount('${escapeHtml(account.id)}')">Remove</button>
+                        </div>
                     </div>
-                    <div class="account-actions">
-                        ${account.status === 'expired' ?
-                            `<button class="btn-warning" onclick="reauthAccount('${escapeHtml(account.id)}')">Re-authenticate</button>` :
-                            ''}
-                        <button class="btn-danger" onclick="removeAccount('${escapeHtml(account.id)}')">Remove</button>
+                    <div class="calendar-list" id="calendars-${escapeHtml(account.id)}">
+                        ${renderCalendarsHTML(calendars)}
+                    </div>
+                </div>
+            `}).join('');
+        }
+
+        function toggleAccount(accountId) {
+            const item = document.querySelector(`[data-account-id="${accountId}"]`);
+            const header = item.querySelector('.account-header');
+            const expand = item.querySelector('.account-expand');
+            const calendarList = document.getElementById(`calendars-${accountId}`);
+
+            const isExpanded = calendarList.classList.contains('expanded');
+
+            if (isExpanded) {
+                header.classList.remove('expanded');
+                expand.classList.remove('expanded');
+                calendarList.classList.remove('expanded');
+            } else {
+                header.classList.add('expanded');
+                expand.classList.add('expanded');
+                calendarList.classList.add('expanded');
+            }
+        }
+
+        function renderCalendarsHTML(calendars) {
+            if (!calendars || calendars.length === 0) {
+                return '<div class="calendar-loading">No calendars found</div>';
+            }
+
+            return calendars.map(cal => `
+                <div class="calendar-item">
+                    <div class="calendar-color" style="background-color: ${cal.backgroundColor || '#4285f4'}"></div>
+                    <div class="calendar-name ${cal.primary ? 'primary' : ''}">
+                        ${escapeHtml(cal.summaryOverride || cal.summary || 'Unnamed Calendar')}
+                    </div>
+                    <div class="calendar-badges">
+                        ${cal.primary ? '<span class="access-badge primary-badge">Primary</span>' : ''}
+                        <span class="access-badge access-${cal.accessRole}">${formatAccessRole(cal.accessRole)}</span>
                     </div>
                 </div>
             `).join('');
+        }
+
+        function formatAccessRole(role) {
+            const labels = {
+                'owner': 'Owner',
+                'writer': 'Editor',
+                'reader': 'Viewer',
+                'freeBusyReader': 'Free/Busy'
+            };
+            return labels[role] || role;
         }
 
         function escapeHtml(text) {

@@ -150,8 +150,8 @@ describe('TokenManager - Multi-Account Support', () => {
       const accounts = await tokenManager.listAccounts();
 
       expect(accounts).toEqual([
-        { id: 'work', email: 'user@company.com', status: 'active' },
-        { id: 'personal', email: 'user@gmail.com', status: 'active' }
+        { id: 'work', email: 'user@company.com', status: 'active', calendars: [] },
+        { id: 'personal', email: 'user@gmail.com', status: 'active', calendars: [] }
       ]);
     });
 
@@ -168,11 +168,11 @@ describe('TokenManager - Multi-Account Support', () => {
         work: {
           access_token: 'work-access',
           refresh_token: 'work-refresh',
-          expiry_date: Date.now() + 3600000 // Valid
+          expiry_date: Date.now() + 3600000 // Valid access token
         },
         personal: {
+          // No refresh_token and expired access token = truly expired
           access_token: 'personal-access',
-          refresh_token: 'personal-refresh',
           expiry_date: Date.now() - 3600000 // Expired
         }
       };
@@ -183,8 +183,29 @@ describe('TokenManager - Multi-Account Support', () => {
 
       const accounts = await tokenManager.listAccounts();
 
+      // Account with refresh_token should always be active (can refresh)
       expect(accounts[0].status).toBe('active');
+      // Account without refresh_token and expired access token should be expired
       expect(accounts[1].status).toBe('expired');
+    });
+
+    it('should mark account with refresh_token as active even if access token expired', async () => {
+      const mockTokens = {
+        work: {
+          access_token: 'work-access',
+          refresh_token: 'work-refresh',
+          expiry_date: Date.now() - 3600000 // Expired access token, but has refresh
+        }
+      };
+
+      vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(mockTokens));
+      vi.spyOn(tokenManager as any, 'getUserEmail')
+        .mockResolvedValue('user@example.com');
+
+      const accounts = await tokenManager.listAccounts();
+
+      // Has refresh_token, so can get new access tokens = active
+      expect(accounts[0].status).toBe('active');
     });
   });
 

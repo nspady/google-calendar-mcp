@@ -5,10 +5,27 @@ import { GaxiosError } from 'gaxios';
 import { mkdir } from 'fs/promises';
 import { dirname } from 'path';
 
+// Cached calendar info
+interface CachedCalendar {
+  id: string;
+  summary: string;
+  summaryOverride?: string;
+  accessRole: string;
+  primary: boolean;
+  backgroundColor?: string;
+}
+
+// Extended credentials with cached email and calendars
+interface CachedCredentials extends Credentials {
+  cached_email?: string;
+  cached_calendars?: CachedCalendar[];
+  calendars_cached_at?: number;
+}
+
 // Interface for multi-account token storage
 // Now supports arbitrary account IDs
 interface MultiAccountTokens {
-  [accountId: string]: Credentials;
+  [accountId: string]: CachedCredentials;
 }
 
 export class TokenManager {
@@ -330,11 +347,18 @@ export class TokenManager {
     }
   }
 
-  async saveTokens(tokens: Credentials): Promise<void> {
+  async saveTokens(tokens: Credentials, email?: string): Promise<void> {
     try {
         const multiAccountTokens = await this.loadMultiAccountTokens();
-        multiAccountTokens[this.accountMode] = tokens;
-        
+        const cachedTokens: CachedCredentials = { ...tokens };
+
+        // Cache the email if provided
+        if (email) {
+          cachedTokens.cached_email = email;
+        }
+
+        multiAccountTokens[this.accountMode] = cachedTokens;
+
         await this.saveMultiAccountTokens(multiAccountTokens);
         this.oauth2Client.setCredentials(tokens);
         process.stderr.write(`Tokens saved successfully for ${this.accountMode} account to: ${this.tokenPath}\n`);
@@ -480,12 +504,27 @@ export class TokenManager {
   }
 
   /**
-   * List all authenticated accounts with their email addresses and status
+   * List all authenticated accounts with their email addresses, status, and calendars
+   * Uses cached data when available to avoid repeated API calls
    */
-  async listAccounts(): Promise<Array<{ id: string; email: string; status: string }>> {
+  async listAccounts(): Promise<Array<{
+    id: string;
+    email: string;
+    status: string;
+    calendars: CachedCalendar[];
+  }>> {
     try {
       const multiAccountTokens = await this.loadMultiAccountTokens();
-      const accountList: Array<{ id: string; email: string; status: string }> = [];
+      const accountList: Array<{
+        id: string;
+        email: string;
+        status: string;
+        calendars: CachedCalendar[];
+      }> = [];
+      let tokensUpdated = false;
+
+      // Cache TTL: 5 minutes for calendars
+      const CALENDAR_CACHE_TTL = 5 * 60 * 1000;
 
       for (const [accountId, tokens] of Object.entries(multiAccountTokens)) {
         // Skip invalid entries
@@ -493,27 +532,78 @@ export class TokenManager {
           continue;
         }
 
-        // Get email address
-        let email = 'unknown';
-        try {
-          const client = new OAuth2Client(
-            (this.oauth2Client as any)._clientId,
-            (this.oauth2Client as any)._clientSecret,
-            (this.oauth2Client as any)._redirectUri
-          );
-          client.setCredentials(tokens);
-          email = await this.getUserEmail(client);
-        } catch (error) {
-          // Email retrieval failed, use unknown
+        let client: OAuth2Client | null = null;
+
+        // Create client and refresh if needed
+        if (tokens.access_token || tokens.refresh_token) {
+          try {
+            client = new OAuth2Client(
+              this.credentials.clientId,
+              this.credentials.clientSecret,
+              this.credentials.redirectUri
+            );
+            client.setCredentials(tokens);
+
+            // Try to refresh token if access token is expired or missing
+            if (tokens.refresh_token && (!tokens.access_token || (tokens.expiry_date && tokens.expiry_date < Date.now()))) {
+              try {
+                const response = await client.refreshAccessToken();
+                client.setCredentials(response.credentials);
+                Object.assign(tokens, response.credentials);
+                tokensUpdated = true;
+              } catch {
+                // Refresh failed
+              }
+            }
+          } catch {
+            client = null;
+          }
+        }
+
+        // Get email address - use cached value if available
+        let email = tokens.cached_email || 'unknown';
+        if (!tokens.cached_email && client) {
+          try {
+            email = await this.getUserEmail(client);
+            if (email !== 'unknown') {
+              tokens.cached_email = email;
+              tokensUpdated = true;
+            }
+          } catch {
+            // Email retrieval failed
+          }
+        }
+
+        // Get calendars - use cached if fresh, otherwise fetch
+        let calendars: CachedCalendar[] = tokens.cached_calendars || [];
+        const cacheExpired = !tokens.calendars_cached_at ||
+          (Date.now() - tokens.calendars_cached_at) > CALENDAR_CACHE_TTL;
+
+        if (cacheExpired && client) {
+          try {
+            calendars = await this.fetchCalendarsForClient(client);
+            tokens.cached_calendars = calendars;
+            tokens.calendars_cached_at = Date.now();
+            tokensUpdated = true;
+          } catch {
+            // Calendar fetch failed, use cached or empty
+          }
         }
 
         // Determine status
         let status = 'active';
-        if (tokens.expiry_date && tokens.expiry_date < Date.now()) {
-          status = 'expired';
+        if (!tokens.refresh_token) {
+          if (!tokens.access_token || (tokens.expiry_date && tokens.expiry_date < Date.now())) {
+            status = 'expired';
+          }
         }
 
-        accountList.push({ id: accountId, email, status });
+        accountList.push({ id: accountId, email, status, calendars });
+      }
+
+      // Save updated tokens with cached data
+      if (tokensUpdated) {
+        await this.saveMultiAccountTokens(multiAccountTokens);
       }
 
       return accountList;
@@ -523,14 +613,62 @@ export class TokenManager {
   }
 
   /**
+   * Fetch calendars for a specific OAuth2Client
+   */
+  private async fetchCalendarsForClient(client: OAuth2Client): Promise<CachedCalendar[]> {
+    const { google } = await import('googleapis');
+    const calendar = google.calendar({ version: 'v3', auth: client });
+    const response = await calendar.calendarList.list();
+    const items = response.data.items || [];
+
+    const calendars: CachedCalendar[] = items.map(cal => ({
+      id: cal.id || '',
+      summary: cal.summary || '',
+      summaryOverride: cal.summaryOverride || undefined,
+      accessRole: cal.accessRole || 'reader',
+      primary: cal.primary || false,
+      backgroundColor: cal.backgroundColor || undefined
+    }));
+
+    // Sort: primary first, then by name
+    calendars.sort((a, b) => {
+      if (a.primary && !b.primary) return -1;
+      if (!a.primary && b.primary) return 1;
+      return (a.summaryOverride || a.summary).localeCompare(b.summaryOverride || b.summary);
+    });
+
+    return calendars;
+  }
+
+  /**
    * Get user email address from OAuth2Client
+   * First tries getTokenInfo, then falls back to primary calendar ID
    */
   private async getUserEmail(client: OAuth2Client): Promise<string> {
     try {
+      // Try getTokenInfo first (only works if token has email/openid scope)
       const tokenInfo = await client.getTokenInfo(client.credentials.access_token || '');
-      return tokenInfo.email || 'unknown';
-    } catch (error) {
-      return 'unknown';
+      if (tokenInfo.email) {
+        return tokenInfo.email;
+      }
+    } catch {
+      // Token info failed, try calendar fallback
     }
+
+    // Fallback: Get primary calendar ID (usually the user's email)
+    try {
+      const { google } = await import('googleapis');
+      const calendar = google.calendar({ version: 'v3', auth: client });
+      const response = await calendar.calendars.get({ calendarId: 'primary' });
+      const primaryId = response.data.id;
+      // Primary calendar ID is typically the user's email
+      if (primaryId && primaryId.includes('@')) {
+        return primaryId;
+      }
+    } catch {
+      // Calendar fallback also failed
+    }
+
+    return 'unknown';
   }
 } 
