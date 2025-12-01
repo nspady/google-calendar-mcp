@@ -30,29 +30,60 @@ export class ListEventsHandler extends BaseToolHandler {
         // Get clients for specified accounts (supports single or multiple)
         const selectedAccounts = this.getClientsForAccounts(args.account, accounts);
         const partialFailures: Array<{ accountId: string; reason: string }> = [];
-
-        // MCP SDK has already validated the arguments against the tool schema
-        const validArgs = args;
+        const resolutionWarnings: string[] = [];
 
         // Normalize calendarId to always be an array for consistent processing
-        const calendarNamesOrIds = Array.isArray(validArgs.calendarId)
-            ? validArgs.calendarId
-            : [validArgs.calendarId];
+        const calendarNamesOrIds = Array.isArray(args.calendarId)
+            ? args.calendarId
+            : [args.calendarId];
 
-        // Fetch events from all selected accounts
+        // For multi-account queries, pre-resolve calendars to their owning accounts
+        // This prevents "calendar not found" errors when a calendar only exists on some accounts
+        let accountCalendarMap: Map<string, string[]>;
+
+        if (selectedAccounts.size > 1) {
+            // Multi-account: route calendars to their owning accounts using CalendarRegistry
+            const { resolved, warnings } = await this.calendarRegistry.resolveCalendarsToAccounts(
+                calendarNamesOrIds,
+                selectedAccounts
+            );
+            accountCalendarMap = resolved;
+            resolutionWarnings.push(...warnings);
+
+            // If no calendars could be resolved on any account, throw error
+            if (accountCalendarMap.size === 0) {
+                const allCalendars = await this.calendarRegistry.getUnifiedCalendars(selectedAccounts);
+                const calendarList = allCalendars.map(c => `"${c.displayName}" (${c.calendarId})`).join(', ');
+                throw this.createError(
+                    `None of the requested calendars could be found: ${calendarNamesOrIds.map(c => `"${c}"`).join(', ')}. ` +
+                    `Available calendars: ${calendarList || 'none'}. Use 'list-calendars' to see all available calendars.`
+                );
+            }
+        } else {
+            // Single account: use existing per-account resolution (strict mode)
+            // All calendars go to the single account - will error if not found
+            const [accountId] = selectedAccounts.keys();
+            accountCalendarMap = new Map([[accountId, calendarNamesOrIds]]);
+        }
+
+        // Fetch events from accounts that have matching calendars
         const eventsPerAccount = await Promise.all(
-            Array.from(selectedAccounts.entries()).map(async ([accountId, client]) => {
+            Array.from(accountCalendarMap.entries()).map(async ([accountId, calendarsForAccount]) => {
+                const client = selectedAccounts.get(accountId)!;
                 try {
-                    // Resolve calendar names to IDs for this account
-                    const calendarIds = await this.resolveCalendarIds(client, calendarNamesOrIds);
+                    // For single-account, resolve names to IDs (strict mode)
+                    // For multi-account, calendars are already resolved IDs
+                    const calendarIds = selectedAccounts.size === 1
+                        ? await this.resolveCalendarIds(client, calendarsForAccount)
+                        : calendarsForAccount;
 
                     const events = await this.fetchEvents(client, calendarIds, {
-                        timeMin: validArgs.timeMin,
-                        timeMax: validArgs.timeMax,
-                        timeZone: validArgs.timeZone,
-                        fields: validArgs.fields,
-                        privateExtendedProperty: validArgs.privateExtendedProperty,
-                        sharedExtendedProperty: validArgs.sharedExtendedProperty
+                        timeMin: args.timeMin,
+                        timeMax: args.timeMax,
+                        timeZone: args.timeZone,
+                        fields: args.fields,
+                        privateExtendedProperty: args.privateExtendedProperty,
+                        sharedExtendedProperty: args.sharedExtendedProperty
                     });
 
                     // Tag events with account ID and return metadata
@@ -93,7 +124,7 @@ export class ListEventsHandler extends BaseToolHandler {
         const structuredEvents: StructuredEvent[] = allEvents.map(event =>
             convertGoogleEventToStructured(event, event.calendarId, event.accountId)
         );
-        const warnings: string[] = [];
+        const warnings: string[] = [...resolutionWarnings];
 
         // Build detailed warnings for partial failures
         if (partialFailures.length > 0) {

@@ -187,8 +187,25 @@ export const ToolSchemas = {
   }),
   
   'search-events': z.object({
-    account: singleAccountSchema,
-    calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
+    account: multiAccountSchema,
+    calendarId: z.union([
+      z.string().describe(
+        "Calendar identifier(s) to search. Accepts calendar IDs (e.g., 'primary', 'user@gmail.com') OR calendar names (e.g., 'Work', 'Personal'). Single calendar: 'primary'. Multiple calendars: array ['Work', 'Personal'] or JSON string '[\"Work\", \"Personal\"]'"
+      ),
+      z.array(z.string())
+    ]).transform((val) => {
+      if (typeof val === 'string') {
+        // Try to parse JSON array if it looks like one
+        if (val.startsWith('[')) {
+          try {
+            const parsed = JSON.parse(val);
+            if (Array.isArray(parsed)) return parsed;
+          } catch { /* ignore */ }
+        }
+        return val;
+      }
+      return val;
+    }).describe("Calendar identifier(s) to search. Accepts calendar IDs or names. Single or multiple calendars supported."),
     query: z.string().describe(
       "Free text search query (searches summary, description, location, attendees, etc.)"
     ),

@@ -388,6 +388,90 @@ describe('FreeBusyEventHandler', () => {
       // The handler now uses getClientsForAccounts which accepts account parameter
       expect(spy).toHaveBeenCalledWith('test', mockAccounts);
     });
+
+    it('should route calendars to correct accounts in multi-account queries', async () => {
+      // Setup two accounts
+      const workClient = new OAuth2Client();
+      const personalClient = new OAuth2Client();
+      const multiAccounts = new Map([
+        ['work', workClient],
+        ['personal', personalClient]
+      ]);
+
+      // Setup different calendar responses for each client
+      const workCalendar = {
+        freebusy: {
+          query: vi.fn().mockResolvedValue({
+            data: {
+              calendars: {
+                'work@example.com': {
+                  busy: [{ start: '2025-01-15T09:00:00Z', end: '2025-01-15T10:00:00Z' }]
+                }
+              }
+            }
+          })
+        }
+      };
+
+      const personalCalendar = {
+        freebusy: {
+          query: vi.fn().mockResolvedValue({
+            data: {
+              calendars: {
+                'family@group.calendar.google.com': {
+                  busy: [{ start: '2025-01-15T14:00:00Z', end: '2025-01-15T15:00:00Z' }]
+                }
+              }
+            }
+          })
+        }
+      };
+
+      vi.spyOn(handler as any, 'getCalendar').mockImplementation((client: OAuth2Client) => {
+        if (client === workClient) return workCalendar;
+        return personalCalendar;
+      });
+
+      // Mock CalendarRegistry to route calendars to different accounts
+      vi.spyOn((handler as any).calendarRegistry, 'resolveCalendarsToAccounts').mockResolvedValue({
+        resolved: new Map([
+          ['work', ['work@example.com']],
+          ['personal', ['family@group.calendar.google.com']]
+        ]),
+        warnings: []
+      });
+
+      const args = {
+        timeMin: '2025-01-15T00:00:00',
+        timeMax: '2025-01-15T23:59:59',
+        calendars: [
+          { id: 'work@example.com' },
+          { id: 'family@group.calendar.google.com' }
+        ],
+        account: ['work', 'personal']
+      };
+
+      const result = await handler.runTool(args, multiAccounts);
+      const response = JSON.parse(result.content[0].text);
+
+      // Work calendar should only be queried for work@example.com
+      expect(workCalendar.freebusy.query).toHaveBeenCalledWith({
+        requestBody: expect.objectContaining({
+          items: [{ id: 'work@example.com' }]
+        })
+      });
+
+      // Personal calendar should only be queried for family calendar
+      expect(personalCalendar.freebusy.query).toHaveBeenCalledWith({
+        requestBody: expect.objectContaining({
+          items: [{ id: 'family@group.calendar.google.com' }]
+        })
+      });
+
+      // Both calendars should have results
+      expect(response.calendars['work@example.com'].busy).toHaveLength(1);
+      expect(response.calendars['family@group.calendar.google.com'].busy).toHaveLength(1);
+    });
   });
 
   describe('Response Formatting', () => {

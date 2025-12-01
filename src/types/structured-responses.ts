@@ -217,11 +217,14 @@ export interface SearchEventsResponse {
   events: StructuredEvent[];
   totalCount: number;
   query: string;
-  calendarId: string;
+  calendarId?: string;
+  calendars?: string[];
+  accounts?: string[];
   timeRange?: {
     start: string;
     end: string;
   };
+  warnings?: string[];
 }
 
 /**

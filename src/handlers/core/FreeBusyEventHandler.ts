@@ -47,17 +47,53 @@ export class FreeBusyEventHandler extends BaseToolHandler {
     const mergedCalendars: Record<string, FreeBusyCalendarResult> = {};
     const calendarIds = args.calendars.map(c => c.id);
 
-    // Query from each account
+    // For multi-account queries, pre-resolve which calendars exist on which accounts
+    // This prevents the "cartesian product" problem where we try to query all calendars
+    // from all accounts, causing failures when a calendar doesn't exist on an account
+    let accountCalendarMap: Map<string, string[]>;
+    const resolutionWarnings: string[] = [];
+
+    if (accounts.size > 1) {
+      const { resolved, warnings } = await this.calendarRegistry.resolveCalendarsToAccounts(
+        calendarIds,
+        accounts
+      );
+      accountCalendarMap = resolved;
+      resolutionWarnings.push(...warnings);
+
+      // If no calendars could be resolved, mark all as not found
+      if (accountCalendarMap.size === 0) {
+        for (const calId of calendarIds) {
+          mergedCalendars[calId] = {
+            busy: [],
+            errors: [{ reason: 'notFound' }]
+          };
+        }
+        return mergedCalendars;
+      }
+    } else {
+      // Single account: send all calendars to that account
+      const [accountId] = accounts.keys();
+      accountCalendarMap = new Map([[accountId, calendarIds]]);
+    }
+
+    // Query from each account with only the calendars that exist on that account
     const results = await Promise.all(
-      Array.from(accounts.entries()).map(async ([accountId, client]) => {
+      Array.from(accountCalendarMap.entries()).map(async ([accountId, calendarsForAccount]) => {
+        const client = accounts.get(accountId)!;
         try {
-          const result = await this.queryFreeBusy(client, args);
-          return { accountId, result, error: null };
+          // Filter args.calendars to only include those routed to this account
+          const filteredArgs: GetFreeBusyInput = {
+            ...args,
+            calendars: args.calendars.filter(c => calendarsForAccount.includes(c.id))
+          };
+          const result = await this.queryFreeBusy(client, filteredArgs);
+          return { accountId, result, error: null, calendarsQueried: calendarsForAccount };
         } catch (error) {
           // Log but don't fail - other accounts might succeed
           const message = error instanceof Error ? error.message : String(error);
           process.stderr.write(`Warning: FreeBusy query failed for account "${accountId}": ${message}\n`);
-          return { accountId, result: null, error: message };
+          return { accountId, result: null, error: message, calendarsQueried: calendarsForAccount };
         }
       })
     );

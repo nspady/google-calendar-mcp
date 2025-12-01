@@ -395,4 +395,174 @@ describe('SearchEventsHandler', () => {
       expect(spy).toHaveBeenCalledWith('test', 'primary', mockAccounts, 'read');
     });
   });
+
+  describe('Multi-Calendar Search', () => {
+    let workClient: OAuth2Client;
+    let personalClient: OAuth2Client;
+    let multiAccounts: Map<string, OAuth2Client>;
+
+    beforeEach(() => {
+      workClient = new OAuth2Client();
+      personalClient = new OAuth2Client();
+      multiAccounts = new Map([
+        ['work', workClient],
+        ['personal', personalClient]
+      ]);
+
+      // Mock getClientsForAccounts to return all accounts when array is passed
+      vi.spyOn(handler as any, 'getClientsForAccounts').mockImplementation(
+        (accountArg: string | string[] | undefined, accounts: Map<string, OAuth2Client>) => {
+          if (Array.isArray(accountArg)) {
+            const selected = new Map<string, OAuth2Client>();
+            for (const id of accountArg) {
+              if (accounts.has(id)) selected.set(id, accounts.get(id)!);
+            }
+            return selected;
+          }
+          if (accountArg) {
+            return accounts.has(accountArg) ? new Map([[accountArg, accounts.get(accountArg)!]]) : new Map();
+          }
+          return accounts;
+        }
+      );
+
+      // Mock calendarRegistry.resolveCalendarsToAccounts
+      vi.spyOn((handler as any).calendarRegistry, 'resolveCalendarsToAccounts').mockResolvedValue({
+        resolved: new Map([
+          ['work', ['work-calendar']],
+          ['personal', ['personal-calendar']]
+        ]),
+        warnings: []
+      });
+    });
+
+    it('should search across multiple calendars and merge results', async () => {
+      const workEvents = [
+        {
+          id: 'work-1',
+          summary: 'Team Meeting',
+          start: { dateTime: '2025-01-15T10:00:00Z' },
+          end: { dateTime: '2025-01-15T11:00:00Z' }
+        }
+      ];
+      const personalEvents = [
+        {
+          id: 'personal-1',
+          summary: 'Team Lunch',
+          start: { dateTime: '2025-01-15T12:00:00Z' },
+          end: { dateTime: '2025-01-15T13:00:00Z' }
+        }
+      ];
+
+      vi.spyOn(handler as any, 'getCalendar').mockImplementation((client: OAuth2Client) => ({
+        events: {
+          list: vi.fn().mockResolvedValue({
+            data: { items: client === workClient ? workEvents : personalEvents }
+          })
+        }
+      }));
+
+      const result = await handler.runTool({
+        account: ['work', 'personal'],
+        calendarId: ['work-calendar', 'personal-calendar'],
+        query: 'Team'
+      }, multiAccounts);
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.totalCount).toBe(2);
+      expect(parsed.events).toHaveLength(2);
+      expect(parsed.calendars).toContain('work-calendar');
+      expect(parsed.calendars).toContain('personal-calendar');
+      expect(parsed.accounts).toContain('work');
+      expect(parsed.accounts).toContain('personal');
+    });
+
+    it('should sort merged results chronologically', async () => {
+      const workEvents = [
+        {
+          id: 'work-1',
+          summary: 'Late Event',
+          start: { dateTime: '2025-01-15T15:00:00Z' },
+          end: { dateTime: '2025-01-15T16:00:00Z' }
+        }
+      ];
+      const personalEvents = [
+        {
+          id: 'personal-1',
+          summary: 'Early Event',
+          start: { dateTime: '2025-01-15T09:00:00Z' },
+          end: { dateTime: '2025-01-15T10:00:00Z' }
+        }
+      ];
+
+      vi.spyOn(handler as any, 'getCalendar').mockImplementation((client: OAuth2Client) => ({
+        events: {
+          list: vi.fn().mockResolvedValue({
+            data: { items: client === workClient ? workEvents : personalEvents }
+          })
+        }
+      }));
+
+      const result = await handler.runTool({
+        account: ['work', 'personal'],
+        calendarId: ['work-calendar', 'personal-calendar'],
+        query: 'Event'
+      }, multiAccounts);
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.events[0].summary).toBe('Early Event');
+      expect(parsed.events[1].summary).toBe('Late Event');
+    });
+
+    it('should include warnings for partial failures in multi-calendar search', async () => {
+      const personalEvents = [
+        {
+          id: 'personal-1',
+          summary: 'Team Event',
+          start: { dateTime: '2025-01-15T10:00:00Z' },
+          end: { dateTime: '2025-01-15T11:00:00Z' }
+        }
+      ];
+
+      vi.spyOn(handler as any, 'getCalendar').mockImplementation((client: OAuth2Client) => ({
+        events: {
+          list: vi.fn().mockImplementation(() => {
+            if (client === workClient) {
+              throw new Error('Access denied');
+            }
+            return { data: { items: personalEvents } };
+          })
+        }
+      }));
+
+      const result = await handler.runTool({
+        account: ['work', 'personal'],
+        calendarId: ['work-calendar', 'personal-calendar'],
+        query: 'Team'
+      }, multiAccounts);
+
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.totalCount).toBe(1);
+      expect(parsed.warnings).toBeDefined();
+      expect(parsed.warnings.length).toBeGreaterThan(0);
+      expect(parsed.warnings[0]).toContain('Failed to search calendar');
+    });
+
+    it('should throw error when no calendars can be resolved', async () => {
+      vi.spyOn((handler as any).calendarRegistry, 'resolveCalendarsToAccounts').mockResolvedValue({
+        resolved: new Map(),
+        warnings: ['Calendar "missing" not found']
+      });
+
+      vi.spyOn((handler as any).calendarRegistry, 'getUnifiedCalendars').mockResolvedValue([
+        { displayName: 'Work Calendar', calendarId: 'work-calendar' }
+      ]);
+
+      await expect(handler.runTool({
+        account: ['work', 'personal'],
+        calendarId: ['missing-calendar'],
+        query: 'Team'
+      }, multiAccounts)).rejects.toThrow('None of the requested calendars could be found');
+    });
+  });
 });

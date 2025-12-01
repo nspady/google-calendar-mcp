@@ -338,6 +338,16 @@ describe('ListEventsHandler - Multi-account merging', () => {
 
     vi.spyOn(handler as any, 'resolveCalendarIds').mockImplementation(async (_client, ids: string[]) => ids);
     vi.spyOn(handler as any, 'getCalendarTimezone').mockResolvedValue('UTC');
+
+    // Mock calendarRegistry.resolveCalendarsToAccounts for multi-account routing
+    // Default: route 'primary' calendar to both accounts
+    vi.spyOn((handler as any).calendarRegistry, 'resolveCalendarsToAccounts').mockResolvedValue({
+      resolved: new Map([
+        ['work', ['primary']],
+        ['personal', ['primary']]
+      ]),
+      warnings: []
+    });
   });
 
   const setupCalendarMocks = (workEvents: any[], personalEvents: any[]) => {

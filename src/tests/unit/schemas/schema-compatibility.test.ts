@@ -118,6 +118,24 @@ describe('Provider-Specific Schema Compatibility', () => {
       expect(openaiSchema.properties.calendarId.description).toMatch(/\[".*"\]/);
     });
 
+    it('should convert search-events calendarId anyOf to string for OpenAI', () => {
+      const tools = ToolRegistry.getToolsWithSchemas();
+      const searchEventsTool = tools.find(t => t.name === 'search-events');
+
+      expect(searchEventsTool).toBeDefined();
+
+      // Convert to OpenAI format
+      const openaiSchema = convertMCPSchemaToOpenAI(searchEventsTool!.inputSchema);
+
+      // OpenAI should see a simple string type, not anyOf
+      expect(openaiSchema.properties.calendarId.type).toBe('string');
+      expect(openaiSchema.properties.calendarId.anyOf).toBeUndefined();
+
+      // Description should mention JSON array format
+      expect(openaiSchema.properties.calendarId.description).toContain('JSON array string format');
+      expect(openaiSchema.properties.calendarId.description).toMatch(/\[".*"\]/);
+    });
+
     it('should ensure all converted schemas are valid objects', () => {
       const tools = ToolRegistry.getToolsWithSchemas();
 
@@ -158,9 +176,12 @@ describe('Provider-Specific Schema Compatibility', () => {
       const problematicFeatures = ['oneOf', 'anyOf', 'allOf', 'not'];
       const issues: string[] = [];
 
+      // Tools explicitly allowed to use anyOf for calendarId (multi-calendar support)
+      const multiCalendarTools = ['list-events', 'search-events'];
+
       for (const tool of tools) {
-        // Skip list-events - it's explicitly allowed to use anyOf for calendarId
-        if (tool.name === 'list-events') {
+        // Skip multi-calendar tools - they're explicitly allowed to use anyOf for calendarId
+        if (multiCalendarTools.includes(tool.name)) {
           continue;
         }
 

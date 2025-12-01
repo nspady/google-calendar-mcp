@@ -537,6 +537,159 @@ describe('CalendarRegistry', () => {
     });
   });
 
+  describe('resolveCalendarsToAccounts', () => {
+    beforeEach(() => {
+      // Setup calendars where:
+      // - "Family" only exists on personal account
+      // - "Work Calendar" only exists on work account
+      // - "team@group.calendar.google.com" is shared but work has higher permission
+      const mockWorkCalendar = vi.fn().mockResolvedValue({
+        data: {
+          items: [
+            {
+              id: 'work@gmail.com',
+              summary: 'Work Calendar',
+              accessRole: 'owner',
+              primary: true
+            },
+            {
+              id: 'team@group.calendar.google.com',
+              summary: 'Team Events',
+              accessRole: 'writer'
+            }
+          ]
+        }
+      });
+
+      const mockPersonalCalendar = vi.fn().mockResolvedValue({
+        data: {
+          items: [
+            {
+              id: 'personal@gmail.com',
+              summary: 'Personal',
+              accessRole: 'owner',
+              primary: true
+            },
+            {
+              id: 'family@group.calendar.google.com',
+              summary: 'Family',
+              accessRole: 'owner'
+            },
+            {
+              id: 'team@group.calendar.google.com',
+              summary: 'Team Events',
+              accessRole: 'reader'
+            }
+          ]
+        }
+      });
+
+      vi.mocked(google.calendar).mockImplementation((config: any) => {
+        const token = config.auth.credentials.access_token;
+        return {
+          calendarList: {
+            list: token === 'work-token' ? mockWorkCalendar : mockPersonalCalendar
+          }
+        } as any;
+      });
+    });
+
+    it('should route calendars to correct accounts based on ownership', async () => {
+      const { resolved, warnings } = await registry.resolveCalendarsToAccounts(
+        ['Family', 'Work Calendar'],
+        accounts
+      );
+
+      // Family should be routed to personal, Work Calendar to work
+      expect(resolved.size).toBe(2);
+      expect(resolved.get('personal')).toEqual(['family@group.calendar.google.com']);
+      expect(resolved.get('work')).toEqual(['work@gmail.com']);
+      expect(warnings).toHaveLength(0);
+    });
+
+    it('should route shared calendar to account with highest permission', async () => {
+      const { resolved, warnings } = await registry.resolveCalendarsToAccounts(
+        ['Team Events'],
+        accounts
+      );
+
+      // Team Events should go to work (writer > reader)
+      expect(resolved.size).toBe(1);
+      expect(resolved.get('work')).toEqual(['team@group.calendar.google.com']);
+      expect(warnings).toHaveLength(0);
+    });
+
+    it('should include warnings for calendars not found', async () => {
+      const { resolved, warnings } = await registry.resolveCalendarsToAccounts(
+        ['Family', 'NonExistent'],
+        accounts
+      );
+
+      expect(resolved.get('personal')).toEqual(['family@group.calendar.google.com']);
+      expect(warnings).toContain('Calendar "NonExistent" not found on any account');
+    });
+
+    it('should handle calendar IDs directly', async () => {
+      const { resolved, warnings } = await registry.resolveCalendarsToAccounts(
+        ['family@group.calendar.google.com', 'work@gmail.com'],
+        accounts
+      );
+
+      expect(resolved.get('personal')).toEqual(['family@group.calendar.google.com']);
+      expect(resolved.get('work')).toEqual(['work@gmail.com']);
+      expect(warnings).toHaveLength(0);
+    });
+
+    it('should group multiple calendars per account', async () => {
+      const { resolved, warnings } = await registry.resolveCalendarsToAccounts(
+        ['Family', 'Personal'],  // Both on personal account
+        accounts
+      );
+
+      expect(resolved.size).toBe(1);
+      const personalCalendars = resolved.get('personal');
+      expect(personalCalendars).toHaveLength(2);
+      expect(personalCalendars).toContain('family@group.calendar.google.com');
+      expect(personalCalendars).toContain('personal@gmail.com');
+      expect(warnings).toHaveLength(0);
+    });
+
+    it('should respect restrictToAccounts option', async () => {
+      const { resolved, warnings } = await registry.resolveCalendarsToAccounts(
+        ['Family', 'Work Calendar'],
+        accounts,
+        { restrictToAccounts: ['work'] }
+      );
+
+      // Family only exists on personal, so it won't be found when restricted to work
+      expect(resolved.size).toBe(1);
+      expect(resolved.get('work')).toEqual(['work@gmail.com']);
+      expect(warnings).toContain('Calendar "Family" not found on any account');
+    });
+
+    it('should return empty map when no calendars found', async () => {
+      const { resolved, warnings } = await registry.resolveCalendarsToAccounts(
+        ['NonExistent1', 'NonExistent2'],
+        accounts
+      );
+
+      expect(resolved.size).toBe(0);
+      expect(warnings).toHaveLength(2);
+    });
+
+    it('should not duplicate calendar IDs in the same account', async () => {
+      // Request the same calendar twice
+      const { resolved, warnings } = await registry.resolveCalendarsToAccounts(
+        ['Family', 'family@group.calendar.google.com'],  // Same calendar, different references
+        accounts
+      );
+
+      expect(resolved.get('personal')).toHaveLength(1);
+      expect(resolved.get('personal')).toEqual(['family@group.calendar.google.com']);
+      expect(warnings).toHaveLength(0);
+    });
+  });
+
   describe('concurrent access', () => {
     it('should prevent duplicate API calls during concurrent requests', async () => {
       const mockCalendar = vi.fn().mockImplementation(() =>

@@ -47,9 +47,38 @@ export class FindCalendarConflictsHandler extends BaseToolHandler {
     const calendarSelectors = this.normalizeCalendarSelection(args.calendarId);
     const normalizedEvents: NormalizedEvent[] = [];
 
-    for (const [accountId, client] of selectedAccounts.entries()) {
+    // For multi-account queries, pre-resolve which calendars exist on which accounts
+    // This prevents errors when a calendar only exists on specific accounts
+    let accountCalendarMap: Map<string, string[]>;
+
+    if (selectedAccounts.size > 1) {
+      const { resolved, warnings } = await this.calendarRegistry.resolveCalendarsToAccounts(
+        calendarSelectors,
+        selectedAccounts
+      );
+      accountCalendarMap = resolved;
+
+      // If no calendars could be resolved, throw helpful error
+      if (accountCalendarMap.size === 0) {
+        const allCalendars = await this.calendarRegistry.getUnifiedCalendars(selectedAccounts);
+        const calendarList = allCalendars.map(c => `"${c.displayName}" (${c.calendarId})`).join(', ');
+        throw new McpError(
+          ErrorCode.InvalidRequest,
+          `None of the requested calendars could be found: ${calendarSelectors.map(c => `"${c}"`).join(', ')}. ` +
+          `Available calendars: ${calendarList || 'none'}. Use 'list-calendars' to see all available calendars.`
+        );
+      }
+    } else {
+      // Single account: use existing per-account resolution (strict mode)
+      const [accountId, client] = [...selectedAccounts.entries()][0];
       const resolvedCalendars = await this.resolveCalendarIds(client, calendarSelectors);
-      for (const calendarId of resolvedCalendars) {
+      accountCalendarMap = new Map([[accountId, resolvedCalendars]]);
+    }
+
+    // Fetch events from accounts that have matching calendars
+    for (const [accountId, calendarIds] of accountCalendarMap.entries()) {
+      const client = selectedAccounts.get(accountId)!;
+      for (const calendarId of calendarIds) {
         const timeRange = await this.normalizeTimeRange(client, calendarId, args.timeMin, args.timeMax);
         const calendar = this.getCalendar(client);
 

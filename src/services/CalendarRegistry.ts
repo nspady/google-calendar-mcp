@@ -358,4 +358,52 @@ export class CalendarRegistry {
       accessRole: preferredAccess.accessRole
     };
   }
+
+  /**
+   * Resolve multiple calendar names/IDs to their owning accounts.
+   * For each calendar, determines which account has access (using highest permission).
+   * Returns a routing map of accountId -> calendarIds for efficient multi-account queries.
+   *
+   * @param namesOrIds Array of calendar names or IDs to resolve
+   * @param accounts Map of available accounts
+   * @param options.restrictToAccounts Only resolve on these specific accounts (for strict mode)
+   * @returns Routing map and warnings for calendars not found
+   */
+  async resolveCalendarsToAccounts(
+    namesOrIds: string[],
+    accounts: Map<string, OAuth2Client>,
+    options?: { restrictToAccounts?: string[] }
+  ): Promise<{
+    resolved: Map<string, string[]>;  // accountId -> calendarIds for that account
+    warnings: string[];               // calendars not found on any account
+  }> {
+    const resolved = new Map<string, string[]>();
+    const warnings: string[] = [];
+
+    // Filter accounts if restricted
+    const availableAccounts = options?.restrictToAccounts
+      ? new Map(Array.from(accounts.entries()).filter(([id]) => options.restrictToAccounts!.includes(id)))
+      : accounts;
+
+    for (const nameOrId of namesOrIds) {
+      // Use existing resolution logic which finds the preferred (highest permission) account
+      const resolution = await this.resolveCalendarNameToId(nameOrId, availableAccounts, 'read');
+
+      if (!resolution) {
+        warnings.push(`Calendar "${nameOrId}" not found on any account`);
+        continue;
+      }
+
+      const { calendarId, accountId } = resolution;
+
+      // Add to routing map
+      const accountCalendars = resolved.get(accountId) || [];
+      if (!accountCalendars.includes(calendarId)) {
+        accountCalendars.push(calendarId);
+      }
+      resolved.set(accountId, accountCalendars);
+    }
+
+    return { resolved, warnings };
+  }
 }
