@@ -82,7 +82,7 @@ export class TokenManager {
     try {
       const fileContent = await fs.readFile(this.tokenPath, "utf-8");
       const parsed = JSON.parse(fileContent);
-      
+
       // Check if this is the old single-account format
       if (parsed.access_token || parsed.refresh_token) {
         // Convert old format to new multi-account format
@@ -92,12 +92,28 @@ export class TokenManager {
         await this.saveMultiAccountTokens(multiAccountTokens);
         return multiAccountTokens;
       }
-      
+
       // Already in multi-account format
       return parsed as MultiAccountTokens;
     } catch (error: unknown) {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
         // File doesn't exist, return empty structure
+        return {};
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Raw token file read without migration logic.
+   * Used for atomic read-modify-write operations where we need to re-read current state.
+   */
+  private async loadMultiAccountTokensRaw(): Promise<MultiAccountTokens> {
+    try {
+      const fileContent = await fs.readFile(this.tokenPath, "utf-8");
+      return JSON.parse(fileContent) as MultiAccountTokens;
+    } catch (error: unknown) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
         return {};
       }
       throw error;
@@ -600,9 +616,35 @@ export class TokenManager {
         accountList.push({ id: accountId, email, status, calendars });
       }
 
-      // Save updated tokens with cached data
+      // Save updated tokens with cached data using atomic read-modify-write
+      // This prevents race conditions when multiple listAccounts() calls run concurrently
       if (tokensUpdated) {
-        await this.saveMultiAccountTokens(multiAccountTokens);
+        await this.enqueueTokenWrite(async () => {
+          // Re-read current token state to preserve any concurrent auth changes
+          const latestTokens = await this.loadMultiAccountTokensRaw();
+
+          // Merge our cached metadata updates into the latest token state
+          for (const accountId of Object.keys(multiAccountTokens)) {
+            const localUpdates = multiAccountTokens[accountId];
+            const latestAccount = latestTokens[accountId];
+
+            if (latestAccount && localUpdates) {
+              // Only update cached metadata, not auth tokens
+              if (localUpdates.cached_email) {
+                latestAccount.cached_email = localUpdates.cached_email;
+              }
+              if (localUpdates.cached_calendars) {
+                latestAccount.cached_calendars = localUpdates.cached_calendars;
+                latestAccount.calendars_cached_at = localUpdates.calendars_cached_at;
+              }
+            }
+          }
+
+          await this.ensureTokenDirectoryExists();
+          await fs.writeFile(this.tokenPath, JSON.stringify(latestTokens, null, 2), {
+            mode: 0o600,
+          });
+        });
       }
 
       return accountList;

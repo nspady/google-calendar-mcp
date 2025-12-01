@@ -1,5 +1,31 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **Multi-account support**: Connect and manage multiple Google accounts simultaneously
+  - Query events across all accounts with automatic result merging
+  - Permission-based account auto-selection for write operations
+  - Case-insensitive account IDs and calendar name resolution
+  - New `find-calendar-conflicts` tool for cross-account conflict detection
+- **Account management UI**: Web-based interface at `/accounts` endpoint (HTTP mode)
+- **CalendarRegistry service**: Centralized calendar discovery with caching and deduplication
+
+### Changed
+- All tools now accept optional `account` parameter for explicit account selection
+- Read operations (list-events, list-calendars, get-freebusy) query all accounts when `account` is omitted
+- Write operations auto-select account with appropriate calendar permissions
+- Token storage format now supports multiple accounts (automatic migration from single-account format)
+
+### Fixed
+- Race conditions in token refresh and cache operations
+- HTTP transport security hardening (origin validation, input sanitization)
+
+### Backwards Compatibility
+- Fully backwards compatible: existing single-account setups work unchanged
+- Automatic token migration on first load (no manual intervention required)
+- All new parameters are optional with sensible defaults
+
 ## [2.0.7](https://github.com/nspady/google-calendar-mcp/compare/v2.0.6...v2.0.7) (2025-11-05)
 
 

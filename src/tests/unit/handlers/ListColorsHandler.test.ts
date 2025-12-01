@@ -18,14 +18,18 @@ describe('ListColorsHandler', () => {
   let handler: ListColorsHandler;
   let mockOAuth2Client: OAuth2Client;
   let mockOAuth2Client2: OAuth2Client;
-  let mockAccounts: Map<string, OAuth2Client>;
+  let mockSingleAccount: Map<string, OAuth2Client>;
+  let mockMultipleAccounts: Map<string, OAuth2Client>;
   let mockCalendar: any;
 
   beforeEach(() => {
     handler = new ListColorsHandler();
     mockOAuth2Client = new OAuth2Client();
     mockOAuth2Client2 = new OAuth2Client();
-    mockAccounts = new Map([
+    // Single account for most tests (auto-selects)
+    mockSingleAccount = new Map([['test1', mockOAuth2Client]]);
+    // Multiple accounts for multi-account specific tests
+    mockMultipleAccounts = new Map([
       ['test1', mockOAuth2Client],
       ['test2', mockOAuth2Client2]
     ]);
@@ -57,7 +61,7 @@ describe('ListColorsHandler', () => {
 
       mockCalendar.colors.get.mockResolvedValue({ data: mockColors });
 
-      const result = await handler.runTool({}, mockAccounts);
+      const result = await handler.runTool({}, mockSingleAccount);
 
       expect(mockCalendar.colors.get).toHaveBeenCalled();
       expect(result.content[0].type).toBe('text');
@@ -90,7 +94,7 @@ describe('ListColorsHandler', () => {
 
       mockCalendar.colors.get.mockResolvedValue({ data: mockColors });
 
-      const result = await handler.runTool({}, mockAccounts);
+      const result = await handler.runTool({}, mockSingleAccount);
 
       const response = JSON.parse(result.content[0].text);
       expect(response.event).toBeDefined();
@@ -108,7 +112,7 @@ describe('ListColorsHandler', () => {
 
       mockCalendar.colors.get.mockResolvedValue({ data: mockColors });
 
-      const result = await handler.runTool({}, mockAccounts);
+      const result = await handler.runTool({}, mockSingleAccount);
 
       const response = JSON.parse(result.content[0].text);
       expect(response.calendar).toBeDefined();
@@ -124,7 +128,7 @@ describe('ListColorsHandler', () => {
 
       mockCalendar.colors.get.mockResolvedValue({ data: mockColors });
 
-      const result = await handler.runTool({}, mockAccounts);
+      const result = await handler.runTool({}, mockSingleAccount);
 
       const response = JSON.parse(result.content[0].text);
       expect(response.event).toEqual({});
@@ -141,7 +145,7 @@ describe('ListColorsHandler', () => {
 
       mockCalendar.colors.get.mockResolvedValue({ data: mockColors });
 
-      const result = await handler.runTool({}, mockAccounts);
+      const result = await handler.runTool({}, mockSingleAccount);
 
       const response = JSON.parse(result.content[0].text);
       expect(response.event['1']).toEqual({
@@ -156,18 +160,30 @@ describe('ListColorsHandler', () => {
   });
 
   describe('Account Selection', () => {
-    it('should use first account when no account specified', async () => {
+    it('should auto-select when only one account exists', async () => {
       const mockColors = {
         event: { '1': { background: '#a4bdfc', foreground: '#1d1d1d' } }
       };
 
       mockCalendar.colors.get.mockResolvedValue({ data: mockColors });
 
-      const result = await handler.runTool({}, mockAccounts);
+      const result = await handler.runTool({}, mockSingleAccount);
 
       expect(mockCalendar.colors.get).toHaveBeenCalled();
       const response = JSON.parse(result.content[0].text);
       expect(response.event['1']).toBeDefined();
+    });
+
+    it('should require account parameter when multiple accounts exist', async () => {
+      const mockColors = {
+        event: { '1': { background: '#a4bdfc', foreground: '#1d1d1d' } }
+      };
+
+      mockCalendar.colors.get.mockResolvedValue({ data: mockColors });
+
+      await expect(handler.runTool({}, mockMultipleAccounts)).rejects.toThrow(
+        'Multiple accounts available'
+      );
     });
 
     it('should use specified account when provided', async () => {
@@ -178,9 +194,9 @@ describe('ListColorsHandler', () => {
 
       mockCalendar.colors.get.mockResolvedValue({ data: mockColors });
 
-      await handler.runTool({ account: 'test2' }, mockAccounts);
+      await handler.runTool({ account: 'test2' }, mockMultipleAccounts);
 
-      expect(spy).toHaveBeenCalledWith('test2', mockAccounts);
+      expect(spy).toHaveBeenCalledWith('test2', mockMultipleAccounts);
     });
   });
 
@@ -200,7 +216,7 @@ describe('ListColorsHandler', () => {
 
       mockCalendar.colors.get.mockResolvedValue({ data: mockColors });
 
-      const result = await handler.runTool({}, mockAccounts);
+      const result = await handler.runTool({}, mockSingleAccount);
 
       const response = JSON.parse(result.content[0].text);
 
@@ -235,7 +251,7 @@ describe('ListColorsHandler', () => {
 
       mockCalendar.colors.get.mockResolvedValue({ data: mockColors });
 
-      const result = await handler.runTool({}, mockAccounts);
+      const result = await handler.runTool({}, mockSingleAccount);
 
       const response = JSON.parse(result.content[0].text);
       expect(response.event).toHaveProperty('1');
@@ -254,13 +270,13 @@ describe('ListColorsHandler', () => {
         throw new Error('Failed to retrieve colors');
       });
 
-      await expect(handler.runTool({}, mockAccounts)).rejects.toThrow('Failed to retrieve colors');
+      await expect(handler.runTool({}, mockSingleAccount)).rejects.toThrow('Failed to retrieve colors');
     });
 
     it('should handle null response data', async () => {
       mockCalendar.colors.get.mockResolvedValue({ data: null });
 
-      await expect(handler.runTool({}, mockAccounts)).rejects.toThrow('Failed to retrieve colors');
+      await expect(handler.runTool({}, mockSingleAccount)).rejects.toThrow('Failed to retrieve colors');
     });
 
     it('should handle permission denied error', async () => {
@@ -273,7 +289,7 @@ describe('ListColorsHandler', () => {
         throw new Error('Permission denied');
       });
 
-      await expect(handler.runTool({}, mockAccounts)).rejects.toThrow('Permission denied');
+      await expect(handler.runTool({}, mockSingleAccount)).rejects.toThrow('Permission denied');
     });
 
     it('should handle network errors', async () => {
@@ -285,7 +301,7 @@ describe('ListColorsHandler', () => {
         throw new Error('Network error');
       });
 
-      await expect(handler.runTool({}, mockAccounts)).rejects.toThrow('Network error');
+      await expect(handler.runTool({}, mockSingleAccount)).rejects.toThrow('Network error');
     });
   });
 
@@ -302,7 +318,7 @@ describe('ListColorsHandler', () => {
 
       mockCalendar.colors.get.mockResolvedValue({ data: mockColors });
 
-      const result = await handler.runTool({}, mockAccounts);
+      const result = await handler.runTool({}, mockSingleAccount);
 
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');

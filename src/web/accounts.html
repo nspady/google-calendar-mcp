@@ -662,6 +662,10 @@
 
                 // Listen for auth success message
                 const handleMessage = (event) => {
+                    // Validate origin to prevent XSS/clickjacking attacks
+                    if (event.origin !== window.location.origin) {
+                        return;
+                    }
                     if (event.data.type === 'auth-success') {
                         window.removeEventListener('message', handleMessage);
                         showMessage(`Account "${accountId}" authenticated successfully!`, 'success');
@@ -736,6 +740,10 @@
 
                 // Listen for auth success message
                 const handleMessage = (event) => {
+                    // Validate origin to prevent XSS/clickjacking attacks
+                    if (event.origin !== window.location.origin) {
+                        return;
+                    }
                     if (event.data.type === 'auth-success') {
                         window.removeEventListener('message', handleMessage);
                         showMessage(`Account "${accountId}" re-authenticated successfully!`, 'success');
