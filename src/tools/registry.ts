@@ -43,8 +43,50 @@ const timeZoneSchema = z.string().optional().describe(
   "Timezone as IANA Time Zone Database name (e.g., America/Los_Angeles). Takes priority over calendar's default timezone. Only used for timezone-naive datetime strings."
 );
 
-const fieldsSchema = z.array(z.enum(ALLOWED_EVENT_FIELDS)).optional().describe(
+// Generic helper to parse JSON string arrays
+const parseJsonStringArray = (val: unknown): unknown => {
+  if (typeof val !== 'string') return val;
+  const trimmed = val.trim();
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    try {
+      // Handle single-quoted JSON-like strings (Python/shell style)
+      let jsonString = trimmed;
+      if (jsonString.includes("'")) {
+        jsonString = jsonString
+          .replace(/\[\s*'/g, '["')
+          .replace(/'\s*,\s*'/g, '", "')
+          .replace(/'\s*\]/g, '"]');
+      }
+      const parsed = JSON.parse(jsonString);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {
+      // Fall through to return original value
+    }
+  }
+  return val;
+};
+
+const fieldsSchema = z.preprocess(
+  parseJsonStringArray,
+  z.array(z.enum(ALLOWED_EVENT_FIELDS))
+).optional().describe(
   "Optional array of additional event fields to retrieve. Available fields are strictly validated. Default fields (id, summary, start, end, status, htmlLink, location, attendees) are always included."
+);
+
+const calendarsToCheckSchema = z.preprocess(
+  parseJsonStringArray,
+  z.array(z.string())
+).optional().describe(
+  "List of calendar IDs to check for conflicts (defaults to just the target calendar)"
+);
+
+const recurrenceSchema = z.preprocess(
+  parseJsonStringArray,
+  z.array(z.string())
+).optional().describe(
+  "Recurrence rules in RFC5545 format (e.g., [\"RRULE:FREQ=WEEKLY;COUNT=5\"])"
 );
 
 const privateExtendedPropertySchema = z
@@ -69,15 +111,47 @@ const singleAccountSchema = z.string()
     "Account ID to use for this operation (e.g., 'work', 'personal'). Optional when only one account is authenticated - will auto-select the account with appropriate permissions. Use 'list-calendars' to see available accounts."
   );
 
+// Account ID validation regex
+const accountIdRegex = /^[a-z0-9_-]{1,64}$/;
+
+// Helper to parse JSON string arrays for account parameter
+const parseAccountJsonString = (val: unknown): unknown => {
+  if (typeof val !== 'string') return val;
+  const trimmed = val.trim();
+  // Check if it looks like a JSON array
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    try {
+      // Handle single-quoted JSON-like strings (Python/shell style)
+      let jsonString = trimmed;
+      if (jsonString.includes("'")) {
+        jsonString = jsonString
+          .replace(/\[\s*'/g, '["')
+          .replace(/'\s*,\s*'/g, '", "')
+          .replace(/'\s*\]/g, '"]');
+      }
+      const parsed = JSON.parse(jsonString);
+      if (Array.isArray(parsed) && parsed.every(id => typeof id === 'string')) {
+        return parsed;
+      }
+    } catch {
+      // Fall through to return original value
+    }
+  }
+  return val;
+};
+
 // Multi-account schema - for read operations (list, search, get)
-const multiAccountSchema = z.union([
-  z.string()
-    .regex(/^[a-z0-9_-]{1,64}$/, "Account ID must be 1-64 characters: lowercase letters, numbers, dashes, underscores only"),
-  z.array(z.string()
-    .regex(/^[a-z0-9_-]{1,64}$/, "Account ID must be 1-64 characters: lowercase letters, numbers, dashes, underscores only"))
-    .min(1, "At least one account ID is required")
-    .max(10, "Maximum 10 accounts allowed per request")
-])
+const multiAccountSchema = z.preprocess(
+  parseAccountJsonString,
+  z.union([
+    z.string()
+      .regex(accountIdRegex, "Account ID must be 1-64 characters: lowercase letters, numbers, dashes, underscores only"),
+    z.array(z.string()
+      .regex(accountIdRegex, "Account ID must be 1-64 characters: lowercase letters, numbers, dashes, underscores only"))
+      .min(1, "At least one account ID is required")
+      .max(10, "Maximum 10 accounts allowed per request")
+  ])
+)
   .optional()
   .describe(
     "Account ID(s) to query (e.g., 'work' or ['work', 'personal']). Optional - if omitted, queries all authenticated accounts and merges results. Use 'list-calendars' to see available accounts."
@@ -209,9 +283,7 @@ export const ToolSchemas = {
         minutes: z.number().describe("Minutes before the event to trigger the reminder")
       }).partial({ method: true })).optional().describe("Custom reminders")
     }).describe("Reminder settings for the event").optional(),
-    recurrence: z.array(z.string()).optional().describe(
-      "Recurrence rules in RFC5545 format (e.g., [\"RRULE:FREQ=WEEKLY;COUNT=5\"])"
-    ),
+    recurrence: recurrenceSchema,
     transparency: z.enum(["opaque", "transparent"]).optional().describe(
       "Whether the event blocks time on the calendar. 'opaque' means busy, 'transparent' means free."
     ),
@@ -268,9 +340,7 @@ export const ToolSchemas = {
     }).optional().describe(
       "Source of the event, such as a web page or email message."
     ),
-    calendarsToCheck: z.array(z.string()).optional().describe(
-      "List of calendar IDs to check for conflicts (defaults to just the target calendar)"
-    ),
+    calendarsToCheck: calendarsToCheckSchema,
     duplicateSimilarityThreshold: z.number().min(0).max(1).optional().describe(
       "Threshold for duplicate detection (0-1, default: 0.7). Events with similarity above this are flagged as potential duplicates"
     ),
@@ -316,7 +386,7 @@ export const ToolSchemas = {
         minutes: z.number().describe("Minutes before the event to trigger the reminder")
       }).partial({ method: true })).optional().describe("Custom reminders")
     }).describe("Reminder settings for the event").optional(),
-    recurrence: z.array(z.string()).optional().describe("Updated recurrence rules"),
+    recurrence: recurrenceSchema,
     sendUpdates: z.enum(["all", "externalOnly", "none"]).default("all").describe(
       "Whether to send update notifications"
     ),
@@ -342,9 +412,7 @@ export const ToolSchemas = {
     checkConflicts: z.boolean().optional().describe(
       "Whether to check for conflicts when updating (default: true when changing time)"
     ),
-    calendarsToCheck: z.array(z.string()).optional().describe(
-      "List of calendar IDs to check for conflicts (defaults to just the target calendar)"
-    ),
+    calendarsToCheck: calendarsToCheckSchema,
     conferenceData: z.object({
       createRequest: z.object({
         requestId: z.string().describe("Client-generated unique ID for this request to ensure idempotency"),
