@@ -594,6 +594,7 @@ export class ToolRegistry {
         // Otherwise it's a single string calendar ID - keep as-is
 
         return {
+          account: args.account,
           calendarId: processedCalendarId,
           timeMin: args.timeMin,
           timeMax: args.timeMax,
