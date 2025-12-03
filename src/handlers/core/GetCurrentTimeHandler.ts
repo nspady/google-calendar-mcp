@@ -11,8 +11,9 @@ export class GetCurrentTimeHandler extends BaseToolHandler {
         // Validate arguments using schema
         const validArgs = args as GetCurrentTimeInput;
 
-        // Use specified account or default (auto-selects if only one account)
-        const oauth2Client = this.getClientForAccount(args.account, accounts);
+        // Use specified account or default to first available account
+        // (get-current-time only needs any authenticated client for timezone lookup)
+        const oauth2Client = this.getClientForAccountOrFirst(args.account, accounts);
         
         const now = new Date();
         

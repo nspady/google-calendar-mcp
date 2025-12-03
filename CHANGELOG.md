@@ -7,7 +7,6 @@
   - Query events across all accounts with automatic result merging
   - Permission-based account auto-selection for write operations
   - Case-insensitive account IDs and calendar name resolution
-  - New `find-calendar-conflicts` tool for cross-account conflict detection
 - **Account management UI**: Web-based interface at `/accounts` endpoint (HTTP mode)
 - **CalendarRegistry service**: Centralized calendar discovery with caching and deduplication
 

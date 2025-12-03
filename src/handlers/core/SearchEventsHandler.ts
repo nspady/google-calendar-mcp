@@ -14,6 +14,18 @@ interface ExtendedEvent extends calendar_v3.Schema$Event {
     accountId?: string;
 }
 
+// Internal args type for searchEvents with single calendarId (after normalization)
+interface SearchEventsArgs {
+    calendarId: string;
+    query: string;
+    timeMin: string;
+    timeMax: string;
+    timeZone?: string;
+    fields?: string[];
+    privateExtendedProperty?: string[];
+    sharedExtendedProperty?: string[];
+}
+
 export class SearchEventsHandler extends BaseToolHandler {
     async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
         const validArgs = args as SearchEventsInput;
@@ -53,7 +65,7 @@ export class SearchEventsHandler extends BaseToolHandler {
             // Single account + single calendar: use existing auto-selection for simplicity
             const { client, accountId, calendarId } = await this.getClientWithAutoSelection(
                 args.account,
-                validArgs.calendarId,
+                calendarNamesOrIds[0],  // Use normalized single-element array
                 accounts,
                 'read'
             );
@@ -119,8 +131,8 @@ export class SearchEventsHandler extends BaseToolHandler {
         };
 
         if (validArgs.timeMin || validArgs.timeMax) {
-            // Use first calendar's timezone as reference
-            const firstAccountId = accountCalendarMap.keys().next().value;
+            // Use first calendar's timezone as reference (map is guaranteed non-empty at this point)
+            const firstAccountId = accountCalendarMap.keys().next().value as string;
             const firstCalendarId = accountCalendarMap.get(firstAccountId)?.[0] || 'primary';
             const client = selectedAccounts.get(firstAccountId)!;
             const timezone = validArgs.timeZone || await this.getCalendarTimezone(client, firstCalendarId);
@@ -135,7 +147,7 @@ export class SearchEventsHandler extends BaseToolHandler {
 
     private async searchEvents(
         client: OAuth2Client,
-        args: SearchEventsInput
+        args: SearchEventsArgs
     ): Promise<calendar_v3.Schema$Event[]> {
         try {
             const calendar = this.getCalendar(client);

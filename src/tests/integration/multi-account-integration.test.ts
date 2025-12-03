@@ -654,53 +654,6 @@ describe('Google Calendar MCP - Multi-Account Integration Tests', () => {
     });
   });
 
-  describe('Cross-Account Conflict Detection', () => {
-    it.skipIf(!isMultiAccountConfigured)('should detect conflicts across multiple calendars/accounts', async () => {
-      // First, create an event on primary account
-      const conflictTime = new Date(Date.now() + 96 * 60 * 60 * 1000);
-      const conflictEnd = new Date(conflictTime.getTime() + 60 * 60 * 1000);
-
-      const firstEvent = {
-        calendarId: 'primary',
-        summary: 'Conflict Test Event 1',
-        start: conflictTime.toISOString().slice(0, 19),
-        end: conflictEnd.toISOString().slice(0, 19),
-        account: PRIMARY_ACCOUNT,
-        sendUpdates: SEND_UPDATES
-      };
-
-      const firstResult = await client.callTool({
-        name: 'create-event',
-        arguments: firstEvent
-      });
-
-      const firstResponse = JSON.parse((firstResult.content as any)[0].text);
-      expect(firstResponse.event).toBeDefined();
-
-      createdEventIds.push({
-        calendarId: 'primary',
-        eventId: firstResponse.event.id,
-        account: PRIMARY_ACCOUNT
-      });
-
-      // Now use find-calendar-conflicts to check for conflicts
-      const conflictResult = await client.callTool({
-        name: 'find-calendar-conflicts',
-        arguments: {
-          calendarIds: ['primary', 'primary'],
-          account: [PRIMARY_ACCOUNT, SECONDARY_ACCOUNT],
-          timeMin: conflictTime.toISOString().slice(0, 19),
-          timeMax: conflictEnd.toISOString().slice(0, 19)
-        }
-      });
-
-      expect(TestDataFactory.validateEventResponse(conflictResult)).toBe(true);
-      const conflictResponse = JSON.parse((conflictResult.content as any)[0].text);
-
-      console.log(`   Conflict detection: ${JSON.stringify(conflictResponse).slice(0, 200)}...`);
-    });
-  });
-
   describe('Error Handling', () => {
     it.skipIf(!isMultiAccountConfigured)('should handle invalid account gracefully', async () => {
       try {

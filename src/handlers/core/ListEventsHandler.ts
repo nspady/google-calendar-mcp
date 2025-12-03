@@ -1,4 +1,4 @@
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult, McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
@@ -54,7 +54,8 @@ export class ListEventsHandler extends BaseToolHandler {
             if (accountCalendarMap.size === 0) {
                 const allCalendars = await this.calendarRegistry.getUnifiedCalendars(selectedAccounts);
                 const calendarList = allCalendars.map(c => `"${c.displayName}" (${c.calendarId})`).join(', ');
-                throw this.createError(
+                throw new McpError(
+                    ErrorCode.InvalidRequest,
                     `None of the requested calendars could be found: ${calendarNamesOrIds.map(c => `"${c}"`).join(', ')}. ` +
                     `Available calendars: ${calendarList || 'none'}. Use 'list-calendars' to see all available calendars.`
                 );

@@ -9,8 +9,7 @@ This document tracks the ongoing work required to provide seamless multi-account
 - **Read vs. write awareness** – Read-only handlers (e.g., `get-event`, `search-events`) now select any account that has *read* access to a calendar instead of demanding writer permissions.
 - **Partial failure surfaced** – `list-events` reports per-account warnings whenever one of the accounts fails during a merged query, making it clear when results are incomplete.
 - **Documentation + onboarding** – README and advanced usage docs now explain how to add accounts via CLI or the HTTP account manager UI, and clarify where tokens are stored.
-- **Cross-account conflict tool** – Added `find-calendar-conflicts`, letting MCP clients detect overlapping events between any combination of accounts/calendars.
-- **Integration coverage** – Introduced `src/tests/integration/multi-account.test.ts`, an optional stdio integration suite powered by `MULTI_ACCOUNT_TESTS=true` + `MULTI_ACCOUNT_IDS=work,personal` to validate merged list-events output and the conflict tool against real accounts.
+- **Integration coverage** – Introduced `src/tests/integration/multi-account.test.ts`, an optional stdio integration suite powered by `MULTI_ACCOUNT_TESTS=true` + `MULTI_ACCOUNT_IDS=work,personal` to validate merged list-events output against real accounts.
 
 ## Usage Notes
 
@@ -61,20 +60,7 @@ use_tool("create-event", {
 
 The server automatically selects the account that has owner or writer permissions on `team@company.com`.
 
-### Pattern 4: Cross-Account Conflict Detection
-Find scheduling conflicts across multiple accounts:
-
-```javascript
-use_tool("find-calendar-conflicts", {
-  account: ["work", "personal"],
-  timeMin: "2025-03-01T00:00:00Z",
-  timeMax: "2025-03-07T23:59:59Z"
-});
-```
-
-Returns any overlapping events between work and personal calendars.
-
-### Pattern 5: Selective Account Queries
+### Pattern 4: Selective Account Queries
 Query only specific accounts:
 
 ```javascript
@@ -89,6 +75,5 @@ Useful when you want to focus on one account but have multiple connected.
 
 ## Upcoming Work
 
-- Implement the `find-calendar-conflicts` tool and multi-account upgrades to `list-events` outlined in `MULTI_ACCOUNT_IMPLEMENTATION.md`.
 - Add integration tests that exercise stdio + HTTP transports with multiple authenticated accounts.
 - Consider exposing richer status metadata (e.g., token freshness) through the MCP `initialize` response so clients can present account pickers automatically.

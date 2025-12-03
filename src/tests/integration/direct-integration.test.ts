@@ -1916,8 +1916,10 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         }
         
         const timestamp = Date.now();
+        // Use a unique prefix that won't match stale events from previous test runs
+        const uniquePrefix = `DuplicateTest_${timestamp}`;
         const baseEvent = TestDataFactory.createSingleEvent({
-          summary: `Team Meeting ${timestamp}`,
+          summary: `${uniquePrefix}_Meeting`,
           location: 'Conference Room A',
           start: TestDataFactory.formatDateTimeRFC3339(fixedStart),
           end: TestDataFactory.formatDateTimeRFC3339(fixedEnd)
@@ -1946,7 +1948,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
         // Test 2: Similar title + overlapping time = 70% similarity (warning)
         const similarTitleEvent = {
           ...baseEvent,
-          summary: `Team Meeting ${timestamp} Discussion` // Contains "Team Meeting"
+          summary: `${uniquePrefix}_Meeting Discussion` // Contains unique prefix
         };
         
         const similarResult = await client.callTool({

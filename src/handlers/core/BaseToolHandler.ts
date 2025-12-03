@@ -23,6 +23,59 @@ export abstract class BaseToolHandler<TArgs = any> {
     }
 
     /**
+     * Get OAuth2Client for a specific account, or the first available account if none specified.
+     * Use this for read-only operations where any authenticated account will work.
+     * @param accountId Optional account ID. If not provided, uses first available account.
+     * @param accounts Map of available accounts
+     * @returns OAuth2Client for the specified or first account
+     * @throws McpError if account is invalid or not found
+     */
+    protected getClientForAccountOrFirst(accountId: string | undefined, accounts: Map<string, OAuth2Client>): OAuth2Client {
+        // No accounts available
+        if (accounts.size === 0) {
+            throw new McpError(
+                ErrorCode.InvalidRequest,
+                'No authenticated accounts available. Please run authentication first.'
+            );
+        }
+
+        // Account ID specified - validate and retrieve
+        if (accountId) {
+            const normalizedId = this.normalizeAccountId(accountId);
+            try {
+                validateAccountId(normalizedId);
+            } catch (error) {
+                throw new McpError(
+                    ErrorCode.InvalidRequest,
+                    error instanceof Error ? error.message : 'Invalid account ID'
+                );
+            }
+
+            const client = accounts.get(normalizedId);
+            if (!client) {
+                const availableAccounts = Array.from(accounts.keys()).join(', ');
+                throw new McpError(
+                    ErrorCode.InvalidRequest,
+                    `Account "${normalizedId}" not found. Available accounts: ${availableAccounts}`
+                );
+            }
+            return client;
+        }
+
+        // No account specified - use first available (sorted for consistency)
+        const sortedAccountIds = Array.from(accounts.keys()).sort();
+        const firstAccountId = sortedAccountIds[0];
+        const client = accounts.get(firstAccountId);
+        if (!client) {
+            throw new McpError(
+                ErrorCode.InternalError,
+                'Failed to retrieve OAuth client'
+            );
+        }
+        return client;
+    }
+
+    /**
      * Get OAuth2Client for a specific account or determine default account
      * @param accountId Optional account ID. If not provided, uses single account if available.
      * @param accounts Map of available accounts

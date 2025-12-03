@@ -170,30 +170,6 @@ export interface DuplicateInfo {
   suggestion: string;
 }
 
-export interface CalendarConflictEvent {
-  accountId: string;
-  calendarId: string;
-  event: StructuredEvent;
-}
-
-export interface CalendarConflictDetail {
-  overlapStart: string;
-  overlapEnd: string;
-  accountsInvolved: string[];
-  events: CalendarConflictEvent[];
-}
-
-export interface FindCalendarConflictsResponse {
-  conflicts: CalendarConflictDetail[];
-  totalConflicts: number;
-  accounts: string[];
-  timeRange: {
-    start: string;
-    end: string;
-  };
-  note?: string;
-}
-
 /**
  * Response format for listing calendar events
  */

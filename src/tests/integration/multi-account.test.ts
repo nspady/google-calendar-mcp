@@ -124,23 +124,6 @@ describeIfEnabled('Multi-account integration (stdio transport)', () => {
     const eventFromB = listResponse.events.find((event: any) => event.id === eventB);
     expect(eventFromA?.accountId).toBe(accountA);
     expect(eventFromB?.accountId).toBe(accountB);
-
-    const conflictResult = await client.callTool({
-      name: 'find-calendar-conflicts',
-      arguments: {
-        account: MULTI_ACCOUNT_IDS,
-        timeMin,
-        timeMax
-      }
-    });
-
-    const conflictResponse = parseToolResponse(conflictResult);
-    expect(conflictResponse.totalConflicts).toBeGreaterThan(0);
-    const matchingConflict = (conflictResponse.conflicts || []).find((conflict: any) => {
-      const ids = conflict.events?.map((entry: any) => entry.event?.id) || [];
-      return ids.includes(eventA) && ids.includes(eventB);
-    });
-    expect(matchingConflict).toBeTruthy();
   });
 
   async function createEventForAccount(

@@ -177,7 +177,7 @@ export MULTI_ACCOUNT_TESTS=true
 export MULTI_ACCOUNT_IDS=work,personal
 vitest run src/tests/integration/multi-account.test.ts
 ```
-These tests verify cross-account list-events merging and the new `find-calendar-conflicts` tool. Each account listed in `MULTI_ACCOUNT_IDS` must already be authenticated.
+These tests verify cross-account list-events merging. Each account listed in `MULTI_ACCOUNT_IDS` must already be authenticated.
 
 2. **Obtain Google OAuth Credentials:**
    - Go to [Google Cloud Console](https://console.cloud.google.com)

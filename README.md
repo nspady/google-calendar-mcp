@@ -173,7 +173,6 @@ Along with the normal capabilities you would expect for a calendar integration y
 | `delete-event` | Delete events |
 | `get-freebusy` | Check availability across calendars, including external calendars |
 | `list-colors` | List available event colors |
-| `find-calendar-conflicts` | Detect overlapping events across multiple accounts/calendars within a time window |
 
 ## Documentation
 

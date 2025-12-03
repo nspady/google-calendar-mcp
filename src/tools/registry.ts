@@ -15,7 +15,6 @@ import { UpdateEventHandler } from "../handlers/core/UpdateEventHandler.js";
 import { DeleteEventHandler } from "../handlers/core/DeleteEventHandler.js";
 import { FreeBusyEventHandler } from "../handlers/core/FreeBusyEventHandler.js";
 import { GetCurrentTimeHandler } from "../handlers/core/GetCurrentTimeHandler.js";
-import { FindCalendarConflictsHandler } from "../handlers/core/FindCalendarConflictsHandler.js";
 
 // Define shared schema fields for reuse
 // Note: Event datetime fields (start/end) are NOT shared to avoid $ref generation
@@ -553,15 +552,6 @@ export const ToolSchemas = {
     timeZone: z.string().optional().describe(
       "Optional IANA timezone (e.g., 'America/Los_Angeles', 'Europe/London', 'UTC'). If not provided, uses the primary Google Calendar's default timezone."
     )
-  }),
-
-  'find-calendar-conflicts': z.object({
-    account: multiAccountSchema.describe("Accounts to check. Omit to use all authenticated accounts."),
-    timeMin: timeMinSchema.describe("Start of the window to analyze for overlaps."),
-    timeMax: timeMaxSchema.describe("End of the window to analyze for overlaps."),
-    calendarId: z.string().optional().describe(
-      "Calendar identifier or name to inspect (defaults to 'primary' for each account when omitted)."
-    )
   })
 } as const;
 
@@ -581,7 +571,6 @@ export type UpdateEventInput = ToolInputs['update-event'];
 export type DeleteEventInput = ToolInputs['delete-event'];
 export type GetFreeBusyInput = ToolInputs['get-freebusy'];
 export type GetCurrentTimeInput = ToolInputs['get-current-time'];
-export type FindCalendarConflictsInput = ToolInputs['find-calendar-conflicts'];
 
 interface ToolDefinition {
   name: keyof typeof ToolSchemas;
@@ -737,12 +726,6 @@ export class ToolRegistry {
       description: "Get current time in the primary Google Calendar's timezone (or a requested timezone).",
       schema: ToolSchemas['get-current-time'],
       handler: GetCurrentTimeHandler
-    },
-    {
-      name: "find-calendar-conflicts",
-      description: "Detect overlapping events across multiple accounts/calendars within a time range.",
-      schema: ToolSchemas['find-calendar-conflicts'],
-      handler: FindCalendarConflictsHandler
     }
   ];
 

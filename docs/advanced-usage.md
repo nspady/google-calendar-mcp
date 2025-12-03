@@ -28,7 +28,7 @@ All tools accept an optional `account` parameter. The behavior depends on the to
 
 | Tool Type | Accepts Arrays? | `account` Omitted | `account: "work"` | `account: ["work", "personal"]` |
 |-----------|----------------|-------------------|-------------------|----------------------------------|
-| **Read-only** (list-events, list-calendars, find-calendar-conflicts) | ✅ Yes | Merges ALL accounts | Single account only | Merges specified accounts |
+| **Read-only** (list-events, list-calendars, get-freebusy) | ✅ Yes | Merges ALL accounts | Single account only | Merges specified accounts |
 | **Write** (create-event, update-event, delete-event) | ❌ No | Auto-selects best permission | Uses specified account | ❌ Error (not supported) |
 | **Get** (get-event, search-events) | ❌ No | Auto-selects account with access | Uses specified account | ❌ Error (not supported) |
 
@@ -77,31 +77,6 @@ use_tool("create-event", {
 ### Calendar Deduplication
 
 The Calendar Registry collects calendars from every account, de-duplicates shared calendars, and tracks the best account to use for read/write operations. Responses include `accountAccess` arrays so you can see every account that can reach a given calendar.
-
-### Cross-Account Conflict Detection
-
-Use the `find-calendar-conflicts` tool to spot overlapping events across any combination of accounts/calendars:
-
-```javascript
-use_tool("find-calendar-conflicts", {
-  account: ["work", "personal"],
-  timeMin: "2025-03-01T00:00:00Z",
-  timeMax: "2025-03-07T23:59:59Z"
-});
-```
-
-You can narrow the search to a specific calendar (shared team calendar, for example):
-
-```javascript
-use_tool("find-calendar-conflicts", {
-  account: ["work"],
-  calendarId: "Team Calendar",
-  timeMin: "2025-03-02T00:00:00",
-  timeMax: "2025-03-02T23:59:59"
-});
-```
-
-Each conflict entry lists the overlapping window plus the structured event details (including `accountId` and `calendarId`) so the LLM can explain or remediate the clash.
 
 ## Batch Operations
 

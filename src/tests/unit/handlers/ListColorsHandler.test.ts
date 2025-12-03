@@ -174,20 +174,20 @@ describe('ListColorsHandler', () => {
       expect(response.event['1']).toBeDefined();
     });
 
-    it('should require account parameter when multiple accounts exist', async () => {
+    it('should use first available account when multiple accounts exist without specifying one', async () => {
+      // Colors API returns same data for all accounts, so any account works
       const mockColors = {
         event: { '1': { background: '#a4bdfc', foreground: '#1d1d1d' } }
       };
 
       mockCalendar.colors.get.mockResolvedValue({ data: mockColors });
 
-      await expect(handler.runTool({}, mockMultipleAccounts)).rejects.toThrow(
-        'Multiple accounts available'
-      );
+      const result = await handler.runTool({}, mockMultipleAccounts);
+      expect(result.content).toBeDefined();
     });
 
     it('should use specified account when provided', async () => {
-      const spy = vi.spyOn(handler as any, 'getClientForAccount');
+      const spy = vi.spyOn(handler as any, 'getClientForAccountOrFirst');
       const mockColors = {
         event: { '1': { background: '#a4bdfc', foreground: '#1d1d1d' } }
       };
