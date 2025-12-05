@@ -37,6 +37,23 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, char => htmlEscapes[char]);
 }
 
+/**
+ * Validate if an origin is from localhost
+ * Properly parses the URL to prevent bypass via subdomains like localhost.attacker.com
+ * Exported for testing
+ */
+export function isLocalhostOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin);
+    const hostname = url.hostname;
+    // Only allow exact localhost or 127.0.0.1
+    return hostname === 'localhost' || hostname === '127.0.0.1';
+  } catch {
+    // Invalid URL - reject
+    return false;
+  }
+}
+
 export interface HttpTransportConfig {
   port?: number;
   host?: string;
@@ -87,15 +104,10 @@ export class HttpTransportHandler {
     const httpServer = http.createServer(async (req, res) => {
       // Validate Origin header to prevent DNS rebinding attacks (MCP spec requirement)
       const origin = req.headers.origin;
-      const allowedOrigins = [
-        'http://localhost',
-        'http://127.0.0.1',
-        'https://localhost',
-        'https://127.0.0.1'
-      ];
 
-      // For requests with Origin header, validate it
-      if (origin && !allowedOrigins.some(allowed => origin.startsWith(allowed))) {
+      // For requests with Origin header, validate it using proper URL parsing
+      // This prevents bypass via subdomains like localhost.attacker.com
+      if (origin && !isLocalhostOrigin(origin)) {
         res.writeHead(403, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           error: 'Forbidden: Invalid origin',
@@ -118,7 +130,7 @@ export class HttpTransportHandler {
 
       // Handle CORS - restrict to localhost only for security
       // HTTP mode is designed for local development/testing only
-      const allowedCorsOrigin = origin && allowedOrigins.some(allowed => origin.startsWith(allowed))
+      const allowedCorsOrigin = origin && isLocalhostOrigin(origin)
         ? origin
         : `http://${host}:${port}`;
       res.setHeader('Access-Control-Allow-Origin', allowedCorsOrigin);
