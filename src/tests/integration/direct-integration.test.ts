@@ -28,7 +28,8 @@ import { TestDataFactory, TestEvent } from './test-data-factory.js';
  * MULTI-ACCOUNT SUPPORT:
  * - These integration tests focus on single-account scenarios
  * - Multi-account functionality (account parameter, CalendarRegistry, smart account selection)
- *   is thoroughly tested in unit tests (see multi-account.test.ts, CalendarRegistry.test.ts)
+ *   is thoroughly tested in unit tests (see CalendarRegistry.test.ts) and integration tests
+ *   (see multi-account-integration.test.ts)
  * - All tools support the optional 'account' parameter for multi-account scenarios
  * - When account is not specified, tools use smart account selection (via CalendarRegistry)
  */
@@ -2469,196 +2470,243 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
     });
   });
 
+  // Event Response Management tests require multi-account setup:
+  // - Account A (organizer) creates events and invites Account B
+  // - Account B (attendee) responds to invitations
+  // Set TEST_PRIMARY_ACCOUNT and TEST_SECONDARY_ACCOUNT to run these tests
   describe('Event Response Management', () => {
-    it('should respond to event invitations', async () => {
-      // Note: This test requires creating an event where the authenticated user
-      // is invited as an attendee (not the organizer)
-      // For this test to work properly, we need the test account's email
+    const PRIMARY_ACCOUNT = process.env.TEST_PRIMARY_ACCOUNT;
+    const SECONDARY_ACCOUNT = process.env.TEST_SECONDARY_ACCOUNT;
+    const isMultiAccountConfigured = !!(PRIMARY_ACCOUNT && SECONDARY_ACCOUNT);
 
-      // Create an event with the test user as an attendee
-      const testUserEmail = process.env.TEST_USER_EMAIL || 'test@example.com';
+    // Helper to get account email via list-calendars (primary calendar ID is typically the email)
+    async function getAccountEmail(accountId: string): Promise<string | null> {
+      try {
+        const result = await client.callTool({
+          name: 'list-calendars',
+          arguments: { account: accountId }
+        });
+        const response = JSON.parse((result.content as any)[0].text);
+        const primaryCal = response.calendars?.find((cal: any) => cal.primary === true);
+        // Primary calendar ID is typically the account email
+        return primaryCal?.id || null;
+      } catch {
+        return null;
+      }
+    }
+
+    // Helper to create event as organizer with attendee
+    async function createEventWithAttendee(
+      organizerAccount: string,
+      attendeeEmail: string,
+      eventOptions: Partial<TestEvent> = {}
+    ): Promise<string> {
       const eventData = TestDataFactory.createSingleEvent({
-        summary: `Integration Test - RSVP Test ${Date.now()}`,
-        attendees: [
-          { email: testUserEmail }
-        ]
+        summary: `Integration Test - RSVP ${Date.now()}`,
+        ...eventOptions,
+        attendees: [{ email: attendeeEmail }]
       });
 
-      const eventId = await createTestEvent(eventData);
+      const result = await client.callTool({
+        name: 'create-event',
+        arguments: {
+          calendarId: 'primary',
+          account: organizerAccount,
+          summary: eventData.summary,
+          start: eventData.start,
+          end: eventData.end,
+          attendees: eventData.attendees,
+          sendUpdates: SEND_UPDATES,
+          allowDuplicates: true
+        }
+      });
+
+      const response = JSON.parse((result.content as any)[0].text);
+      const eventId = response.event?.id;
+      if (!eventId) throw new Error('Failed to create event');
+      return eventId;
+    }
+
+    it.skipIf(!isMultiAccountConfigured)('should respond to event invitations', async () => {
+      const [organizerAccount, attendeeAccount] = [PRIMARY_ACCOUNT!, SECONDARY_ACCOUNT!];
+
+      // Get attendee's email address
+      const attendeeEmail = await getAccountEmail(attendeeAccount);
+      if (!attendeeEmail) {
+        console.log(`⚠️  Skipping test - could not get email for account "${attendeeAccount}"`);
+        return;
+      }
+
+      // Organizer creates event inviting attendee
+      const eventId = await createEventWithAttendee(organizerAccount, attendeeEmail, {
+        summary: `Integration Test - RSVP Test ${Date.now()}`
+      });
       createdEventIds.push(eventId);
 
-      // Wait for event to be created
+      // Wait for event to propagate
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Respond to the event with "accepted"
       const respondStartTime = testFactory.startTimer('respond-to-event');
 
-      try {
-        const respondResult = await client.callTool({
-          name: 'respond-to-event',
-          arguments: {
-            calendarId: TEST_CALENDAR_ID,
-            eventId: eventId,
-            response: 'accepted',
-            sendUpdates: SEND_UPDATES
-          }
-        });
-
-        testFactory.endTimer('respond-to-event', respondStartTime, true);
-
-        expect(TestDataFactory.validateEventResponse(respondResult)).toBe(true);
-
-        const responseText = (respondResult.content as any)[0].text;
-        const response = JSON.parse(responseText);
-
-        expect(response.responseStatus).toBe('accepted');
-        expect(response.message).toContain('accepted');
-        expect(response.event).toBeDefined();
-        expect(response.event.id).toBe(eventId);
-
-        console.log('✅ Successfully responded to event invitation');
-
-        // Try other response types
-        const declineResult = await client.callTool({
-          name: 'respond-to-event',
-          arguments: {
-            calendarId: TEST_CALENDAR_ID,
-            eventId: eventId,
-            response: 'declined',
-            sendUpdates: SEND_UPDATES
-          }
-        });
-
-        const declineResponse = JSON.parse((declineResult.content as any)[0].text);
-        expect(declineResponse.responseStatus).toBe('declined');
-
-        console.log('✅ Successfully changed response to declined');
-
-        // Try tentative
-        const tentativeResult = await client.callTool({
-          name: 'respond-to-event',
-          arguments: {
-            calendarId: TEST_CALENDAR_ID,
-            eventId: eventId,
-            response: 'tentative',
-            sendUpdates: SEND_UPDATES
-          }
-        });
-
-        const tentativeResponse = JSON.parse((tentativeResult.content as any)[0].text);
-        expect(tentativeResponse.responseStatus).toBe('tentative');
-
-        console.log('✅ Successfully changed response to tentative');
-      } catch (error) {
-        testFactory.endTimer('respond-to-event', respondStartTime, false, String(error));
-        // If the error is about not being an attendee, that's expected if TEST_USER_EMAIL
-        // doesn't match the authenticated account
-        if (String(error).includes('not an attendee')) {
-          console.log('⚠️  Skipping respond-to-event test - authenticated user not an attendee');
-          console.log('   Set TEST_USER_EMAIL to the authenticated account\'s email to run this test');
-        } else {
-          throw error;
+      // Attendee responds to the invitation
+      const respondResult = await client.callTool({
+        name: 'respond-to-event',
+        arguments: {
+          calendarId: 'primary',
+          account: attendeeAccount,
+          eventId: eventId,
+          response: 'accepted',
+          sendUpdates: SEND_UPDATES
         }
-      }
-    });
-
-    it('should respond with a comment/note', async () => {
-      const testUserEmail = process.env.TEST_USER_EMAIL || 'test@example.com';
-      const eventData = TestDataFactory.createSingleEvent({
-        summary: `Integration Test - Response with Comment ${Date.now()}`,
-        attendees: [
-          { email: testUserEmail }
-        ]
       });
 
-      const eventId = await createTestEvent(eventData);
+      testFactory.endTimer('respond-to-event', respondStartTime, true);
+
+      const response = JSON.parse((respondResult.content as any)[0].text);
+      expect(response.responseStatus).toBe('accepted');
+      expect(response.message).toContain('accepted');
+      expect(response.event).toBeDefined();
+
+      console.log('✅ Successfully responded to event invitation');
+
+      // Test changing response to declined
+      const declineResult = await client.callTool({
+        name: 'respond-to-event',
+        arguments: {
+          calendarId: 'primary',
+          account: attendeeAccount,
+          eventId: eventId,
+          response: 'declined',
+          sendUpdates: SEND_UPDATES
+        }
+      });
+
+      const declineResponse = JSON.parse((declineResult.content as any)[0].text);
+      expect(declineResponse.responseStatus).toBe('declined');
+      console.log('✅ Successfully changed response to declined');
+
+      // Test tentative response
+      const tentativeResult = await client.callTool({
+        name: 'respond-to-event',
+        arguments: {
+          calendarId: 'primary',
+          account: attendeeAccount,
+          eventId: eventId,
+          response: 'tentative',
+          sendUpdates: SEND_UPDATES
+        }
+      });
+
+      const tentativeResponse = JSON.parse((tentativeResult.content as any)[0].text);
+      expect(tentativeResponse.responseStatus).toBe('tentative');
+      console.log('✅ Successfully changed response to tentative');
+    });
+
+    it.skipIf(!isMultiAccountConfigured)('should respond with a comment/note', async () => {
+      const [organizerAccount, attendeeAccount] = [PRIMARY_ACCOUNT!, SECONDARY_ACCOUNT!];
+      const attendeeEmail = await getAccountEmail(attendeeAccount);
+      if (!attendeeEmail) {
+        console.log(`⚠️  Skipping test - could not get email for account "${attendeeAccount}"`);
+        return;
+      }
+
+      const eventId = await createEventWithAttendee(organizerAccount, attendeeEmail, {
+        summary: `Integration Test - Response with Comment ${Date.now()}`
+      });
       createdEventIds.push(eventId);
 
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      try {
-        // Decline with a comment
-        const declineResult = await client.callTool({
-          name: 'respond-to-event',
-          arguments: {
-            calendarId: TEST_CALENDAR_ID,
-            eventId: eventId,
-            response: 'declined',
-            comment: 'I have a scheduling conflict',
-            sendUpdates: SEND_UPDATES
-          }
-        });
-
-        const declineResponse = JSON.parse((declineResult.content as any)[0].text);
-        expect(declineResponse.responseStatus).toBe('declined');
-        expect(declineResponse.message).toContain('I have a scheduling conflict');
-
-        console.log('✅ Successfully declined with comment');
-      } catch (error) {
-        if (String(error).includes('not an attendee')) {
-          console.log('⚠️  Skipping comment test - authenticated user not an attendee');
-        } else {
-          throw error;
+      // Decline with a comment
+      const declineResult = await client.callTool({
+        name: 'respond-to-event',
+        arguments: {
+          calendarId: 'primary',
+          account: attendeeAccount,
+          eventId: eventId,
+          response: 'declined',
+          comment: 'I have a scheduling conflict',
+          sendUpdates: SEND_UPDATES
         }
-      }
+      });
+
+      const declineResponse = JSON.parse((declineResult.content as any)[0].text);
+      expect(declineResponse.responseStatus).toBe('declined');
+      expect(declineResponse.message).toContain('I have a scheduling conflict');
+
+      console.log('✅ Successfully declined with comment');
     });
 
-    it('should respond to single instance of recurring event', async () => {
-      const testUserEmail = process.env.TEST_USER_EMAIL || 'test@example.com';
+    it.skipIf(!isMultiAccountConfigured)('should respond to single instance of recurring event', async () => {
+      const [organizerAccount, attendeeAccount] = [PRIMARY_ACCOUNT!, SECONDARY_ACCOUNT!];
+      const attendeeEmail = await getAccountEmail(attendeeAccount);
+      if (!attendeeEmail) {
+        console.log(`⚠️  Skipping test - could not get email for account "${attendeeAccount}"`);
+        return;
+      }
 
-      // Create a recurring event
+      // Create a recurring event with attendee
       const recurringEventData = TestDataFactory.createRecurringEvent({
         summary: `Integration Test - Recurring RSVP ${Date.now()}`,
-        attendees: [
-          { email: testUserEmail }
-        ]
+        attendees: [{ email: attendeeEmail }]
       });
 
-      const eventId = await createTestEvent(recurringEventData);
+      const createResult = await client.callTool({
+        name: 'create-event',
+        arguments: {
+          calendarId: 'primary',
+          account: organizerAccount,
+          summary: recurringEventData.summary,
+          start: recurringEventData.start,
+          end: recurringEventData.end,
+          recurrence: recurringEventData.recurrence,
+          attendees: recurringEventData.attendees,
+          sendUpdates: SEND_UPDATES,
+          allowDuplicates: true
+        }
+      });
+
+      const createResponse = JSON.parse((createResult.content as any)[0].text);
+      const eventId = createResponse.event?.id;
+      if (!eventId) throw new Error('Failed to create recurring event');
       createdEventIds.push(eventId);
 
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      try {
-        // Get the event to find the first instance start time
-        const getResult = await client.callTool({
-          name: 'get-event',
-          arguments: {
-            calendarId: TEST_CALENDAR_ID,
-            eventId: eventId
-          }
-        });
-
-        const eventInfo = JSON.parse((getResult.content as any)[0].text);
-        const originalStartTime = eventInfo.event.start.dateTime || eventInfo.event.start.date;
-
-        // Decline just this instance
-        const respondResult = await client.callTool({
-          name: 'respond-to-event',
-          arguments: {
-            calendarId: TEST_CALENDAR_ID,
-            eventId: eventId,
-            response: 'declined',
-            modificationScope: 'thisEventOnly',
-            originalStartTime: originalStartTime,
-            comment: 'Cannot make this one',
-            sendUpdates: SEND_UPDATES
-          }
-        });
-
-        const response = JSON.parse((respondResult.content as any)[0].text);
-        expect(response.responseStatus).toBe('declined');
-        expect(response.message).toContain('this instance only');
-        expect(response.message).toContain('Cannot make this one');
-
-        console.log('✅ Successfully declined single instance of recurring event');
-      } catch (error) {
-        if (String(error).includes('not an attendee')) {
-          console.log('⚠️  Skipping recurring event test - authenticated user not an attendee');
-        } else {
-          throw error;
+      // Get the event to find the first instance start time
+      const getResult = await client.callTool({
+        name: 'get-event',
+        arguments: {
+          calendarId: 'primary',
+          account: attendeeAccount,
+          eventId: eventId
         }
-      }
+      });
+
+      const eventInfo = JSON.parse((getResult.content as any)[0].text);
+      const originalStartTime = eventInfo.event.start.dateTime || eventInfo.event.start.date;
+
+      // Decline just this instance
+      const respondResult = await client.callTool({
+        name: 'respond-to-event',
+        arguments: {
+          calendarId: 'primary',
+          account: attendeeAccount,
+          eventId: eventId,
+          response: 'declined',
+          modificationScope: 'thisEventOnly',
+          originalStartTime: originalStartTime,
+          comment: 'Cannot make this one',
+          sendUpdates: SEND_UPDATES
+        }
+      });
+
+      const response = JSON.parse((respondResult.content as any)[0].text);
+      expect(response.responseStatus).toBe('declined');
+      expect(response.message).toContain('this instance only');
+      expect(response.message).toContain('Cannot make this one');
+
+      console.log('✅ Successfully declined single instance of recurring event');
     });
   });
 

@@ -14,11 +14,21 @@ export type RespondToEventInput = {
     modificationScope?: "thisEventOnly" | "all";
     originalStartTime?: string;
     sendUpdates?: "all" | "externalOnly" | "none";
+    account?: string;
 };
 
 export class RespondToEventHandler extends BaseToolHandler {
-    async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
-        const validArgs = args as RespondToEventInput;
+    async runTool(args: RespondToEventInput, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
+        const validArgs = args;
+
+        // Get OAuth2Client with automatic account selection for write operations
+        // Also resolves calendar name to ID if a name was provided
+        const { client: oauth2Client, accountId: selectedAccountId, calendarId: resolvedCalendarId } = await this.getClientWithAutoSelection(
+            args.account,
+            validArgs.calendarId,
+            accounts,
+            'write'
+        );
 
         try {
             const calendar = this.getCalendar(oauth2Client);
@@ -37,7 +47,7 @@ export class RespondToEventHandler extends BaseToolHandler {
                 }
 
                 // Detect if event is recurring
-                const eventType = await helpers.detectEventType(validArgs.eventId, validArgs.calendarId);
+                const eventType = await helpers.detectEventType(validArgs.eventId, resolvedCalendarId);
                 if (eventType !== 'recurring') {
                     throw new RecurringEventError(
                         'modificationScope "thisEventOnly" can only be used with recurring events',
@@ -48,14 +58,16 @@ export class RespondToEventHandler extends BaseToolHandler {
                 // Format instance ID for single instance response
                 targetEventId = helpers.formatInstanceId(validArgs.eventId, validArgs.originalStartTime);
             } else if (validArgs.modificationScope === 'all') {
-                // Use base event ID (current behavior)
-                targetEventId = validArgs.eventId;
+                // Extract base event ID by removing instance suffix if present
+                // Instance IDs have format: baseId_YYYYMMDDTHHMMSSZ
+                // Base IDs have no underscore, so split is safe for both cases
+                targetEventId = validArgs.eventId.split('_')[0];
             }
             // If no scope specified, default to 'all' behavior (use base event ID)
 
             // 2. Get the event to find the current user's attendee entry
             const eventResponse = await calendar.events.get({
-                calendarId: validArgs.calendarId,
+                calendarId: resolvedCalendarId,
                 eventId: targetEventId
             });
 
@@ -93,12 +105,12 @@ export class RespondToEventHandler extends BaseToolHandler {
 
             // 6. Patch the event with the updated attendee list
             const updateResponse = await calendar.events.patch({
-                calendarId: validArgs.calendarId,
+                calendarId: resolvedCalendarId,
                 eventId: targetEventId,
                 requestBody: {
                     attendees: updatedAttendees
                 },
-                sendUpdates: validArgs.sendUpdates || "all"
+                sendUpdates: validArgs.sendUpdates || "none"
             });
 
             if (!updateResponse.data) {
@@ -117,7 +129,7 @@ export class RespondToEventHandler extends BaseToolHandler {
             }
 
             const response: RespondToEventResponse = {
-                event: convertGoogleEventToStructured(updateResponse.data, validArgs.calendarId),
+                event: convertGoogleEventToStructured(updateResponse.data, resolvedCalendarId, selectedAccountId),
                 responseStatus: validArgs.response,
                 message: message
             };

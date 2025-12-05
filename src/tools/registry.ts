@@ -558,6 +558,9 @@ export const ToolSchemas = {
   'respond-to-event': z.object({
     calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
     eventId: z.string().describe("ID of the event to respond to"),
+    account: z.string().optional().describe(
+      "Account ID to use for this operation (e.g., 'work', 'personal'). Optional when only one account is authenticated - will auto-select the account with appropriate permissions. Use 'list-calendars' to see available accounts."
+    ),
     response: z.enum(["accepted", "declined", "tentative", "needsAction"]).describe(
       "Your response to the event invitation: 'accepted' (accept), 'declined' (decline), 'tentative' (maybe), 'needsAction' (no response)"
     ),
@@ -576,7 +579,7 @@ export const ToolSchemas = {
       .describe("Original start time of the specific instance (required when modificationScope is 'thisEventOnly')")
       .optional(),
     sendUpdates: z.enum(["all", "externalOnly", "none"]).optional().describe(
-      "Whether to send response notifications. 'all' sends to all guests, 'externalOnly' to non-Google Calendar users only, 'none' sends no notifications. Default is 'all'."
+      "Whether to send response notifications. 'all' sends to all guests, 'externalOnly' to non-Google Calendar users only, 'none' sends no notifications. Default is 'none'."
     )
   }).refine(
     (data) => {

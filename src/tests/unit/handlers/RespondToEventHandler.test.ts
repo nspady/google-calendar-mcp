@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { RespondToEventHandler } from '../../../handlers/core/RespondToEventHandler.js';
 import { OAuth2Client } from 'google-auth-library';
+import { google } from 'googleapis';
 
 // Mock the googleapis module
 vi.mock('googleapis', () => ({
@@ -9,6 +10,10 @@ vi.mock('googleapis', () => ({
       events: {
         get: vi.fn(),
         patch: vi.fn()
+      },
+      calendarList: {
+        list: vi.fn(),
+        get: vi.fn()
       }
     }))
   },
@@ -17,23 +22,37 @@ vi.mock('googleapis', () => ({
 
 describe('RespondToEventHandler', () => {
   let handler: RespondToEventHandler;
-  let mockOAuth2Client: OAuth2Client;
+  const mockOAuth2Client = {
+    getAccessToken: vi.fn().mockResolvedValue({ token: 'mock-token' })
+  } as unknown as OAuth2Client;
+  let mockAccounts: Map<string, OAuth2Client>;
   let mockCalendar: any;
 
   beforeEach(() => {
     handler = new RespondToEventHandler();
-    mockOAuth2Client = new OAuth2Client();
+    mockAccounts = new Map([['test', mockOAuth2Client]]);
 
     // Setup mock calendar
     mockCalendar = {
       events: {
         get: vi.fn(),
         patch: vi.fn()
+      },
+      calendarList: {
+        list: vi.fn().mockResolvedValue({
+          data: {
+            items: [
+              { id: 'primary', summary: 'Primary Calendar', primary: true, accessRole: 'owner' }
+            ]
+          }
+        }),
+        get: vi.fn().mockResolvedValue({
+          data: { timeZone: 'UTC' }
+        })
       }
     };
 
-    // Mock the getCalendar method
-    vi.spyOn(handler as any, 'getCalendar').mockReturnValue(mockCalendar);
+    vi.mocked(google.calendar).mockReturnValue(mockCalendar);
   });
 
   describe('runTool', () => {
@@ -66,7 +85,7 @@ describe('RespondToEventHandler', () => {
         response: 'accepted' as const
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.get).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -82,11 +101,11 @@ describe('RespondToEventHandler', () => {
             { email: 'self@example.com', self: true, responseStatus: 'accepted' }
           ]
         },
-        sendUpdates: 'all'
+        sendUpdates: 'none'
       });
 
       expect(result.content[0].type).toBe('text');
-      const response = JSON.parse(result.content[0].text);
+      const response = JSON.parse((result.content[0] as any).text);
       expect(response.responseStatus).toBe('accepted');
       expect(response.message).toBe('Your response has been set to "accepted"');
       expect(response.event).toBeDefined();
@@ -121,7 +140,7 @@ describe('RespondToEventHandler', () => {
         response: 'declined' as const
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -131,10 +150,10 @@ describe('RespondToEventHandler', () => {
             expect.objectContaining({ responseStatus: 'declined', self: true })
           ])
         },
-        sendUpdates: 'all'
+        sendUpdates: 'none'
       });
 
-      const response = JSON.parse(result.content[0].text);
+      const response = JSON.parse((result.content[0] as any).text);
       expect(response.responseStatus).toBe('declined');
     });
 
@@ -167,9 +186,9 @@ describe('RespondToEventHandler', () => {
         response: 'tentative' as const
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
-      const response = JSON.parse(result.content[0].text);
+      const response = JSON.parse((result.content[0] as any).text);
       expect(response.responseStatus).toBe('tentative');
       expect(response.message).toBe('Your response has been set to "tentative"');
     });
@@ -193,14 +212,14 @@ describe('RespondToEventHandler', () => {
         calendarId: 'primary',
         eventId: 'event123',
         response: 'accepted' as const,
-        sendUpdates: 'none' as const
+        sendUpdates: 'all' as const
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.patch).toHaveBeenCalledWith(
         expect.objectContaining({
-          sendUpdates: 'none'
+          sendUpdates: 'all'
         })
       );
     });
@@ -225,7 +244,7 @@ describe('RespondToEventHandler', () => {
         response: 'accepted' as const
       };
 
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow(
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
         'You are not an attendee of this event. Only attendees can respond to event invitations.'
       );
     });
@@ -250,7 +269,7 @@ describe('RespondToEventHandler', () => {
         response: 'accepted' as const
       };
 
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow(
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
         'You are the organizer of this event. Organizers do not respond to their own event invitations.'
       );
     });
@@ -264,7 +283,7 @@ describe('RespondToEventHandler', () => {
         response: 'accepted' as const
       };
 
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow('Event not found');
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow('Event not found');
     });
 
     it('should throw error when event has no attendees', async () => {
@@ -284,7 +303,7 @@ describe('RespondToEventHandler', () => {
         response: 'accepted' as const
       };
 
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow(
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
         'You are not an attendee of this event. Only attendees can respond to event invitations.'
       );
     });
@@ -307,7 +326,7 @@ describe('RespondToEventHandler', () => {
         response: 'accepted' as const
       };
 
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow(
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
         'Failed to update event response'
       );
     });
@@ -328,7 +347,7 @@ describe('RespondToEventHandler', () => {
         throw new Error('Handled API Error');
       });
 
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow('Handled API Error');
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow('Handled API Error');
     });
 
     it('should preserve other attendee properties when updating response', async () => {
@@ -360,7 +379,7 @@ describe('RespondToEventHandler', () => {
         response: 'accepted' as const
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -377,7 +396,7 @@ describe('RespondToEventHandler', () => {
             })
           ])
         },
-        sendUpdates: 'all'
+        sendUpdates: 'none'
       });
     });
   });
@@ -413,7 +432,7 @@ describe('RespondToEventHandler', () => {
         comment: 'I have a conflict'
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({
         calendarId: 'primary',
@@ -426,10 +445,10 @@ describe('RespondToEventHandler', () => {
             })
           ])
         },
-        sendUpdates: 'all'
+        sendUpdates: 'none'
       });
 
-      const response = JSON.parse(result.content[0].text);
+      const response = JSON.parse((result.content[0] as any).text);
       expect(response.message).toContain('I have a conflict');
     });
 
@@ -452,9 +471,9 @@ describe('RespondToEventHandler', () => {
         comment: 'Looking forward to it!'
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
-      const response = JSON.parse(result.content[0].text);
+      const response = JSON.parse((result.content[0] as any).text);
       expect(response.message).toContain('Looking forward to it!');
     });
 
@@ -476,7 +495,7 @@ describe('RespondToEventHandler', () => {
         response: 'accepted' as const
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       const patchCall = mockCalendar.events.patch.mock.calls[0][0];
       const updatedAttendee = patchCall.requestBody.attendees[0];
@@ -497,15 +516,11 @@ describe('RespondToEventHandler', () => {
         ]
       };
 
-      // Mock detectEventType to return 'recurring'
-      vi.spyOn(handler as any, 'getCalendar').mockReturnValue({
-        events: {
-          get: vi.fn()
-            .mockResolvedValueOnce({ data: mockRecurringEvent }) // For detectEventType
-            .mockResolvedValueOnce({ data: mockRecurringEvent }), // For actual get
-          patch: vi.fn().mockResolvedValue({ data: mockRecurringEvent })
-        }
-      });
+      // Setup mock calendar for recurring event detection
+      mockCalendar.events.get
+        .mockResolvedValueOnce({ data: mockRecurringEvent }) // For detectEventType
+        .mockResolvedValueOnce({ data: mockRecurringEvent }); // For actual get
+      mockCalendar.events.patch.mockResolvedValue({ data: mockRecurringEvent });
 
       const args = {
         calendarId: 'primary',
@@ -515,17 +530,16 @@ describe('RespondToEventHandler', () => {
         originalStartTime: '2025-01-15T10:00:00Z'
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       // Verify the instance ID was used (formatted with underscore and timestamp)
-      const calendar = (handler as any).getCalendar(mockOAuth2Client);
-      expect(calendar.events.patch).toHaveBeenCalled();
+      expect(mockCalendar.events.patch).toHaveBeenCalled();
 
-      const patchCall = calendar.events.patch.mock.calls[0][0];
+      const patchCall = mockCalendar.events.patch.mock.calls[0][0];
       expect(patchCall.eventId).toContain('recurring123_');
       expect(patchCall.eventId).toContain('20250115T100000Z');
 
-      const response = JSON.parse(result.content[0].text);
+      const response = JSON.parse((result.content[0] as any).text);
       expect(response.message).toContain('this instance only');
     });
 
@@ -549,7 +563,7 @@ describe('RespondToEventHandler', () => {
         modificationScope: 'all' as const
       };
 
-      const result = await handler.runTool(args, mockOAuth2Client);
+      const result = await handler.runTool(args, mockAccounts);
 
       // Verify the base event ID was used
       expect(mockCalendar.events.patch).toHaveBeenCalledWith(
@@ -558,7 +572,7 @@ describe('RespondToEventHandler', () => {
         })
       );
 
-      const response = JSON.parse(result.content[0].text);
+      const response = JSON.parse((result.content[0] as any).text);
       expect(response.message).toContain('all instances');
     });
 
@@ -571,7 +585,7 @@ describe('RespondToEventHandler', () => {
         // Missing originalStartTime
       };
 
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow(
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
         'originalStartTime is required'
       );
     });
@@ -596,7 +610,7 @@ describe('RespondToEventHandler', () => {
         originalStartTime: '2025-01-15T10:00:00Z'
       };
 
-      await expect(handler.runTool(args, mockOAuth2Client)).rejects.toThrow(
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
         'can only be used with recurring events'
       );
     });
@@ -621,12 +635,43 @@ describe('RespondToEventHandler', () => {
         // No modificationScope - should default to 'all' behavior
       };
 
-      await handler.runTool(args, mockOAuth2Client);
+      await handler.runTool(args, mockAccounts);
 
       // Verify the base event ID was used (not instance-specific)
       expect(mockCalendar.events.patch).toHaveBeenCalledWith(
         expect.objectContaining({
           eventId: 'recurring123'
+        })
+      );
+    });
+
+    it('should extract base event ID when modificationScope is all and instance ID is provided', async () => {
+      const mockRecurringEvent = {
+        id: 'recurring123',
+        summary: 'Weekly Standup',
+        recurrence: ['RRULE:FREQ=WEEKLY;COUNT=10'],
+        attendees: [
+          { email: 'self@example.com', self: true, responseStatus: 'needsAction' }
+        ]
+      };
+
+      mockCalendar.events.get.mockResolvedValue({ data: mockRecurringEvent });
+      mockCalendar.events.patch.mockResolvedValue({ data: mockRecurringEvent });
+
+      const args = {
+        calendarId: 'primary',
+        // Pass an instance ID (baseId_timestamp format)
+        eventId: 'recurring123_20250115T100000Z',
+        response: 'declined' as const,
+        modificationScope: 'all' as const
+      };
+
+      await handler.runTool(args, mockAccounts);
+
+      // Should extract base ID and use it for the patch call
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventId: 'recurring123' // Base ID extracted from instance ID
         })
       );
     });
