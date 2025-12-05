@@ -16,6 +16,97 @@ const toolDefinition = (ToolRegistry as any).tools?.find((t: any) => t.name === 
 const handlerFunction = toolDefinition?.handlerFunction;
 
 describe('list-events Registration Flow (Schema + HandlerFunction)', () => {
+  describe('Account parameter schema validation', () => {
+    it('should accept single account string', () => {
+      const input = {
+        account: 'work',
+        calendarId: 'primary',
+        timeMin: '2024-01-01T00:00:00',
+        timeMax: '2024-01-02T00:00:00'
+      };
+
+      const result = ToolSchemas['list-events'].safeParse(input);
+      expect(result.success).toBe(true);
+      expect(result.data?.account).toBe('work');
+    });
+
+    it('should accept native array of accounts', () => {
+      const input = {
+        account: ['work', 'personal'],
+        calendarId: 'primary',
+        timeMin: '2024-01-01T00:00:00',
+        timeMax: '2024-01-02T00:00:00'
+      };
+
+      const result = ToolSchemas['list-events'].safeParse(input);
+      expect(result.success).toBe(true);
+      expect(result.data?.account).toEqual(['work', 'personal']);
+    });
+
+    it('should parse JSON string array of accounts (double quotes)', () => {
+      const input = {
+        account: '["normal", "work"]',
+        calendarId: 'primary',
+        timeMin: '2024-01-01T00:00:00',
+        timeMax: '2024-01-02T00:00:00'
+      };
+
+      const result = ToolSchemas['list-events'].safeParse(input);
+      expect(result.success).toBe(true);
+      expect(result.data?.account).toEqual(['normal', 'work']);
+    });
+
+    it('should parse JSON string array of accounts (single quotes - Python style)', () => {
+      const input = {
+        account: "['normal', 'work']",
+        calendarId: 'primary',
+        timeMin: '2024-01-01T00:00:00',
+        timeMax: '2024-01-02T00:00:00'
+      };
+
+      const result = ToolSchemas['list-events'].safeParse(input);
+      expect(result.success).toBe(true);
+      expect(result.data?.account).toEqual(['normal', 'work']);
+    });
+
+    it('should handle account JSON string with whitespace', () => {
+      const input = {
+        account: '  ["work", "personal"]  ',
+        calendarId: 'primary',
+        timeMin: '2024-01-01T00:00:00',
+        timeMax: '2024-01-02T00:00:00'
+      };
+
+      const result = ToolSchemas['list-events'].safeParse(input);
+      expect(result.success).toBe(true);
+      expect(result.data?.account).toEqual(['work', 'personal']);
+    });
+
+    it('should reject invalid account IDs in JSON string', () => {
+      const input = {
+        account: '["INVALID_UPPERCASE", "work"]',
+        calendarId: 'primary',
+        timeMin: '2024-01-01T00:00:00',
+        timeMax: '2024-01-02T00:00:00'
+      };
+
+      const result = ToolSchemas['list-events'].safeParse(input);
+      expect(result.success).toBe(false);
+    });
+
+    it('should allow omitting account parameter', () => {
+      const input = {
+        calendarId: 'primary',
+        timeMin: '2024-01-01T00:00:00',
+        timeMax: '2024-01-02T00:00:00'
+      };
+
+      const result = ToolSchemas['list-events'].safeParse(input);
+      expect(result.success).toBe(true);
+      expect(result.data?.account).toBeUndefined();
+    });
+  });
+
   describe('Schema validation (first step)', () => {
     it('should validate native array format', () => {
       const input = {
@@ -328,6 +419,69 @@ describe('list-events Registration Flow (Schema + HandlerFunction)', () => {
           };
 
           await expect(handlerFunction(input)).rejects.toThrow('Array must contain only non-empty strings');
+        });
+      });
+
+      describe('Account parameter preservation', () => {
+        it('should preserve single account string parameter', async () => {
+          const input = {
+            account: 'work',
+            calendarId: 'primary',
+            timeMin: '2024-01-01T00:00:00',
+            timeMax: '2024-01-02T00:00:00'
+          };
+
+          const result = await handlerFunction(input);
+          expect(result.account).toBe('work');
+        });
+
+        it('should preserve account array parameter', async () => {
+          const input = {
+            account: ['work', 'personal'],
+            calendarId: 'primary',
+            timeMin: '2024-01-01T00:00:00',
+            timeMax: '2024-01-02T00:00:00'
+          };
+
+          const result = await handlerFunction(input);
+          expect(result.account).toEqual(['work', 'personal']);
+        });
+
+        it('should preserve undefined account when not provided', async () => {
+          const input = {
+            calendarId: 'primary',
+            timeMin: '2024-01-01T00:00:00',
+            timeMax: '2024-01-02T00:00:00'
+          };
+
+          const result = await handlerFunction(input);
+          expect(result.account).toBeUndefined();
+        });
+
+        it('should preserve account when calendarId is JSON string', async () => {
+          const input = {
+            account: 'normal',
+            calendarId: '["primary", "work@example.com"]',
+            timeMin: '2024-01-01T00:00:00',
+            timeMax: '2024-01-02T00:00:00'
+          };
+
+          const result = await handlerFunction(input);
+          expect(result.account).toBe('normal');
+          expect(Array.isArray(result.calendarId)).toBe(true);
+        });
+
+        it('should preserve account when calendarId is native array', async () => {
+          const input = {
+            account: 'personal',
+            calendarId: ['primary', 'work@example.com'],
+            timeMin: '2024-01-01T00:00:00',
+            timeMax: '2024-01-02T00:00:00'
+          };
+
+          const result = await handlerFunction(input);
+          expect(result.account).toBe('personal');
+          expect(result.calendarId).toEqual(['primary', 'work@example.com']);
         });
       });
     });

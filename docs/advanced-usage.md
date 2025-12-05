@@ -4,35 +4,79 @@ This guide covers advanced features and use cases for the Google Calendar MCP Se
 
 ## Multi-Account Support
 
-The server supports managing multiple Google accounts (e.g., personal and a test calendar).
+The server allows you to connect multiple Google accounts simultaneously (e.g., personal, work, family) and interact with all of them seamlessly.
 
-### Setup Multiple Accounts
+### Add or Remove Accounts
 
-```bash
-# Authenticate normal account
-npm run auth
-
-# Authenticate test account
-npm run auth:test
-
-# Check status
-npm run account:status
-```
-
-### Account Management Commands
+| Workflow | How to Add Accounts |
+|----------|---------------------|
+| **CLI / stdio** | `npm run account auth work` |
+| **HTTP / Docker** | Visit `http://localhost:3000/accounts` |
 
 ```bash
-npm run account:clear:normal    # Clear normal account tokens
-npm run account:clear:test      # Clear test account tokens
-npm run account:migrate         # Migrate from old token format
+npm run account auth work      # Authenticate "work" account
+npm run account auth personal  # Authenticate "personal" account
+npm run account list           # List all accounts + status
+npm run account clear work     # Remove an account
 ```
 
-### Using Multiple Accounts
+### Using Accounts with Tools
 
-The server intelligently determines which account to use:
-- Normal operations use your primary account
-- Integration tests automatically use the test account
-- Accounts are isolated and secure
+All tools accept an optional `account` parameter. The behavior depends on the tool type:
+
+#### Account Parameter Behavior
+
+| Tool Type | Accepts Arrays? | `account` Omitted | `account: "work"` | `account: ["work", "personal"]` |
+|-----------|----------------|-------------------|-------------------|----------------------------------|
+| **Read-only** (list-events, list-calendars, get-freebusy) | ✅ Yes | Merges ALL accounts | Single account only | Merges specified accounts |
+| **Write** (create-event, update-event, delete-event) | ❌ No | Auto-selects best permission | Uses specified account | ❌ Error (not supported) |
+| **Get** (get-event, search-events) | ❌ No | Auto-selects account with access | Uses specified account | ❌ Error (not supported) |
+
+**Auto-selection logic:**
+- When `account` is omitted, the server automatically selects the account with appropriate permissions
+- Write operations require write/owner access
+- Read operations work with any access level (reader, writer, or owner)
+- If no account has the required permissions, you'll get a clear error message
+
+#### Examples
+
+```javascript
+// Read-only tools: Query all authenticated accounts (auto-merge)
+use_tool("list-events", {
+  timeMin: "2025-02-01T00:00:00",
+  timeMax: "2025-02-01T23:59:59"
+  // No account parameter = merges all accounts
+});
+
+// Read-only tools: Query specific accounts
+use_tool("list-events", {
+  account: ["work", "personal"],  // Array supported!
+  timeMin: "2025-02-01T00:00:00",
+  timeMax: "2025-02-01T23:59:59"
+});
+
+// Write tools: Explicitly pick account
+use_tool("create-event", {
+  calendarId: "team@company.com",
+  summary: "Status update",
+  account: "work",  // Must be single string, not array
+  start: "2025-02-01T10:00:00",
+  end: "2025-02-01T11:00:00"
+});
+
+// Write tools: Auto-select account (finds account with write access)
+use_tool("create-event", {
+  calendarId: "team@company.com",
+  summary: "Status update",
+  // No account parameter = auto-selects account with write permission
+  start: "2025-02-01T10:00:00",
+  end: "2025-02-01T11:00:00"
+});
+```
+
+### Calendar Deduplication
+
+The Calendar Registry collects calendars from every account, de-duplicates shared calendars, and tracks the best account to use for read/write operations. Responses include `accountAccess` arrays so you can see every account that can reach a given calendar.
 
 ## Batch Operations
 
@@ -189,10 +233,10 @@ The server only requests necessary permissions:
 
 ### Token Security
 
-- Tokens encrypted at rest
-- Automatic token refresh
-- Secure credential storage
-- No tokens in logs or debug output
+- Tokens stored locally with owner-only permissions (`0600`) in `~/.config/google-calendar-mcp/tokens.json`
+- Automatic token refresh with durable multi-account storage
+- Credentials never leave your machine (no remote storage)
+- No tokens are written to logs or emitted over stdout/stderr
 
 ## Debugging
 

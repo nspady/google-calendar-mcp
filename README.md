@@ -4,7 +4,10 @@ A Model Context Protocol (MCP) server that provides Google Calendar integration 
 
 ## Features
 
+- **Multi-Account Support**: Connect and query multiple Google accounts simultaneously (e.g. work, personal)
 - **Multi-Calendar Support**: List events from multiple calendars simultaneously
+- **Multi-Account Access**: Connect personal, work, and test Google accounts at the same time
+- **Cross-Account Conflicts**: Detect overlapping events across any combination of calendars
 - **Event Management**: Create, update, delete, and search calendar events
 - **Recurring Events**: Advanced modification capabilities for recurring events
 - **Free/Busy Queries**: Check availability across calendars
@@ -111,6 +114,22 @@ npm run auth
 
 See [Authentication Guide](docs/authentication.md#moving-to-production-mode-recommended) for details.
 
+## Managing Multiple Accounts
+
+Connect multiple Google accounts and use them simultaneously.
+
+**CLI / stdio:**
+```bash
+npm run account auth work      # Add "work" account
+npm run account auth personal  # Add "personal" account
+npm run account list           # List all accounts
+```
+
+**HTTP / Docker:**
+Visit `http://localhost:3000/accounts` to manage accounts in the browser.
+
+When no `account` parameter is supplied to a tool, read-only tools merge results from all accounts, while write tools auto-select the account with appropriate permissions.
+
 ## Example Usage
 
 Along with the normal capabilities you would expect for a calendar integration you can also do really dynamic, multi-step processes like:
@@ -165,6 +184,7 @@ Along with the normal capabilities you would expect for a calendar integration y
 - [Architecture](docs/architecture.md) - Technical architecture overview
 - [Development](docs/development.md) - Contributing and testing
 - [Testing](docs/testing.md) - Unit and integration testing guide
+- [Multi-Account Updates](docs/multi-account-updates.md) - Current status and roadmap for multi-account support
 
 ## Configuration
 

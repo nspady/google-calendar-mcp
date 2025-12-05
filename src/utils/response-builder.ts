@@ -96,9 +96,10 @@ export function convertConflictsToStructured(
  */
 export function convertEventsToStructured(
   events: calendar_v3.Schema$Event[],
-  calendarId?: string
+  calendarId?: string,
+  accountId?: string
 ): StructuredEvent[] {
-  return events.map(event => convertGoogleEventToStructured(event, calendarId));
+  return events.map(event => convertGoogleEventToStructured(event, calendarId, accountId));
 }
 
 /**

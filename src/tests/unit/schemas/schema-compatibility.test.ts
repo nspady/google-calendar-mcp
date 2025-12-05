@@ -118,6 +118,24 @@ describe('Provider-Specific Schema Compatibility', () => {
       expect(openaiSchema.properties.calendarId.description).toMatch(/\[".*"\]/);
     });
 
+    it('should convert search-events calendarId anyOf to string for OpenAI', () => {
+      const tools = ToolRegistry.getToolsWithSchemas();
+      const searchEventsTool = tools.find(t => t.name === 'search-events');
+
+      expect(searchEventsTool).toBeDefined();
+
+      // Convert to OpenAI format
+      const openaiSchema = convertMCPSchemaToOpenAI(searchEventsTool!.inputSchema);
+
+      // OpenAI should see a simple string type, not anyOf
+      expect(openaiSchema.properties.calendarId.type).toBe('string');
+      expect(openaiSchema.properties.calendarId.anyOf).toBeUndefined();
+
+      // Description should mention JSON array format
+      expect(openaiSchema.properties.calendarId.description).toContain('JSON array string format');
+      expect(openaiSchema.properties.calendarId.description).toMatch(/\[".*"\]/);
+    });
+
     it('should ensure all converted schemas are valid objects', () => {
       const tools = ToolRegistry.getToolsWithSchemas();
 
@@ -153,22 +171,36 @@ describe('Provider-Specific Schema Compatibility', () => {
       expect(types).toContain('array');
     });
 
-    it('should ensure all other tools do NOT use anyOf/oneOf/allOf', () => {
+    it('should ensure all other tools do NOT use anyOf/oneOf/allOf (except for account parameter)', () => {
       const tools = ToolRegistry.getToolsWithSchemas();
       const problematicFeatures = ['oneOf', 'anyOf', 'allOf', 'not'];
       const issues: string[] = [];
 
+      // Tools explicitly allowed to use anyOf for calendarId (multi-calendar support)
+      const multiCalendarTools = ['list-events', 'search-events'];
+
       for (const tool of tools) {
-        // Skip list-events - it's explicitly allowed to use anyOf
-        if (tool.name === 'list-events') {
+        // Skip multi-calendar tools - they're explicitly allowed to use anyOf for calendarId
+        if (multiCalendarTools.includes(tool.name)) {
           continue;
         }
 
-        const schemaStr = JSON.stringify(tool.inputSchema);
+        const schema = tool.inputSchema as JSONSchemaObject;
 
-        for (const feature of problematicFeatures) {
-          if (schemaStr.includes(`"${feature}"`)) {
-            issues.push(`Tool "${tool.name}" contains problematic feature: ${feature}`);
+        // Check each property for problematic features
+        if (schema.properties) {
+          for (const [propName, propSchema] of Object.entries(schema.properties)) {
+            // Skip account parameter - it's allowed to use anyOf for string | string[]
+            if (propName === 'account') {
+              continue;
+            }
+
+            const propStr = JSON.stringify(propSchema);
+            for (const feature of problematicFeatures) {
+              if (propStr.includes(`"${feature}"`)) {
+                issues.push(`Tool "${tool.name}" property "${propName}" contains problematic feature: ${feature}`);
+              }
+            }
           }
         }
       }

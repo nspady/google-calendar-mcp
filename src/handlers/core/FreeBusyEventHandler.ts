@@ -3,32 +3,138 @@ import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { GetFreeBusyInput } from "../../tools/registry.js";
 import { FreeBusyResponse as GoogleFreeBusyResponse } from '../../schemas/types.js';
-import { FreeBusyResponse } from '../../types/structured-responses.js';
+import { FreeBusyResponse, BusySlot } from '../../types/structured-responses.js';
 import { createStructuredResponse } from '../../utils/response-builder.js';
 import { McpError } from '@modelcontextprotocol/sdk/types.js';
 import { ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { convertToRFC3339 } from '../utils/datetime.js';
 
+interface FreeBusyCalendarResult {
+  busy: BusySlot[];
+  errors?: Array<{ domain?: string; reason?: string }>;
+}
+
 export class FreeBusyEventHandler extends BaseToolHandler {
-  async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
+  async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
     const validArgs = args as GetFreeBusyInput;
 
-    if(!this.isLessThanThreeMonths(validArgs.timeMin,validArgs.timeMax)){
+    if (!this.isLessThanThreeMonths(validArgs.timeMin, validArgs.timeMax)) {
       throw new McpError(
         ErrorCode.InvalidRequest,
         "The time gap between timeMin and timeMax must be less than 3 months"
       );
     }
 
-    const result = await this.queryFreeBusy(oauth2Client, validArgs);
+    // Get clients for specified accounts (or all if not specified)
+    const selectedAccounts = this.getClientsForAccounts(args.account, accounts);
+
+    // Query freebusy from all selected accounts and merge results
+    const mergedCalendars = await this.queryFreeBusyMultiAccount(selectedAccounts, validArgs);
 
     const response: FreeBusyResponse = {
       timeMin: validArgs.timeMin,
       timeMax: validArgs.timeMax,
-      calendars: this.formatCalendarsData(result)
+      calendars: mergedCalendars
     };
 
     return createStructuredResponse(response);
+  }
+
+  private async queryFreeBusyMultiAccount(
+    accounts: Map<string, OAuth2Client>,
+    args: GetFreeBusyInput
+  ): Promise<Record<string, FreeBusyCalendarResult>> {
+    const mergedCalendars: Record<string, FreeBusyCalendarResult> = {};
+    const calendarIds = args.calendars.map(c => c.id);
+
+    // For multi-account queries, pre-resolve which calendars exist on which accounts
+    // This prevents the "cartesian product" problem where we try to query all calendars
+    // from all accounts, causing failures when a calendar doesn't exist on an account
+    let accountCalendarMap: Map<string, string[]>;
+    const resolutionWarnings: string[] = [];
+
+    if (accounts.size > 1) {
+      const { resolved, warnings } = await this.calendarRegistry.resolveCalendarsToAccounts(
+        calendarIds,
+        accounts
+      );
+      accountCalendarMap = resolved;
+      resolutionWarnings.push(...warnings);
+
+      // If no calendars could be resolved, mark all as not found
+      if (accountCalendarMap.size === 0) {
+        for (const calId of calendarIds) {
+          mergedCalendars[calId] = {
+            busy: [],
+            errors: [{ reason: 'notFound' }]
+          };
+        }
+        return mergedCalendars;
+      }
+    } else {
+      // Single account: send all calendars to that account
+      const [accountId] = accounts.keys();
+      accountCalendarMap = new Map([[accountId, calendarIds]]);
+    }
+
+    // Query from each account with only the calendars that exist on that account
+    const results = await Promise.all(
+      Array.from(accountCalendarMap.entries()).map(async ([accountId, calendarsForAccount]) => {
+        const client = accounts.get(accountId)!;
+        try {
+          // Filter args.calendars to only include those routed to this account
+          const filteredArgs: GetFreeBusyInput = {
+            ...args,
+            calendars: args.calendars.filter(c => calendarsForAccount.includes(c.id))
+          };
+          const result = await this.queryFreeBusy(client, filteredArgs);
+          return { accountId, result, error: null, calendarsQueried: calendarsForAccount };
+        } catch (error) {
+          // Log but don't fail - other accounts might succeed
+          const message = error instanceof Error ? error.message : String(error);
+          process.stderr.write(`Warning: FreeBusy query failed for account "${accountId}": ${message}\n`);
+          return { accountId, result: null, error: message, calendarsQueried: calendarsForAccount };
+        }
+      })
+    );
+
+    // Merge results from all accounts
+    // For each calendar, prefer results without errors
+    for (const calId of calendarIds) {
+      let bestResult: FreeBusyCalendarResult | null = null;
+
+      for (const { result } of results) {
+        if (!result?.calendars) continue;
+
+        const calData = result.calendars[calId];
+        if (!calData) continue;
+
+        // If we don't have a result yet, or this one has no errors but previous did, use this one
+        if (!bestResult) {
+          bestResult = {
+            busy: calData.busy?.map((slot: any) => ({ start: slot.start, end: slot.end })) || [],
+            errors: calData.errors?.map((err: any) => ({ domain: err.domain, reason: err.reason }))
+          };
+        } else if (bestResult.errors && !calData.errors) {
+          // Current best has errors but this one doesn't - prefer this one
+          bestResult = {
+            busy: calData.busy?.map((slot: any) => ({ start: slot.start, end: slot.end })) || []
+          };
+        }
+      }
+
+      // If no account returned data for this calendar, mark it as not found
+      if (!bestResult) {
+        mergedCalendars[calId] = {
+          busy: [],
+          errors: [{ reason: 'notFound' }]
+        };
+      } else {
+        mergedCalendars[calId] = bestResult;
+      }
+    }
+
+    return mergedCalendars;
   }
 
   private async queryFreeBusy(
@@ -96,32 +202,5 @@ export class FreeBusyEventHandler extends BaseToolHandler {
     const threeMonthsInMilliseconds = 3 * 30 * 24 * 60 * 60 * 1000;
 
     return diffInMilliseconds <= threeMonthsInMilliseconds;
-  }
-
-  private formatCalendarsData(response: GoogleFreeBusyResponse): Record<string, {
-    busy: Array<{ start: string; end: string }>;
-    errors?: Array<{ domain?: string; reason?: string }>;
-  }> {
-    const calendars: Record<string, any> = {};
-
-    if (response.calendars) {
-      for (const [calId, calData] of Object.entries(response.calendars) as [string, any][]) {
-        calendars[calId] = {
-          busy: calData.busy?.map((slot: any) => ({
-            start: slot.start,
-            end: slot.end
-          })) || []
-        };
-
-        if (calData.errors?.length > 0) {
-          calendars[calId].errors = calData.errors.map((err: any) => ({
-            domain: err.domain,
-            reason: err.reason
-          }));
-        }
-      }
-    }
-
-    return calendars;
   }
 }

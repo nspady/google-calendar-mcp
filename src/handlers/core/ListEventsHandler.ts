@@ -1,4 +1,4 @@
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult, McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
@@ -8,9 +8,10 @@ import { buildListFieldMask } from "../../utils/field-mask-builder.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
 import { ListEventsResponse, StructuredEvent, convertGoogleEventToStructured } from "../../types/structured-responses.js";
 
-// Extended event type to include calendar ID for tracking source
+// Extended event type to include calendar ID and account ID for tracking source
 interface ExtendedEvent extends calendar_v3.Schema$Event {
   calendarId: string;
+  accountId?: string;
 }
 
 interface ListEventsArgs {
@@ -21,40 +22,137 @@ interface ListEventsArgs {
   fields?: string[];
   privateExtendedProperty?: string[];
   sharedExtendedProperty?: string[];
+  account?: string | string[];
 }
 
 export class ListEventsHandler extends BaseToolHandler {
-    async runTool(args: ListEventsArgs, oauth2Client: OAuth2Client): Promise<CallToolResult> {
-        // MCP SDK has already validated the arguments against the tool schema
-        const validArgs = args;
+    async runTool(args: ListEventsArgs, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
+        // Get clients for specified accounts (supports single or multiple)
+        const selectedAccounts = this.getClientsForAccounts(args.account, accounts);
+        const partialFailures: Array<{ accountId: string; reason: string }> = [];
+        const resolutionWarnings: string[] = [];
 
         // Normalize calendarId to always be an array for consistent processing
-        // The Zod schema transform has already handled JSON string parsing if needed
-        const calendarNamesOrIds = Array.isArray(validArgs.calendarId)
-            ? validArgs.calendarId
-            : [validArgs.calendarId];
+        const calendarNamesOrIds = Array.isArray(args.calendarId)
+            ? args.calendarId
+            : [args.calendarId];
 
-        // Resolve calendar names to IDs (if any names were provided)
-        const calendarIds = await this.resolveCalendarIds(oauth2Client, calendarNamesOrIds);
+        // For multi-account queries, pre-resolve calendars to their owning accounts
+        // This prevents "calendar not found" errors when a calendar only exists on some accounts
+        let accountCalendarMap: Map<string, string[]>;
 
-        const allEvents = await this.fetchEvents(oauth2Client, calendarIds, {
-            timeMin: validArgs.timeMin,
-            timeMax: validArgs.timeMax,
-            timeZone: validArgs.timeZone,
-            fields: validArgs.fields,
-            privateExtendedProperty: validArgs.privateExtendedProperty,
-            sharedExtendedProperty: validArgs.sharedExtendedProperty
+        if (selectedAccounts.size > 1) {
+            // Multi-account: route calendars to their owning accounts using CalendarRegistry
+            const { resolved, warnings } = await this.calendarRegistry.resolveCalendarsToAccounts(
+                calendarNamesOrIds,
+                selectedAccounts
+            );
+            accountCalendarMap = resolved;
+            resolutionWarnings.push(...warnings);
+
+            // If no calendars could be resolved on any account, throw error
+            if (accountCalendarMap.size === 0) {
+                const allCalendars = await this.calendarRegistry.getUnifiedCalendars(selectedAccounts);
+                const calendarList = allCalendars.map(c => `"${c.displayName}" (${c.calendarId})`).join(', ');
+                throw new McpError(
+                    ErrorCode.InvalidRequest,
+                    `None of the requested calendars could be found: ${calendarNamesOrIds.map(c => `"${c}"`).join(', ')}. ` +
+                    `Available calendars: ${calendarList || 'none'}. Use 'list-calendars' to see all available calendars.`
+                );
+            }
+        } else {
+            // Single account: use existing per-account resolution (strict mode)
+            // All calendars go to the single account - will error if not found
+            const [accountId] = selectedAccounts.keys();
+            accountCalendarMap = new Map([[accountId, calendarNamesOrIds]]);
+        }
+
+        // Fetch events from accounts that have matching calendars
+        const eventsPerAccount = await Promise.all(
+            Array.from(accountCalendarMap.entries()).map(async ([accountId, calendarsForAccount]) => {
+                const client = selectedAccounts.get(accountId)!;
+                try {
+                    // For single-account, resolve names to IDs (strict mode)
+                    // For multi-account, calendars are already resolved IDs
+                    const calendarIds = selectedAccounts.size === 1
+                        ? await this.resolveCalendarIds(client, calendarsForAccount)
+                        : calendarsForAccount;
+
+                    const events = await this.fetchEvents(client, calendarIds, {
+                        timeMin: args.timeMin,
+                        timeMax: args.timeMax,
+                        timeZone: args.timeZone,
+                        fields: args.fields,
+                        privateExtendedProperty: args.privateExtendedProperty,
+                        sharedExtendedProperty: args.sharedExtendedProperty
+                    });
+
+                    // Tag events with account ID and return metadata
+                    return {
+                        accountId,
+                        calendarIds,
+                        events: events.map(event => ({ ...event, accountId }))
+                    };
+                } catch (error) {
+                    // For single account, propagate error
+                    if (selectedAccounts.size === 1) {
+                        throw error;
+                    }
+                    const reason = error instanceof Error ? error.message : String(error);
+                    partialFailures.push({
+                        accountId,
+                        reason
+                    });
+                    process.stderr.write(`Warning: Failed to load events for account "${accountId}": ${reason}\n`);
+                    // For multi-account, continue with other accounts
+                    return { accountId, calendarIds: [], events: [] };
+                }
+            })
+        );
+
+        // Flatten and merge all events and calendar IDs
+        const allEvents = eventsPerAccount.flatMap(result => result.events);
+        const allQueriedCalendarIds = [...new Set(eventsPerAccount.flatMap(result => result.calendarIds))];
+
+        // Sort events chronologically
+        allEvents.sort((a, b) => {
+            const aTime = a.start?.dateTime || a.start?.date || '';
+            const bTime = b.start?.dateTime || b.start?.date || '';
+            return aTime.localeCompare(bTime);
         });
 
         // Convert extended events to structured format
         const structuredEvents: StructuredEvent[] = allEvents.map(event =>
-            convertGoogleEventToStructured(event, event.calendarId)
+            convertGoogleEventToStructured(event, event.calendarId, event.accountId)
         );
+        const warnings: string[] = [...resolutionWarnings];
+
+        // Build detailed warnings for partial failures
+        if (partialFailures.length > 0) {
+            for (const failure of partialFailures) {
+                warnings.push(`Account "${failure.accountId}" failed: ${failure.reason}`);
+            }
+        }
+
+        // Build note based on results
+        let note: string | undefined;
+        if (selectedAccounts.size > 1) {
+            const successfulAccounts = selectedAccounts.size - partialFailures.length;
+            if (partialFailures.length > 0) {
+                note = `⚠️ Partial results: Retrieved events from ${successfulAccounts} of ${selectedAccounts.size} account(s). ${partialFailures.length} account(s) failed - see warnings for details.`;
+            } else {
+                note = `Showing merged events from ${selectedAccounts.size} account(s), sorted chronologically`;
+            }
+        }
 
         const response: ListEventsResponse = {
             events: structuredEvents,
             totalCount: allEvents.length,
-            calendars: calendarIds.length > 1 ? calendarIds : undefined
+            calendars: allQueriedCalendarIds.length > 1 ? allQueriedCalendarIds : undefined,
+            ...(partialFailures.length > 0 && { partialFailures }),
+            ...(warnings.length > 0 && { warnings }),
+            ...(selectedAccounts.size > 1 && { accounts: Array.from(selectedAccounts.keys()) }),
+            ...(note && { note })
         };
 
         return createStructuredResponse(response);

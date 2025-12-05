@@ -131,6 +131,7 @@ export interface StructuredEvent {
   privateCopy?: boolean;
   locked?: boolean;
   calendarId?: string;
+  accountId?: string;
 }
 
 /**
@@ -176,6 +177,13 @@ export interface ListEventsResponse {
   events: StructuredEvent[];
   totalCount: number;
   calendars?: string[];
+  accounts?: string[];
+  note?: string;
+  warnings?: string[];
+  partialFailures?: Array<{
+    accountId: string;
+    reason: string;
+  }>;
 }
 
 /**
@@ -185,11 +193,14 @@ export interface SearchEventsResponse {
   events: StructuredEvent[];
   totalCount: number;
   query: string;
-  calendarId: string;
+  calendarId?: string;
+  calendars?: string[];
+  accounts?: string[];
   timeRange?: {
     start: string;
     end: string;
   };
+  warnings?: string[];
 }
 
 /**
@@ -256,6 +267,11 @@ export interface CalendarInfo {
   conferenceProperties?: {
     allowedConferenceSolutionTypes?: string[];
   };
+  accountAccess?: Array<{
+    accountId: string;
+    accessRole: string;
+    primary: boolean;
+  }>;
 }
 
 /**
@@ -264,6 +280,7 @@ export interface CalendarInfo {
 export interface ListCalendarsResponse {
   calendars: CalendarInfo[];
   totalCount: number;
+  note?: string;
 }
 
 /**
@@ -319,11 +336,13 @@ export interface GetCurrentTimeResponse {
  * Converts a Google Calendar API event to our structured format
  * @param event - The Google Calendar API event object
  * @param calendarId - Optional calendar ID to include in the response
+ * @param accountId - Optional account ID to include in the response (for multi-account queries)
  * @returns Structured event representation
  */
 export function convertGoogleEventToStructured(
   event: calendar_v3.Schema$Event,
-  calendarId?: string
+  calendarId?: string,
+  accountId?: string
 ): StructuredEvent {
   return {
     id: event.id || '',
@@ -406,5 +425,6 @@ export function convertGoogleEventToStructured(
     privateCopy: event.privateCopy ?? undefined,
     locked: event.locked ?? undefined,
     calendarId: calendarId,
+    accountId: accountId,
   };
 }

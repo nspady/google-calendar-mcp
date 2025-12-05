@@ -4,10 +4,343 @@ import { OAuth2Client } from "google-auth-library";
 import { GaxiosError } from 'gaxios';
 import { calendar_v3, google } from "googleapis";
 import { getCredentialsProjectId } from "../../auth/utils.js";
+import { CalendarRegistry } from "../../services/CalendarRegistry.js";
+import { validateAccountId } from "../../auth/paths.js";
 
 
-export abstract class BaseToolHandler {
-    abstract runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult>;
+export abstract class BaseToolHandler<TArgs = any> {
+    protected calendarRegistry: CalendarRegistry = CalendarRegistry.getInstance();
+
+    abstract runTool(args: TArgs, accounts: Map<string, OAuth2Client>): Promise<CallToolResult>;
+
+    /**
+     * Normalize account ID to lowercase for case-insensitive matching
+     * @param accountId Account ID to normalize
+     * @returns Lowercase account ID
+     */
+    private normalizeAccountId(accountId: string): string {
+        return accountId.toLowerCase();
+    }
+
+    /**
+     * Get OAuth2Client for a specific account, or the first available account if none specified.
+     * Use this for read-only operations where any authenticated account will work.
+     * @param accountId Optional account ID. If not provided, uses first available account.
+     * @param accounts Map of available accounts
+     * @returns OAuth2Client for the specified or first account
+     * @throws McpError if account is invalid or not found
+     */
+    protected getClientForAccountOrFirst(accountId: string | undefined, accounts: Map<string, OAuth2Client>): OAuth2Client {
+        // No accounts available
+        if (accounts.size === 0) {
+            throw new McpError(
+                ErrorCode.InvalidRequest,
+                'No authenticated accounts available. Please run authentication first.'
+            );
+        }
+
+        // Account ID specified - validate and retrieve
+        if (accountId) {
+            const normalizedId = this.normalizeAccountId(accountId);
+            try {
+                validateAccountId(normalizedId);
+            } catch (error) {
+                throw new McpError(
+                    ErrorCode.InvalidRequest,
+                    error instanceof Error ? error.message : 'Invalid account ID'
+                );
+            }
+
+            const client = accounts.get(normalizedId);
+            if (!client) {
+                const availableAccounts = Array.from(accounts.keys()).join(', ');
+                throw new McpError(
+                    ErrorCode.InvalidRequest,
+                    `Account "${normalizedId}" not found. Available accounts: ${availableAccounts}`
+                );
+            }
+            return client;
+        }
+
+        // No account specified - use first available (sorted for consistency)
+        const sortedAccountIds = Array.from(accounts.keys()).sort();
+        const firstAccountId = sortedAccountIds[0];
+        const client = accounts.get(firstAccountId);
+        if (!client) {
+            throw new McpError(
+                ErrorCode.InternalError,
+                'Failed to retrieve OAuth client'
+            );
+        }
+        return client;
+    }
+
+    /**
+     * Get OAuth2Client for a specific account or determine default account
+     * @param accountId Optional account ID. If not provided, uses single account if available.
+     * @param accounts Map of available accounts
+     * @returns OAuth2Client for the specified or default account
+     * @throws McpError if account is invalid or not found
+     */
+    protected getClientForAccount(accountId: string | undefined, accounts: Map<string, OAuth2Client>): OAuth2Client {
+        // No accounts available
+        if (accounts.size === 0) {
+            throw new McpError(
+                ErrorCode.InvalidRequest,
+                'No authenticated accounts available. Please run authentication first.'
+            );
+        }
+
+        // Account ID specified - validate and retrieve
+        if (accountId) {
+            // Normalize to lowercase for case-insensitive matching
+            const normalizedId = this.normalizeAccountId(accountId);
+
+            // Validate account ID format (after normalization)
+            try {
+                validateAccountId(normalizedId);
+            } catch (error) {
+                throw new McpError(
+                    ErrorCode.InvalidRequest,
+                    error instanceof Error ? error.message : 'Invalid account ID'
+                );
+            }
+
+            // Get client for specified account
+            const client = accounts.get(normalizedId);
+            if (!client) {
+                const availableAccounts = Array.from(accounts.keys()).join(', ');
+                throw new McpError(
+                    ErrorCode.InvalidRequest,
+                    `Account "${normalizedId}" not found. Available accounts: ${availableAccounts}`
+                );
+            }
+
+            return client;
+        }
+
+        // No account specified - use default behavior
+        if (accounts.size === 1) {
+            // Single account - use it automatically
+            const firstClient = accounts.values().next().value;
+            if (!firstClient) {
+                throw new McpError(
+                    ErrorCode.InternalError,
+                    'Failed to retrieve OAuth client'
+                );
+            }
+            return firstClient;
+        }
+
+        // Multiple accounts but no account specified - error
+        const availableAccounts = Array.from(accounts.keys()).join(', ');
+        throw new McpError(
+            ErrorCode.InvalidRequest,
+            `Multiple accounts available (${availableAccounts}). You must specify the 'account' parameter to indicate which account to use.`
+        );
+    }
+
+    /**
+     * Get multiple OAuth2Clients for multi-account operations (e.g., list-events across accounts)
+     * @param accountIds Account ID(s) - string, string[], or undefined
+     * @param accounts Map of available accounts
+     * @returns Map of accountId to OAuth2Client for the specified accounts
+     * @throws McpError if any account is invalid or not found
+     */
+    protected getClientsForAccounts(
+        accountIds: string | string[] | undefined,
+        accounts: Map<string, OAuth2Client>
+    ): Map<string, OAuth2Client> {
+        // No accounts available
+        if (accounts.size === 0) {
+            throw new McpError(
+                ErrorCode.InvalidRequest,
+                'No authenticated accounts available. Please run authentication first.'
+            );
+        }
+
+        // Normalize to array
+        const ids = this.normalizeAccountIds(accountIds);
+
+        // If no specific accounts requested, use all available accounts
+        if (ids.length === 0) {
+            if (accounts.size === 1) {
+                // Single account - use it
+                return accounts;
+            }
+            // Multiple accounts - return all
+            return accounts;
+        }
+
+        // Validate and retrieve specified accounts
+        const result = new Map<string, OAuth2Client>();
+
+        for (const id of ids) {
+            // Normalize to lowercase for case-insensitive matching
+            const normalizedId = this.normalizeAccountId(id);
+
+            try {
+                validateAccountId(normalizedId);
+            } catch (error) {
+                throw new McpError(
+                    ErrorCode.InvalidRequest,
+                    error instanceof Error ? error.message : 'Invalid account ID'
+                );
+            }
+
+            const client = accounts.get(normalizedId);
+            if (!client) {
+                const availableAccounts = Array.from(accounts.keys()).join(', ');
+                throw new McpError(
+                    ErrorCode.InvalidRequest,
+                    `Account "${normalizedId}" not found. Available accounts: ${availableAccounts}`
+                );
+            }
+
+            result.set(normalizedId, client);
+        }
+
+        return result;
+    }
+
+    /**
+     * Get the best account to use for writing to a specific calendar
+     * Uses CalendarRegistry to find account with highest permissions
+     * @param calendarId Calendar ID
+     * @param accounts All available accounts
+     * @returns Account ID and client for the calendar, or null if no write access
+     */
+    protected async getAccountForCalendarWrite(
+        calendarId: string,
+        accounts: Map<string, OAuth2Client>
+    ): Promise<{ accountId: string; client: OAuth2Client } | null> {
+        return this.getAccountForCalendarAccess(calendarId, accounts, 'write');
+    }
+
+    /**
+     * Get the best account for a calendar depending on operation type
+     * @param calendarId Calendar ID
+     * @param accounts Available accounts
+     * @param operation 'read' or 'write'
+     */
+    protected async getAccountForCalendarAccess(
+        calendarId: string,
+        accounts: Map<string, OAuth2Client>,
+        operation: 'read' | 'write'
+    ): Promise<{ accountId: string; client: OAuth2Client } | null> {
+        // Fast path for single account - skip calendar registry lookup
+        if (accounts.size === 1) {
+            const entry = accounts.entries().next().value;
+            if (entry) {
+                const [accountId, client] = entry;
+                return { accountId, client };
+            }
+        }
+
+        // Multi-account case - use calendar registry for permission-based selection
+        const result = await this.calendarRegistry.getAccountForCalendar(
+            calendarId,
+            accounts,
+            operation
+        );
+
+        if (!result) {
+            return null;
+        }
+
+        const client = accounts.get(result.accountId);
+        if (!client) {
+            return null;
+        }
+
+        return {
+            accountId: result.accountId,
+            client
+        };
+    }
+
+    /**
+     * Convenience method to get a single OAuth2Client with automatic account selection.
+     * Handles the common pattern where:
+     * - If account is specified, use it
+     * - If no account specified, auto-select based on calendar permissions
+     *
+     * This eliminates repetitive boilerplate in handler implementations.
+     * Supports both calendar IDs and calendar names for resolution.
+     *
+     * @param accountId Optional account ID from args
+     * @param calendarNameOrId Calendar name or ID to check permissions for (if auto-selecting)
+     * @param accounts Map of available accounts
+     * @param operation 'read' or 'write' operation type
+     * @returns OAuth2Client, selected account ID, resolved calendar ID, and whether it was auto-selected
+     * @throws McpError if account not found or no suitable account available
+     */
+    protected async getClientWithAutoSelection(
+        accountId: string | undefined,
+        calendarNameOrId: string,
+        accounts: Map<string, OAuth2Client>,
+        operation: 'read' | 'write'
+    ): Promise<{ client: OAuth2Client; accountId: string; calendarId: string; wasAutoSelected: boolean }> {
+        // Account explicitly specified - use it
+        if (accountId) {
+            // Normalize account ID to lowercase
+            const normalizedAccountId = this.normalizeAccountId(accountId);
+            const client = this.getClientForAccount(normalizedAccountId, accounts);
+
+            // If calendar looks like a name (not ID), resolve it using this account
+            let resolvedCalendarId = calendarNameOrId;
+            if (calendarNameOrId !== 'primary' && !calendarNameOrId.includes('@')) {
+                resolvedCalendarId = await this.resolveCalendarId(client, calendarNameOrId);
+            }
+
+            return { client, accountId: normalizedAccountId, calendarId: resolvedCalendarId, wasAutoSelected: false };
+        }
+
+        // No account specified - use CalendarRegistry to resolve name and find best account
+        const resolution = await this.calendarRegistry.resolveCalendarNameToId(
+            calendarNameOrId,
+            accounts,
+            operation
+        );
+
+        if (!resolution) {
+            const availableAccounts = Array.from(accounts.keys()).join(', ');
+            const accessType = operation === 'write' ? 'write' : 'read';
+            throw new McpError(
+                ErrorCode.InvalidRequest,
+                `No account has ${accessType} access to calendar "${calendarNameOrId}". ` +
+                `Available accounts: ${availableAccounts}. Please ensure the calendar exists and ` +
+                `you have the necessary permissions, or specify the 'account' parameter explicitly.`
+            );
+        }
+
+        const client = accounts.get(resolution.accountId);
+        if (!client) {
+            throw new McpError(
+                ErrorCode.InternalError,
+                `Failed to retrieve client for account "${resolution.accountId}"`
+            );
+        }
+
+        return {
+            client,
+            accountId: resolution.accountId,
+            calendarId: resolution.calendarId,
+            wasAutoSelected: true
+        };
+    }
+
+    /**
+     * Normalize account parameter to array of account IDs
+     * @param accountIds string, string[], or undefined
+     * @returns Array of account IDs (empty array if undefined)
+     */
+    protected normalizeAccountIds(accountIds: string | string[] | undefined): string[] {
+        if (!accountIds) {
+            return [];
+        }
+        return Array.isArray(accountIds) ? accountIds : [accountIds];
+    }
 
     protected handleGoogleApiError(error: unknown): never {
         if (error instanceof GaxiosError) {

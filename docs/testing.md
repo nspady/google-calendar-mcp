@@ -139,10 +139,12 @@ npm run test:integration
 
 | Variable | Purpose | Default | Notes |
 |----------|---------|---------|-------|
-| `GOOGLE_ACCOUNT_MODE` | Account mode | `normal` | Use `test` for testing |
+| `GOOGLE_ACCOUNT_MODE` | Default account ID for auth flows | `normal` | Set to any lowercase account ID (e.g., `work`, `personal`) before running `npm run auth` |
 | `DEBUG_LLM_INTERACTIONS` | Debug logging | `false` | Set `true` for verbose LLM logs |
 | `ANTHROPIC_MODEL` | Claude model | `claude-3-5-haiku-20241022` | Must support MCP |
 | `OPENAI_MODEL` | OpenAI model | `gpt-4o-mini` | Must support function calling |
+| `MULTI_ACCOUNT_TESTS` | Enable `multi-account.test.ts` | `false` | Set to `true` to run cross-account integration tests |
+| `MULTI_ACCOUNT_IDS` | Comma-separated account IDs | _unset_ | Example: `work,personal` (requires tokens for each account) |
 
 ### Complete Setup Example
 
@@ -166,6 +168,16 @@ DEBUG_LLM_INTERACTIONS=false
 ANTHROPIC_MODEL=claude-3-5-haiku-20241022
 OPENAI_MODEL=gpt-4o-mini
 ```
+
+> **Tip:** Authenticate multiple accounts with `npm run account auth <accountId>` for each ID. All tokens share the same storage file, so integration tests can switch accounts by passing the `account` parameter.
+
+5. **Run multi-account integration tests (optional):**
+```bash
+export MULTI_ACCOUNT_TESTS=true
+export MULTI_ACCOUNT_IDS=work,personal
+vitest run src/tests/integration/multi-account.test.ts
+```
+These tests verify cross-account list-events merging. Each account listed in `MULTI_ACCOUNT_IDS` must already be authenticated.
 
 2. **Obtain Google OAuth Credentials:**
    - Go to [Google Cloud Console](https://console.cloud.google.com)

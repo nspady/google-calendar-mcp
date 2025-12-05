@@ -7,13 +7,14 @@ describe('GetCurrentTimeHandler', () => {
   const mockOAuth2Client = {
     getAccessToken: vi.fn().mockResolvedValue({ token: 'mock-token' })
   } as unknown as OAuth2Client;
+  const mockAccounts = new Map([['test', mockOAuth2Client]]);
 
   describe('runTool', () => {
     it('should return current time without timezone parameter using primary calendar timezone', async () => {
       const handler = new GetCurrentTimeHandler();
       // Mock calendar timezone to avoid real API calls in unit tests
       const spy = vi.spyOn(GetCurrentTimeHandler.prototype as any, 'getCalendarTimezone').mockResolvedValue('America/Los_Angeles');
-      const result = await handler.runTool({}, mockOAuth2Client);
+      const result = await handler.runTool({}, mockAccounts);
       
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
@@ -29,7 +30,7 @@ describe('GetCurrentTimeHandler', () => {
 
     it('should return current time with valid timezone parameter', async () => {
       const handler = new GetCurrentTimeHandler();
-      const result = await handler.runTool({ timeZone: 'America/New_York' }, mockOAuth2Client);
+      const result = await handler.runTool({ timeZone: 'America/New_York' }, mockAccounts);
       
       expect(result.content).toHaveLength(1);
       expect(result.content[0].type).toBe('text');
@@ -44,7 +45,7 @@ describe('GetCurrentTimeHandler', () => {
 
     it('should handle UTC timezone parameter', async () => {
       const handler = new GetCurrentTimeHandler();
-      const result = await handler.runTool({ timeZone: 'UTC' }, mockOAuth2Client);
+      const result = await handler.runTool({ timeZone: 'UTC' }, mockAccounts);
       
       const response = JSON.parse(result.content[0].text as string);
       expect(response.timezone).toBe('UTC');
@@ -55,11 +56,11 @@ describe('GetCurrentTimeHandler', () => {
     it('should throw error for invalid timezone', async () => {
       const handler = new GetCurrentTimeHandler();
       
-      await expect(handler.runTool({ timeZone: 'Invalid/Timezone' }, mockOAuth2Client))
+      await expect(handler.runTool({ timeZone: 'Invalid/Timezone' }, mockAccounts))
         .rejects.toThrow(McpError);
 
       try {
-        await handler.runTool({ timeZone: 'Invalid/Timezone' }, mockOAuth2Client);
+        await handler.runTool({ timeZone: 'Invalid/Timezone' }, mockAccounts);
       } catch (error) {
         expect(error).toBeInstanceOf(McpError);
         expect((error as McpError).code).toBe(ErrorCode.InvalidRequest);
@@ -82,7 +83,7 @@ describe('GetCurrentTimeHandler', () => {
       ];
 
       for (const timezone of validTimezones) {
-        const result = await handler.runTool({ timeZone: timezone }, mockOAuth2Client);
+        const result = await handler.runTool({ timeZone: timezone }, mockAccounts);
         const response = JSON.parse(result.content[0].text as string);
         expect(response.timezone).toBe(timezone);
       }
@@ -99,7 +100,7 @@ describe('GetCurrentTimeHandler', () => {
       ];
 
       for (const timezone of invalidTimezones) {
-        await expect(handler.runTool({ timeZone: timezone }, mockOAuth2Client))
+        await expect(handler.runTool({ timeZone: timezone }, mockAccounts))
           .rejects.toThrow(McpError);
       }
     });
@@ -109,7 +110,7 @@ describe('GetCurrentTimeHandler', () => {
     it('should include all required fields in response without timezone', async () => {
       const handler = new GetCurrentTimeHandler();
       const spy = vi.spyOn(GetCurrentTimeHandler.prototype as any, 'getCalendarTimezone').mockResolvedValue('America/Los_Angeles');
-      const result = await handler.runTool({}, mockOAuth2Client);
+      const result = await handler.runTool({}, mockAccounts);
       const response = JSON.parse(result.content[0].text as string);
 
       expect(response).toHaveProperty('currentTime');
@@ -124,7 +125,7 @@ describe('GetCurrentTimeHandler', () => {
 
     it('should include all required fields in response with timezone', async () => {
       const handler = new GetCurrentTimeHandler();
-      const result = await handler.runTool({ timeZone: 'UTC' }, mockOAuth2Client);
+      const result = await handler.runTool({ timeZone: 'UTC' }, mockAccounts);
       const response = JSON.parse(result.content[0].text as string);
 
       expect(response).toHaveProperty('currentTime');
@@ -139,7 +140,7 @@ describe('GetCurrentTimeHandler', () => {
 
     it('should format RFC3339 timestamps correctly', async () => {
       const handler = new GetCurrentTimeHandler();
-      const result = await handler.runTool({ timeZone: 'UTC' }, mockOAuth2Client);
+      const result = await handler.runTool({ timeZone: 'UTC' }, mockAccounts);
       const response = JSON.parse(result.content[0].text as string);
 
       // Should match ISO8601 pattern with timezone offset

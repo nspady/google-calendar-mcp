@@ -409,4 +409,167 @@ describe('ListEventsArgumentsSchema JSON String Handling', () => {
     const result = ListEventsArgumentsSchema.parse(input);
     expect(result.calendarId).toBe('["primary", 123]');
   });
+});
+
+// Use the create-event and search-events schemas for testing array preprocessing
+const CreateEventSchema = ToolSchemas['create-event'];
+const SearchEventsSchema = ToolSchemas['search-events'];
+
+describe('Array parameter JSON string preprocessing', () => {
+  describe('fields parameter', () => {
+    it('should parse JSON string of fields into array', () => {
+      const input = {
+        calendarId: 'primary',
+        timeMin: '2024-01-01T00:00:00',
+        timeMax: '2024-01-02T00:00:00',
+        fields: '["location", "description", "creator"]'
+      };
+
+      const result = ListEventsArgumentsSchema.parse(input);
+      expect(result.fields).toEqual(['location', 'description', 'creator']);
+    });
+
+    it('should parse single-quoted JSON string of fields (Python style)', () => {
+      const input = {
+        calendarId: 'primary',
+        timeMin: '2024-01-01T00:00:00',
+        timeMax: '2024-01-02T00:00:00',
+        fields: "['location', 'description']"
+      };
+
+      const result = ListEventsArgumentsSchema.parse(input);
+      expect(result.fields).toEqual(['location', 'description']);
+    });
+
+    it('should accept native array of fields', () => {
+      const input = {
+        calendarId: 'primary',
+        timeMin: '2024-01-01T00:00:00',
+        timeMax: '2024-01-02T00:00:00',
+        fields: ['location', 'description', 'creator']
+      };
+
+      const result = ListEventsArgumentsSchema.parse(input);
+      expect(result.fields).toEqual(['location', 'description', 'creator']);
+    });
+
+    it('should reject invalid field names in JSON string', () => {
+      const input = {
+        calendarId: 'primary',
+        timeMin: '2024-01-01T00:00:00',
+        timeMax: '2024-01-02T00:00:00',
+        fields: '["location", "invalidField"]'
+      };
+
+      expect(() => ListEventsArgumentsSchema.parse(input)).toThrow();
+    });
+  });
+
+  describe('calendarsToCheck parameter', () => {
+    it('should parse JSON string of calendars into array', () => {
+      const input = {
+        calendarId: 'primary',
+        summary: 'Test Event',
+        start: '2024-01-01T10:00:00',
+        end: '2024-01-01T11:00:00',
+        calendarsToCheck: '["primary", "work@example.com"]'
+      };
+
+      const result = CreateEventSchema.parse(input);
+      expect(result.calendarsToCheck).toEqual(['primary', 'work@example.com']);
+    });
+
+    it('should parse single-quoted JSON string (Python style)', () => {
+      const input = {
+        calendarId: 'primary',
+        summary: 'Test Event',
+        start: '2024-01-01T10:00:00',
+        end: '2024-01-01T11:00:00',
+        calendarsToCheck: "['primary', 'work@example.com']"
+      };
+
+      const result = CreateEventSchema.parse(input);
+      expect(result.calendarsToCheck).toEqual(['primary', 'work@example.com']);
+    });
+
+    it('should accept native array of calendars', () => {
+      const input = {
+        calendarId: 'primary',
+        summary: 'Test Event',
+        start: '2024-01-01T10:00:00',
+        end: '2024-01-01T11:00:00',
+        calendarsToCheck: ['primary', 'work@example.com']
+      };
+
+      const result = CreateEventSchema.parse(input);
+      expect(result.calendarsToCheck).toEqual(['primary', 'work@example.com']);
+    });
+
+    it('should handle JSON string with whitespace', () => {
+      const input = {
+        calendarId: 'primary',
+        summary: 'Test Event',
+        start: '2024-01-01T10:00:00',
+        end: '2024-01-01T11:00:00',
+        calendarsToCheck: '  ["primary", "work@example.com"]  '
+      };
+
+      const result = CreateEventSchema.parse(input);
+      expect(result.calendarsToCheck).toEqual(['primary', 'work@example.com']);
+    });
+  });
+
+  describe('recurrence parameter', () => {
+    it('should parse JSON string of recurrence rules into array', () => {
+      const input = {
+        calendarId: 'primary',
+        summary: 'Test Event',
+        start: '2024-01-01T10:00:00',
+        end: '2024-01-01T11:00:00',
+        recurrence: '["RRULE:FREQ=WEEKLY;COUNT=5"]'
+      };
+
+      const result = CreateEventSchema.parse(input);
+      expect(result.recurrence).toEqual(['RRULE:FREQ=WEEKLY;COUNT=5']);
+    });
+
+    it('should parse single-quoted JSON string (Python style)', () => {
+      const input = {
+        calendarId: 'primary',
+        summary: 'Test Event',
+        start: '2024-01-01T10:00:00',
+        end: '2024-01-01T11:00:00',
+        recurrence: "['RRULE:FREQ=DAILY;UNTIL=20240131']"
+      };
+
+      const result = CreateEventSchema.parse(input);
+      expect(result.recurrence).toEqual(['RRULE:FREQ=DAILY;UNTIL=20240131']);
+    });
+
+    it('should accept native array of recurrence rules', () => {
+      const input = {
+        calendarId: 'primary',
+        summary: 'Test Event',
+        start: '2024-01-01T10:00:00',
+        end: '2024-01-01T11:00:00',
+        recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR']
+      };
+
+      const result = CreateEventSchema.parse(input);
+      expect(result.recurrence).toEqual(['RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR']);
+    });
+
+    it('should handle multiple recurrence rules in JSON string', () => {
+      const input = {
+        calendarId: 'primary',
+        summary: 'Test Event',
+        start: '2024-01-01T10:00:00',
+        end: '2024-01-01T11:00:00',
+        recurrence: '["RRULE:FREQ=WEEKLY;COUNT=10", "EXDATE:20240108T100000"]'
+      };
+
+      const result = CreateEventSchema.parse(input);
+      expect(result.recurrence).toEqual(['RRULE:FREQ=WEEKLY;COUNT=10', 'EXDATE:20240108T100000']);
+    });
+  });
 }); 

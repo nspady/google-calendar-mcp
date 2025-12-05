@@ -73,7 +73,7 @@ Client → Transport Layer → Schema Validation (Zod) → Handler → Google Ca
 ### Authentication System
 
 - **OAuth 2.0** with refresh token support
-- **Multi-account**: Supports `normal` (default) and `test` accounts via `GOOGLE_ACCOUNT_MODE` env var
+- **Multi-account**: Supports arbitrary account IDs (e.g., `work`, `personal`). Use `npm run account auth <id>`
 - **Token Storage**: `~/.config/google-calendar-mcp/tokens.json` (platform-specific paths)
 - **Token Validation**: Automatic refresh on expiry
 - **Components**:

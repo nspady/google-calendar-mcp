@@ -7,9 +7,13 @@ import { createStructuredResponse } from "../../utils/response-builder.js";
 import { GetCurrentTimeResponse } from "../../types/structured-responses.js";
 
 export class GetCurrentTimeHandler extends BaseToolHandler {
-    async runTool(args: any, oauth2Client: OAuth2Client): Promise<CallToolResult> {
+    async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
         // Validate arguments using schema
         const validArgs = args as GetCurrentTimeInput;
+
+        // Use specified account or default to first available account
+        // (get-current-time only needs any authenticated client for timezone lookup)
+        const oauth2Client = this.getClientForAccountOrFirst(args.account, accounts);
         
         const now = new Date();
         
