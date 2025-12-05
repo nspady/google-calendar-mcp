@@ -530,10 +530,28 @@ describe('CalendarRegistry', () => {
     });
 
     it('should handle "primary" as special calendar ID', async () => {
-      // Primary isn't in our mock data, so should return null
+      // "primary" is a special alias - with multiple accounts, falls back to first account
       const result = await registry.resolveCalendarNameToId('primary', accounts, 'read');
 
-      expect(result).toBeNull();
+      // With multiple accounts and no registry match, returns first account with 'primary' alias
+      expect(result).toEqual({
+        calendarId: 'primary',
+        accountId: 'work', // First account in the Map
+        accessRole: 'owner'
+      });
+    });
+
+    it('should handle "primary" with single account directly', async () => {
+      // With only one account, should use it directly without registry lookup
+      const singleAccount = new Map([['solo', workClient]]);
+
+      const result = await registry.resolveCalendarNameToId('primary', singleAccount, 'read');
+
+      expect(result).toEqual({
+        calendarId: 'primary',
+        accountId: 'solo',
+        accessRole: 'owner'
+      });
     });
   });
 

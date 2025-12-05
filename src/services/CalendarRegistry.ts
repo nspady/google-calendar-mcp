@@ -276,8 +276,28 @@ export class CalendarRegistry {
     accounts: Map<string, OAuth2Client>,
     operationType: 'read' | 'write' = 'read'
   ): Promise<{ calendarId: string; accountId: string; accessRole: string } | null> {
-    // If it looks like an ID (contains @ or is 'primary'), use getAccountForCalendar
-    if (nameOrId === 'primary' || nameOrId.includes('@')) {
+    // Special case: "primary" is an alias for each account's primary calendar
+    // When only one account exists, use it directly without registry lookup
+    if (nameOrId === 'primary') {
+      if (accounts.size === 1) {
+        const [accountId] = accounts.keys();
+        // Primary calendar always has owner access for the account owner
+        return { calendarId: 'primary', accountId, accessRole: 'owner' };
+      }
+      // Multiple accounts: try to find best match via registry
+      // Each account's primary calendar ID is typically the account email
+      const result = await this.getAccountForCalendar(nameOrId, accounts, operationType);
+      if (result) {
+        return { calendarId: nameOrId, ...result };
+      }
+      // If registry lookup fails with multiple accounts, use first account as fallback
+      // This maintains backwards compatibility while still working
+      const [firstAccountId] = accounts.keys();
+      return { calendarId: 'primary', accountId: firstAccountId, accessRole: 'owner' };
+    }
+
+    // If it looks like an ID (contains @), use getAccountForCalendar
+    if (nameOrId.includes('@')) {
       const result = await this.getAccountForCalendar(nameOrId, accounts, operationType);
       if (result) {
         return { calendarId: nameOrId, ...result };
