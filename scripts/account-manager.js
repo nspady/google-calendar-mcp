@@ -227,10 +227,10 @@ async function clearAccount(accountId) {
       success('All tokens cleared, file deleted');
     } else {
       await fs.writeFile(tokenPath, JSON.stringify(tokens, null, 2), { mode: 0o600 });
-      success(`Cleared tokens for ${accountMode} account`);
+      success(`Cleared tokens for ${accountId} account`);
     }
   } catch (error) {
-    error(`Failed to clear ${accountMode} account: ${error.message}`);
+    error(`Failed to clear ${accountId} account: ${error.message}`);
     process.exit(1);
   }
 }
