@@ -155,7 +155,22 @@ Along with the normal capabilities you would expect for a calendar integration y
    ```
    Which events tomorrow have attendees who have not accepted the invitation?
    ```
-5. Auto coordinate events:
+5. Respond to invitations:
+   ```
+   Accept the team meeting invitation on my calendar for tomorrow at 2pm
+   ```
+   Decline with a note:
+   ```
+   Decline the Friday meeting with a note that I have a scheduling conflict
+   ```
+   Respond to recurring events:
+   ```
+   Accept just this week's standup, but keep future instances as tentative
+   ```
+   ```
+   Decline all future Monday planning meetings
+   ```
+6. Auto coordinate events:
    ```
    Here's some available that was provided to me by someone. {available times}
    Take a look at the times provided and let me know which ones are open on my calendar.
@@ -171,6 +186,7 @@ Along with the normal capabilities you would expect for a calendar integration y
 | `create-event` | Create new calendar events |
 | `update-event` | Update existing events |
 | `delete-event` | Delete events |
+| `respond-to-event` | Respond to event invitations (Accept, Decline, Maybe, No Response) |
 | `get-freebusy` | Check availability across calendars, including external calendars |
 | `list-colors` | List available event colors |
 
