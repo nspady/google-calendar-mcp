@@ -10,6 +10,10 @@ import { TokenManager } from './auth/tokenManager.js';
 // Import tool registry
 import { ToolRegistry } from './tools/registry.js';
 
+// Import account management handler
+import { ManageAccountsHandler, ServerContext } from './handlers/core/ManageAccountsHandler.js';
+import { z } from 'zod';
+
 // Import transport handlers
 import { StdioTransportHandler } from './transports/stdio.js';
 import { HttpTransportHandler, HttpTransportConfig } from './transports/http.js';
@@ -68,19 +72,17 @@ export class GoogleCalendarMcpServer {
     const accountMode = this.tokenManager.getAccountMode();
     
     if (this.config.transport.type === 'stdio') {
-      // For stdio mode, ensure authentication before starting server
+      // For stdio mode, check for existing tokens
       const hasValidTokens = await this.tokenManager.validateTokens(accountMode);
       if (!hasValidTokens) {
-        // Ensure we're using the correct account mode (don't override it)
-        const authSuccess = await this.authServer.start(true); // openBrowser = true
-        if (!authSuccess) {
-          process.stderr.write(`Authentication failed for ${accountMode} account. Please check your OAuth credentials and try again.\n`);
-          process.exit(1);
-        }
-        process.stderr.write(`Successfully authenticated user.\n`);
-        this.accounts = await this.tokenManager.loadAllAccounts();
+        // No existing tokens - server will start but calendar tools won't work
+        // User can authenticate via the 'add-account' tool
+        process.stderr.write(`⚠️  No authenticated accounts found.\n`);
+        process.stderr.write(`Use the 'add-account' tool to authenticate a Google account, or run:\n`);
+        process.stderr.write(`  npx @cocal/google-calendar-mcp auth\n\n`);
+        // Don't exit - allow server to start so add-account tool is available
       } else {
-        process.stderr.write(`Valid ${accountMode} user tokens found, skipping authentication prompt.\n`);
+        process.stderr.write(`Valid ${accountMode} user tokens found.\n`);
         this.accounts = await this.tokenManager.loadAllAccounts();
       }
     } else {
@@ -98,6 +100,45 @@ export class GoogleCalendarMcpServer {
 
   private registerTools(): void {
     ToolRegistry.registerAll(this.server, this.executeWithHandler.bind(this));
+
+    // Register account management tools separately (they need special context)
+    this.registerAccountManagementTools();
+  }
+
+  /**
+   * Register the manage-accounts tool that needs access to server internals.
+   * This tool is special because it:
+   * - Doesn't require existing authentication (for 'add' action)
+   * - Needs access to authServer, tokenManager, etc.
+   */
+  private registerAccountManagementTools(): void {
+    const serverContext: ServerContext = {
+      oauth2Client: this.oauth2Client,
+      tokenManager: this.tokenManager,
+      authServer: this.authServer,
+      accounts: this.accounts,
+      reloadAccounts: async () => {
+        this.accounts = await this.tokenManager.loadAllAccounts();
+        return this.accounts;
+      }
+    };
+
+    const manageAccountsHandler = new ManageAccountsHandler();
+    this.server.tool(
+      'manage-accounts',
+      "Manage Google account authentication. Actions: 'list' (show accounts), 'add' (authenticate new account), 'remove' (remove account).",
+      {
+        action: z.enum(['list', 'add', 'remove'])
+          .describe("Action to perform: 'list' shows all accounts, 'add' authenticates a new account, 'remove' removes an account"),
+        account_id: z.string()
+          .regex(/^[a-z0-9_-]{1,64}$/, "Account ID must be 1-64 characters: lowercase letters, numbers, dashes, underscores only")
+          .optional()
+          .describe("Account identifier (e.g., 'work', 'personal'). Required for 'remove', optional for 'add' (defaults to 'normal'), optional for 'list' (shows all if omitted)")
+      },
+      async (args) => {
+        return manageAccountsHandler.runTool(args, serverContext);
+      }
+    );
   }
 
   private async ensureAuthenticated(): Promise<void> {

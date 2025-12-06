@@ -419,6 +419,40 @@ export class TokenManager {
     }
   }
 
+  /**
+   * Remove a specific account's tokens from storage.
+   * @param accountId - The account ID to remove
+   * @throws Error if account doesn't exist or removal fails
+   */
+  async removeAccount(accountId: string): Promise<void> {
+    const normalizedId = accountId.toLowerCase();
+
+    await this.enqueueTokenWrite(async () => {
+      const multiAccountTokens = await this.loadMultiAccountTokens();
+
+      if (!multiAccountTokens[normalizedId]) {
+        throw new Error(`Account "${normalizedId}" not found`);
+      }
+
+      delete multiAccountTokens[normalizedId];
+
+      // If no accounts left, delete the entire file
+      if (Object.keys(multiAccountTokens).length === 0) {
+        await fs.unlink(this.tokenPath);
+        process.stderr.write(`All tokens cleared, file deleted\n`);
+      } else {
+        await this.ensureTokenDirectoryExists();
+        await fs.writeFile(this.tokenPath, JSON.stringify(multiAccountTokens, null, 2), {
+          mode: 0o600,
+        });
+        process.stderr.write(`Account "${normalizedId}" removed successfully\n`);
+      }
+
+      // Remove from in-memory accounts map if present
+      this.accounts.delete(normalizedId);
+    });
+  }
+
   // Method to switch to a different account (supports arbitrary account IDs)
   async switchAccount(newMode: string): Promise<boolean> {
     this.accountMode = newMode;
