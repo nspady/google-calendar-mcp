@@ -104,13 +104,14 @@ export class RespondToEventHandler extends BaseToolHandler {
             };
 
             // 6. Patch the event with the updated attendee list
+            const actualSendUpdates = validArgs.sendUpdates || "none";
             const updateResponse = await calendar.events.patch({
                 calendarId: resolvedCalendarId,
                 eventId: targetEventId,
                 requestBody: {
                     attendees: updatedAttendees
                 },
-                sendUpdates: validArgs.sendUpdates || "none"
+                sendUpdates: actualSendUpdates
             });
 
             if (!updateResponse.data) {
@@ -131,6 +132,7 @@ export class RespondToEventHandler extends BaseToolHandler {
             const response: RespondToEventResponse = {
                 event: convertGoogleEventToStructured(updateResponse.data, resolvedCalendarId, selectedAccountId),
                 responseStatus: validArgs.response,
+                sendUpdates: actualSendUpdates,
                 message: message
             };
 

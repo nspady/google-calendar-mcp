@@ -245,6 +245,7 @@ export interface DeleteEventResponse {
 export interface RespondToEventResponse {
   event: StructuredEvent;
   responseStatus: 'accepted' | 'declined' | 'tentative' | 'needsAction';
+  sendUpdates: 'all' | 'externalOnly' | 'none';
   message: string;
 }
 

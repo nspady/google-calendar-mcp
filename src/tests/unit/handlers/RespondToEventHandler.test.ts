@@ -107,6 +107,7 @@ describe('RespondToEventHandler', () => {
       expect(result.content[0].type).toBe('text');
       const response = JSON.parse((result.content[0] as any).text);
       expect(response.responseStatus).toBe('accepted');
+      expect(response.sendUpdates).toBe('none');
       expect(response.message).toBe('Your response has been set to "accepted"');
       expect(response.event).toBeDefined();
     });
@@ -155,6 +156,7 @@ describe('RespondToEventHandler', () => {
 
       const response = JSON.parse((result.content[0] as any).text);
       expect(response.responseStatus).toBe('declined');
+      expect(response.sendUpdates).toBe('none');
     });
 
     it('should successfully respond with tentative (maybe)', async () => {
@@ -190,6 +192,7 @@ describe('RespondToEventHandler', () => {
 
       const response = JSON.parse((result.content[0] as any).text);
       expect(response.responseStatus).toBe('tentative');
+      expect(response.sendUpdates).toBe('none');
       expect(response.message).toBe('Your response has been set to "tentative"');
     });
 
@@ -215,13 +218,17 @@ describe('RespondToEventHandler', () => {
         sendUpdates: 'all' as const
       };
 
-      await handler.runTool(args, mockAccounts);
+      const result = await handler.runTool(args, mockAccounts);
 
       expect(mockCalendar.events.patch).toHaveBeenCalledWith(
         expect.objectContaining({
           sendUpdates: 'all'
         })
       );
+
+      // Verify response includes the sendUpdates value
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.sendUpdates).toBe('all');
     });
 
     it('should throw error when user is not an attendee', async () => {
