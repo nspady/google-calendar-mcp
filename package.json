@@ -1,6 +1,6 @@
 {
   "name": "@cocal/google-calendar-mcp",
-  "version": "2.0.7",
+  "version": "2.1.0",
   "description": "Google Calendar MCP Server with extensive support for calendar management",
   "type": "module",
   "main": "build/index.js",

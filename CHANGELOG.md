@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.1.0](https://github.com/nspady/google-calendar-mcp/compare/v2.0.7...v2.1.0) (2025-12-06)
+
+
+### Features
+
+* Multi-account support with smart calendar routing and security hardening ([#132](https://github.com/nspady/google-calendar-mcp/issues/132)) ([11fff7f](https://github.com/nspady/google-calendar-mcp/commit/11fff7f9206150f612c75fafca82c75dbff8268a))
+* respond-to-event tool with multi-account support ([#136](https://github.com/nspady/google-calendar-mcp/issues/136)) ([7ccfae4](https://github.com/nspady/google-calendar-mcp/commit/7ccfae44be387d8f484a731a7ecd622490a424e2))
+
+
+### Bug Fixes
+
+* handle "primary" calendar alias for single-account mode ([b3949d2](https://github.com/nspady/google-calendar-mcp/commit/b3949d2b0a1402f210332d61d53d35afc0168c1f))
+* prevent origin bypass via subdomain in HTTP transport ([f8cacd6](https://github.com/nspady/google-calendar-mcp/commit/f8cacd68d5509eb1872e6ebcf23723e672934ef4))
+
 ## [Unreleased]
 
 ### Added
