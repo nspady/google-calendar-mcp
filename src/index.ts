@@ -36,7 +36,18 @@ async function main() {
 
 
 // --- Command Line Interface ---
-async function runAuthServer(): Promise<void> {
+async function runAuthServer(accountId?: string): Promise<void> {
+  // Set account mode if specified
+  if (accountId) {
+    // Validate account ID format
+    if (!/^[a-z0-9_-]{1,64}$/.test(accountId)) {
+      process.stderr.write('Invalid account ID. Must be 1-64 characters: lowercase letters, numbers, dashes, underscores only.\n');
+      process.exit(1);
+    }
+    process.env.GOOGLE_ACCOUNT_MODE = accountId;
+    process.stderr.write(`Authenticating account: ${accountId}\n`);
+  }
+
   // Use the same logic as auth-server.ts
   try {
     // Initialize OAuth client
@@ -85,22 +96,25 @@ function showHelp(): void {
 Google Calendar MCP Server v${VERSION}
 
 Usage:
-  npx @cocal/google-calendar-mcp [command]
+  npx @cocal/google-calendar-mcp [command] [options]
 
 Commands:
-  auth     Run the authentication flow
-  start    Start the MCP server (default)
-  version  Show version information
-  help     Show this help message
+  auth [account-id]  Run the authentication flow
+                     Optional account-id for multi-account support (e.g., work, personal)
+  start              Start the MCP server (default)
+  version            Show version information
+  help               Show this help message
 
 Examples:
-  npx @cocal/google-calendar-mcp auth
+  npx @cocal/google-calendar-mcp auth              # Authenticate default account
+  npx @cocal/google-calendar-mcp auth work         # Authenticate "work" account
+  npx @cocal/google-calendar-mcp auth personal     # Authenticate "personal" account
   npx @cocal/google-calendar-mcp start
-  npx @cocal/google-calendar-mcp version
   npx @cocal/google-calendar-mcp
 
 Environment Variables:
   GOOGLE_OAUTH_CREDENTIALS    Path to OAuth credentials file
+  GOOGLE_ACCOUNT_MODE         Account ID to use (alternative to auth argument)
 `);
 }
 
@@ -113,46 +127,53 @@ function showVersion(): void {
 export { main, runAuthServer };
 
 // Parse CLI arguments
-function parseCliArgs(): { command: string | undefined } {
+function parseCliArgs(): { command: string | undefined; accountId: string | undefined } {
   const args = process.argv.slice(2);
   let command: string | undefined;
+  let accountId: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    
+
     // Handle special version/help flags as commands
     if (arg === '--version' || arg === '-v' || arg === '--help' || arg === '-h') {
       command = arg;
       continue;
     }
-    
+
     // Skip transport options and their values
     if (arg === '--transport' || arg === '--port' || arg === '--host') {
       i++; // Skip the next argument (the value)
       continue;
     }
-    
+
     // Skip other flags
     if (arg === '--debug') {
       continue;
     }
-    
+
     // Check for command (first non-option argument)
     if (!command && !arg.startsWith('--')) {
       command = arg;
       continue;
     }
+
+    // If command is 'auth', capture the next non-option argument as account ID
+    if (command === 'auth' && !accountId && !arg.startsWith('--')) {
+      accountId = arg;
+      continue;
+    }
   }
 
-  return { command };
+  return { command, accountId };
 }
 
 // CLI logic here (run always)
-const { command } = parseCliArgs();
+const { command, accountId } = parseCliArgs();
 
 switch (command) {
   case "auth":
-    runAuthServer().catch((error) => {
+    runAuthServer(accountId).catch((error) => {
       process.stderr.write(`Authentication failed: ${error}\n`);
       process.exit(1);
     });
