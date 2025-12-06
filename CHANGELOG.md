@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0](https://github.com/nspady/google-calendar-mcp/compare/v2.1.0...v2.2.0) (2025-12-06)
+
+
+### Features
+
+* support account-id in auth CLI command ([#137](https://github.com/nspady/google-calendar-mcp/issues/137)) ([cbdf2db](https://github.com/nspady/google-calendar-mcp/commit/cbdf2dbd13e8ad758b54281ba6248d0c0bf26165))
+
 ## [2.1.0](https://github.com/nspady/google-calendar-mcp/compare/v2.0.7...v2.1.0) (2025-12-06)
 
 
