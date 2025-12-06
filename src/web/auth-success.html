@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication Successful</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .token-path code {
+            color: var(--accent-primary);
+            font-size: 0.85em;
+        }
+    </style>
+</head>
+<body class="centered">
+    <div class="card">
+        <h1 class="success">Authentication Successful</h1>
+        <div class="info-box">
+            <p><strong>Account:</strong> <code>{{accountId}}</code></p>
+            <p>Your authentication tokens have been saved for the <strong>{{accountId}}</strong> account.</p>
+            {{email}}
+        </div>
+        {{tokenPath}}
+        <p>You can now close this browser window.</p>
+        {{closeButton}}
+    </div>
+{{script}}</body>
+</html>

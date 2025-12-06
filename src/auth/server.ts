@@ -5,6 +5,7 @@ import { URL } from 'url';
 import open from 'open';
 import { loadCredentials } from './client.js';
 import { getAccountMode } from './utils.js';
+import { renderAuthSuccess, renderAuthError, renderAuthLanding, loadWebFile } from '../web/templates.js';
 
 export interface StartForMcpToolResult {
   success: boolean;
@@ -34,7 +35,13 @@ export class AuthServer {
     const server = http.createServer(async (req, res) => {
       const url = new URL(req.url || '/', `http://${req.headers.host}`);
       
-      if (url.pathname === '/') {
+      if (url.pathname === '/styles.css') {
+        // Serve shared CSS
+        const css = await loadWebFile('styles.css');
+        res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8' });
+        res.end(css);
+
+      } else if (url.pathname === '/') {
         // Root route - show auth link
         const clientForUrl = this.flowOAuth2Client || this.baseOAuth2Client;
         const scopes = ['https://www.googleapis.com/auth/calendar'];
@@ -43,29 +50,34 @@ export class AuthServer {
           scope: scopes,
           prompt: 'consent'
         });
-        
+
         const accountMode = getAccountMode();
-        
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(`
-          <h1>Google Calendar Authentication</h1>
-          <p><strong>Account Mode:</strong> <code>${accountMode}</code></p>
-          <p>You are authenticating for the <strong>${accountMode}</strong> account.</p>
-          <a href="${authUrl}">Authenticate with Google</a>
-        `);
-        
+
+        const landingHtml = await renderAuthLanding({
+          accountId: accountMode,
+          authUrl: authUrl
+        });
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(landingHtml);
+
       } else if (url.pathname === '/oauth2callback') {
         // OAuth callback route
         const code = url.searchParams.get('code');
         if (!code) {
-          res.writeHead(400, { 'Content-Type': 'text/plain' });
-          res.end('Authorization code missing');
+          const errorHtml = await renderAuthError({
+            errorMessage: 'Authorization code missing'
+          });
+          res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(errorHtml);
           return;
         }
-        
+
         if (!this.flowOAuth2Client) {
-          res.writeHead(500, { 'Content-Type': 'text/plain' });
-          res.end('Authentication flow not properly initiated.');
+          const errorHtml = await renderAuthError({
+            errorMessage: 'Authentication flow not properly initiated.'
+          });
+          res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(errorHtml);
           return;
         }
         
@@ -90,67 +102,22 @@ export class AuthServer {
             }, 2000);
           }
           
-          res.writeHead(200, { 'Content-Type': 'text/html' });
-          res.end(`
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Authentication Successful</title>
-                <style>
-                    body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f4f4f4; margin: 0; }
-                    .container { text-align: center; padding: 2em; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-                    h1 { color: #4CAF50; }
-                    p { color: #333; margin-bottom: 0.5em; }
-                    code { background-color: #eee; padding: 0.2em 0.4em; border-radius: 3px; font-size: 0.9em; }
-                    .account-mode { background-color: #e3f2fd; padding: 1em; border-radius: 5px; margin: 1em 0; }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <h1>Authentication Successful!</h1>
-                    <div class="account-mode">
-                        <p><strong>Account Mode:</strong> <code>${accountMode}</code></p>
-                        <p>Your authentication tokens have been saved for the <strong>${accountMode}</strong> account.</p>
-                    </div>
-                    <p>Tokens saved to:</p>
-                    <p><code>${tokenPath}</code></p>
-                    <p>You can now close this browser window.</p>
-                </div>
-            </body>
-            </html>
-          `);
+          const successHtml = await renderAuthSuccess({
+            accountId: accountMode,
+            tokenPath: tokenPath
+          });
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(successHtml);
         } catch (error: unknown) {
           this.authCompletedSuccessfully = false;
           const message = error instanceof Error ? error.message : 'Unknown error';
           process.stderr.write(`✗ Token save failed: ${message}\n`);
 
-          res.writeHead(500, { 'Content-Type': 'text/html' });
-          res.end(`
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Authentication Failed</title>
-                <style>
-                    body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f4f4f4; margin: 0; }
-                    .container { text-align: center; padding: 2em; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-                    h1 { color: #F44336; }
-                    p { color: #333; }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <h1>Authentication Failed</h1>
-                    <p>An error occurred during authentication:</p>
-                    <p><code>${message}</code></p>
-                    <p>Please try again or check the server logs.</p>
-                </div>
-            </body>
-            </html>
-          `);
+          const errorHtml = await renderAuthError({
+            errorMessage: message
+          });
+          res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(errorHtml);
         }
       } else {
         // 404 for other routes

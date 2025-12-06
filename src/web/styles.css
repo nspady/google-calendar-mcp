@@ -1,0 +1,269 @@
+/**
+ * Shared CSS styles for Google Calendar MCP web pages
+ * Warm off-white color palette
+ */
+
+:root {
+    /* Background colors */
+    --bg-warm: #faf8f5;
+    --bg-warm-dark: #f5f2ed;
+    --card-bg: #fffdfb;
+
+    /* Text colors */
+    --text-primary: #6c6357;
+    --text-secondary: #6b6560;
+    --text-muted: #9a948e;
+
+    /* Border colors */
+    --border-warm: #e8e4df;
+    --border-warm-light: #f0ece7;
+
+    /* Accent colors */
+    --accent-primary: #c17f59;
+    --accent-primary-hover: #a86d4a;
+    --accent-success: #5d8a66;
+    --accent-success-light: #e8f2ea;
+    --accent-warning: #c49052;
+    --accent-warning-light: #fdf6ed;
+    --accent-danger: #b85c5c;
+    --accent-danger-light: #fceaea;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px rgba(61, 56, 50, 0.04);
+    --shadow-md: 0 4px 12px rgba(61, 56, 50, 0.08);
+    --shadow-lg: 0 8px 24px rgba(61, 56, 50, 0.12);
+
+    /* Border radius */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+}
+
+/* Reset */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Base body styles */
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg-warm);
+    color: var(--text-primary);
+    line-height: 1.6;
+    min-height: 100vh;
+}
+
+/* Centered page layout (for auth pages) */
+body.centered {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+}
+
+/* Card container */
+.card {
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    padding: 3rem 4rem;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border-warm-light);
+    min-width: 400px;
+    max-width: 600px;
+    text-align: center;
+}
+
+/* Typography */
+h1 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    letter-spacing: -0.02em;
+}
+
+h1.success {
+    color: var(--accent-success);
+}
+
+h1.error {
+    color: var(--accent-danger);
+}
+
+p {
+    color: var(--text-secondary);
+    margin: 0.75rem 0;
+    font-size: 1rem;
+}
+
+strong {
+    color: var(--text-primary);
+}
+
+code {
+    background-color: var(--border-warm-light);
+    padding: 0.25em 0.5em;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: var(--text-primary);
+}
+
+/* Info box */
+.info-box {
+    background: var(--bg-warm);
+    padding: 1.5rem;
+    border-radius: var(--radius-md);
+    margin: 1.5rem 0;
+    border: 1px solid var(--border-warm);
+}
+
+.info-box p {
+    margin: 0.5rem 0;
+}
+
+/* Error box */
+.error-box {
+    background: var(--accent-danger-light);
+    padding: 1rem;
+    border-radius: var(--radius-sm);
+    margin: 1rem 0;
+    border: 1px solid rgba(184, 92, 92, 0.2);
+    color: var(--accent-danger);
+    font-size: 0.9rem;
+    word-break: break-word;
+}
+
+/* Accent text */
+.accent {
+    color: var(--accent-primary);
+}
+
+/* Links */
+a {
+    color: var(--accent-primary);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+a:hover {
+    color: var(--accent-primary-hover);
+    text-decoration: underline;
+}
+
+/* Buttons */
+button, .btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-primary {
+    background: var(--accent-primary);
+    color: white;
+    box-shadow: 0 1px 2px rgba(193, 127, 89, 0.2);
+}
+
+.btn-primary:hover {
+    background: var(--accent-primary-hover);
+    box-shadow: 0 2px 4px rgba(193, 127, 89, 0.25);
+    transform: translateY(-1px);
+}
+
+.btn-danger {
+    background: transparent;
+    color: var(--accent-danger);
+    border: 1px solid var(--border-warm);
+}
+
+.btn-danger:hover {
+    background: var(--accent-danger-light);
+    border-color: var(--accent-danger);
+}
+
+.btn-warning {
+    background: var(--accent-warning);
+    color: white;
+    box-shadow: 0 1px 2px rgba(196, 144, 82, 0.2);
+}
+
+.btn-warning:hover {
+    background: #b5823f;
+    box-shadow: 0 2px 4px rgba(196, 144, 82, 0.25);
+    transform: translateY(-1px);
+}
+
+/* Forms */
+.form-group {
+    flex: 1;
+}
+
+label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+input[type="text"] {
+    width: 100%;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--border-warm);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    background: var(--bg-warm);
+    color: var(--text-primary);
+    transition: all 0.15s ease;
+}
+
+input[type="text"]::placeholder {
+    color: var(--text-muted);
+}
+
+input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    background: var(--card-bg);
+    box-shadow: 0 0 0 3px rgba(193, 127, 89, 0.1);
+}
+
+/* Notification messages */
+.message-error {
+    background: var(--accent-danger-light);
+    color: var(--accent-danger);
+    padding: 1rem 1.25rem;
+    border-radius: var(--radius-sm);
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    border: 1px solid rgba(184, 92, 92, 0.2);
+}
+
+.message-success {
+    background: var(--accent-success-light);
+    color: var(--accent-success);
+    padding: 1rem 1.25rem;
+    border-radius: var(--radius-sm);
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    border: 1px solid rgba(93, 138, 102, 0.2);
+}
+
+/* Utility states */
+.loading {
+    text-align: center;
+    padding: 2.5rem 1rem;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 2.5rem 1rem;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
