@@ -202,7 +202,7 @@ describe('ManageAccountsHandler', () => {
       const response = JSON.parse(result.content[0].text as string);
       expect(response.status).toBe('already_authenticated');
       expect(response.account_id).toBe('test');
-      expect(response.message).toContain('already authenticated');
+      expect(response.message).toContain('already connected');
 
       // Should NOT call startForMcpTool
       expect(mockAuthServer.startForMcpTool).not.toHaveBeenCalled();
