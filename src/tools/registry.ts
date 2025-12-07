@@ -765,7 +765,7 @@ export class ToolRegistry {
     },
     {
       name: "get-current-time",
-      description: "Get current time in the primary Google Calendar's timezone (or a requested timezone).",
+      description: "Get the current date and time. Call this FIRST before creating, updating, or searching for events to ensure you have accurate date context for scheduling.",
       schema: ToolSchemas['get-current-time'],
       handler: GetCurrentTimeHandler
     },
