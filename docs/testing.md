@@ -95,19 +95,6 @@ export OPENAI_MODEL="gpt-4o-mini"                   # Default
 - **OpenAI**: Only GPT-4+ and select GPT-3.5-turbo models support function calling.
 - If you see "tool not found" or "function not supported" errors, verify your model selection.
 
-### 3. Docker Integration Tests
-
-**Files:** `docker-integration.test.ts`
-
-**Requirements:**
-- Docker installed and running
-- Google OAuth credentials
-
-**What these tests do:**
-- ✅ Test containerized deployment
-- ✅ Validate HTTP transport mode
-- ✅ Test Docker environment configuration
-
 ### Running Specific Integration Test Types
 
 ```bash
@@ -148,7 +135,15 @@ npm run test:integration
 
 ### Complete Setup Example
 
-1. **Create `.env` file in project root:**
+1. **Obtain Google OAuth Credentials:**
+   - Go to [Google Cloud Console](https://console.cloud.google.com)
+   - Create a new project or select existing
+   - Enable Google Calendar API
+   - Create OAuth 2.0 credentials (Desktop app type)
+   - Download credentials JSON file
+   - Save as `gcp-oauth.keys.json` in project root
+
+2. **Create `.env` file in project root:**
 ```env
 # Required for all integration tests
 GOOGLE_OAUTH_CREDENTIALS=./gcp-oauth.keys.json
@@ -169,24 +164,6 @@ ANTHROPIC_MODEL=claude-3-5-haiku-20241022
 OPENAI_MODEL=gpt-4o-mini
 ```
 
-> **Tip:** Authenticate multiple accounts with `npm run account auth <nickname>` for each one (e.g., `work`, `personal`). All tokens share the same storage file, so integration tests can switch accounts by passing the `account` parameter.
-
-5. **Run multi-account integration tests (optional):**
-```bash
-export MULTI_ACCOUNT_TESTS=true
-export MULTI_ACCOUNT_IDS=work,personal
-vitest run src/tests/integration/multi-account.test.ts
-```
-These tests verify cross-account list-events merging. Each account listed in `MULTI_ACCOUNT_IDS` must already be authenticated.
-
-2. **Obtain Google OAuth Credentials:**
-   - Go to [Google Cloud Console](https://console.cloud.google.com)
-   - Create a new project or select existing
-   - Enable Google Calendar API
-   - Create OAuth 2.0 credentials (Desktop app type)
-   - Download credentials JSON file
-   - Save as `gcp-oauth.keys.json` in project root
-
 3. **Authenticate Test Account:**
 ```bash
 # Creates tokens in ~/.config/google-calendar-mcp/tokens.json
@@ -201,6 +178,16 @@ npm run dev account:status
 # Run a simple integration test
 npm run test:integration -- direct-integration.test.ts
 ```
+
+5. **Run multi-account integration tests (optional):**
+```bash
+export MULTI_ACCOUNT_TESTS=true
+export MULTI_ACCOUNT_IDS=work,personal
+vitest run src/tests/integration/multi-account.test.ts
+```
+These tests verify cross-account list-events merging. Each account listed in `MULTI_ACCOUNT_IDS` must already be authenticated.
+
+> **Tip:** Authenticate multiple accounts with `npm run account auth <nickname>` for each one (e.g., `work`, `personal`). All tokens share the same storage file, so integration tests can switch accounts by passing the `account` parameter.
 
 
 ## Troubleshooting
@@ -228,12 +215,6 @@ npm run test:integration -- direct-integration.test.ts
   - OpenAI: Ensure using GPT-4+ or compatible GPT-3.5-turbo model
 - **"Maximum tokens exceeded"**: Some complex tests may hit token limits with verbose models
 - **Network timeouts**: LLM tests may take 2-5 minutes due to AI processing time
-
-**Docker Integration Errors:**
-- **"Docker not found"**: Ensure Docker is installed and running
-- **Port conflicts**: Docker tests use port 3000 - ensure it's available
-- **Build failures**: Check Docker build logs for missing dependencies
-- **"Cannot connect to Docker daemon"**: Start Docker Desktop or daemon
 
 ### Test Data Management
 

@@ -12,8 +12,7 @@ OAuth 2.0 with refresh tokens, multi-account support, secure storage in `~/.conf
 ## Handler Architecture
 
 - `src/handlers/core/` - Individual tool handlers extending `BaseToolHandler`
-- `src/tools/registry.ts` - Auto-registration system discovers and registers handlers
-- `src/schemas/` - Input validation and type definitions
+- `src/tools/registry.ts` - Auto-registration, schemas (Zod), and type definitions
 
 ## Request Flow
 

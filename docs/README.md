@@ -10,7 +10,6 @@ Welcome to the Google Calendar MCP Server documentation.
 ## User Guides
 
 - [Advanced Usage](advanced-usage.md) - Multi-account, batch operations, smart scheduling
-- [Troubleshooting](troubleshooting.md) - Common issues and solutions
 
 ## Deployment
 
@@ -21,7 +20,6 @@ Welcome to the Google Calendar MCP Server documentation.
 - [Development Guide](development.md) - Contributing and development setup
 - [Architecture Overview](architecture.md) - Technical architecture details
 - [Testing Guide](testing.md) - Running and writing tests
-- [Development Scripts](development-scripts.md) - Using the dev command system
 
 ## Reference
 
@@ -33,7 +31,7 @@ Welcome to the Google Calendar MCP Server documentation.
 ### For Users
 1. Start with the [Main README](../README.md)
 2. Follow [Authentication Setup](authentication.md)
-3. Check [Troubleshooting](troubleshooting.md) if needed
+3. See [Advanced Usage](advanced-usage.md) for multi-account and batch operations
 
 ### For Developers
 1. Read [Architecture Overview](architecture.md)

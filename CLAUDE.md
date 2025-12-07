@@ -20,7 +20,7 @@ npm run test:watch                   # Unit tests in watch mode
 npm run dev test:integration:direct  # Direct integration tests (recommended for dev)
 npm run dev coverage                 # Generate test coverage report
 
-# Testing - Full Suite (rarely needed, incurrs LLM usage costs)
+# Testing - Full Suite (rarely needed, incurs LLM usage costs)
 npm run dev test:integration:claude  # Claude + MCP integration (requires CLAUDE_API_KEY)
 npm run dev test:integration:openai  # OpenAI + MCP integration (requires OPENAI_API_KEY)
 npm run dev test:integration:all     # All integration tests (requires all API keys)
@@ -56,8 +56,8 @@ Client → Transport Layer → Schema Validation (Zod) → Handler → Google Ca
 
 1. Create handler class in `src/handlers/core/YourToolHandler.ts`:
    - Extend `BaseToolHandler`
-   - Implement `runTool(args, oauth2Client)` method
-   - Use `this.getCalendar(oauth2Client)` to get Calendar API client
+   - Implement `runTool(args, accounts)` method where `accounts` is `Map<string, OAuth2Client>`
+   - Use `this.getCalendar(accounts)` to get Calendar API client
    - Use `this.handleGoogleApiError(error)` for error handling
 
 2. Define schema in `src/tools/registry.ts`:

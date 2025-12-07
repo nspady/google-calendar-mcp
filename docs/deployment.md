@@ -224,5 +224,3 @@ curl http://localhost:3000/health
 - Enable caching headers
 - Use CDN for static assets
 - Monitor memory usage
-
-See [Troubleshooting Guide](troubleshooting.md) for more solutions.

@@ -4,32 +4,7 @@ This guide covers advanced features and use cases for the Google Calendar MCP Se
 
 ## Multi-Account Support
 
-The server allows you to connect multiple Google accounts simultaneously (e.g., personal, work, family) and interact with all of them seamlessly.
-
-### Add or Remove Accounts
-
-| Workflow | How to Manage Accounts |
-|----------|------------------------|
-| **In chat (recommended)** | Use the `manage-accounts` tool |
-| **CLI** | `npm run account auth <nickname>` |
-| **HTTP / Docker** | Visit `http://localhost:3000/accounts` |
-
-The `manage-accounts` tool lets you add, list, and remove accounts directly from your AI assistant:
-
-```
-manage-accounts with action: "add", account_id: "work"      # Add account
-manage-accounts with action: "list"                          # List accounts
-manage-accounts with action: "remove", account_id: "work"   # Remove account
-```
-
-Or use the CLI for initial setup:
-
-```bash
-npm run account auth work      # Authenticate "work" account
-npm run account auth personal  # Authenticate "personal" account
-npm run account list           # List all accounts + status
-npm run account clear work     # Remove an account
-```
+The server allows you to connect multiple Google accounts simultaneously (e.g., personal, work, family) and interact with all of them seamlessly. See [Authentication Guide](authentication.md#managing-multiple-accounts) for setup instructions.
 
 ### Using Accounts with Tools
 
@@ -143,10 +118,10 @@ The server supports all Google Calendar recurrence rules:
 
 ## Timezone Handling
 
-All times require explicit timezone information:
-- Automatic timezone detection based on your calendar settings
-- Support for scheduling across timezones
+- If no timezone is specified, the server uses your calendar's default timezone
+- You can explicitly set a timezone using the `timeZone` parameter
 - Proper handling of daylight saving time transitions
+- Support for scheduling across timezones
 
 ### Availability Checking
 
@@ -211,7 +186,6 @@ Combine multiple criteria:
 
 Built-in protection against API limits:
 - Automatic retry with exponential backoff in batch operations
-- HTTP transport includes basic rate limiting (100 requests per IP per 15 minutes)
 
 ## Integration Examples
 
@@ -256,5 +230,3 @@ The server only requests necessary permissions:
 1. **Token refresh failures**: Check network connectivity
 2. **API quota exceeded**: Implement backoff strategies
 3. **Timezone mismatches**: Ensure consistent timezone usage
-
-See [Troubleshooting Guide](troubleshooting.md) for detailed solutions.

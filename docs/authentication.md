@@ -185,7 +185,7 @@ While your app is in test mode:
 
 Test mode tokens expire after 7 days. For personal use, you can simply re-authenticate weekly using the commands above. 
 
-If you need longer-lived tokens, you can publish your app to production mode in Google Cloud Console. The the number of users will be restricted unless the application completes a full approval review. Google will also warn that the app is unverified and required bypassing a warning screen. 
+If you need longer-lived tokens, you can publish your app to production mode in Google Cloud Console. The number of users will be restricted unless the application completes a full approval review. Google will also warn that the app is unverified, requiring users to bypass a warning screen. 
 
 
 ### Security Best Practices
@@ -212,5 +212,3 @@ If you need longer-lived tokens, you can publish your app to production mode in 
 ### "Token expired" error
 - Run `npm run auth` to re-authenticate
 - Check if you're in test mode (7-day expiration)
-
-See [Troubleshooting Guide](troubleshooting.md) for more issues and solutions.

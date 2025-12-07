@@ -30,8 +30,8 @@ npm test            # Run tests
 ## Adding New Tools
 
 1. Create handler in `src/handlers/core/NewToolHandler.ts`
-2. Define schema in `src/schemas/`  
-3. Add tests in `src/tests/`
-4. Auto-discovered by registry system
+2. Define schema in `src/tools/registry.ts` (add to `ToolSchemas` object)
+3. Register in `ToolRegistry.tools` array in the same file
+4. Add tests in `src/tests/`
 
-See existing handlers for patterns.
+See existing handlers and CLAUDE.md for patterns.
