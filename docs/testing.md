@@ -268,9 +268,6 @@ npm run test:integration -- direct-integration.test.ts
 ```bash
 # Debug all LLM interactions
 export DEBUG_LLM_INTERACTIONS=true
-
-# Debug MCP server
-export DEBUG=mcp:*
 ```
 
 2. **Run Single Test:**

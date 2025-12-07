@@ -251,12 +251,6 @@ The server only requests necessary permissions:
 
 ## Debugging
 
-### Enable Debug Logging
-
-```bash
-DEBUG=mcp:* npm start
-```
-
 ### Common Issues
 
 1. **Token refresh failures**: Check network connectivity
