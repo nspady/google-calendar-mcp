@@ -6,21 +6,27 @@
     <title>Authentication Successful</title>
     <link rel="stylesheet" href="styles.css">
     <style>
-        .token-path code {
-            color: var(--accent-primary);
+        .account-email {
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin: 0.25rem 0 0.75rem;
+        }
+        .account-label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+        .account-label code {
             font-size: 0.85em;
         }
     </style>
 </head>
 <body class="centered">
     <div class="card">
-        <h1 class="success">Authentication Successful</h1>
+        <h1 class="success">Account connected!</h1>
         <div class="info-box">
-            <p><strong>Account:</strong> <code>{{accountId}}</code></p>
-            <p>Your authentication tokens have been saved for the <strong>{{accountId}}</strong> account.</p>
-            {{email}}
+            {{accountInfo}}
         </div>
-        {{tokenPath}}
         <p>You can now close this browser window.</p>
         {{closeButton}}
     </div>

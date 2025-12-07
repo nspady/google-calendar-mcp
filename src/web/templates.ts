@@ -21,17 +21,30 @@ export function escapeHtml(text: string): string {
 
 /**
  * Load a file from the web directory (handles build vs source paths)
+ *
+ * When running from bundled code (build/index.js), __dirname is "build/"
+ * and web files are in "build/web/". When running from source, __dirname
+ * is "src/web/" and files are in the same directory.
  */
 export async function loadWebFile(fileName: string): Promise<string> {
-  // Try build location first, then source location
-  let filePath = path.join(__dirname, fileName); // build location
-  try {
-    await fs.access(filePath);
-  } catch {
-    // Build location doesn't exist, try source location
-    filePath = path.join(__dirname, '..', 'web', fileName);
+  // Possible locations for web files:
+  // 1. Same directory as this file (source: src/web/)
+  // 2. "web" subdirectory (bundled: build/web/)
+  const locations = [
+    path.join(__dirname, fileName),         // src/web/file.html (source)
+    path.join(__dirname, 'web', fileName),  // build/web/file.html (bundled)
+  ];
+
+  for (const filePath of locations) {
+    try {
+      await fs.access(filePath);
+      return fs.readFile(filePath, 'utf-8');
+    } catch {
+      // Try next location
+    }
   }
-  return fs.readFile(filePath, 'utf-8');
+
+  throw new Error(`Web file not found: ${fileName}. Tried: ${locations.join(', ')}`);
 }
 
 /**
@@ -56,14 +69,17 @@ export async function renderAuthSuccess(params: AuthSuccessParams): Promise<stri
   const template = await loadTemplate('auth-success.html');
   const safeAccountId = escapeHtml(params.accountId);
 
-  // Build optional sections
-  const emailSection = params.email
-    ? `<p class="email">${escapeHtml(params.email)}</p>`
-    : '';
-
-  const tokenPathSection = params.tokenPath
-    ? `<p>Tokens saved to:</p><p class="token-path"><code>${escapeHtml(params.tokenPath)}</code></p>`
-    : '';
+  // Build account info section - email is prominent, account ID is secondary
+  let accountInfoSection: string;
+  if (params.email) {
+    accountInfoSection = `
+      <p class="account-email">${escapeHtml(params.email)}</p>
+      <p class="account-label">Saved as <code>${safeAccountId}</code></p>`;
+  } else {
+    accountInfoSection = `
+      <p class="account-email">Account connected</p>
+      <p class="account-label">Saved as <code>${safeAccountId}</code></p>`;
+  }
 
   const closeButtonSection = params.showCloseButton
     ? `<button onclick="window.close()">Close Window</button>`
@@ -79,9 +95,7 @@ export async function renderAuthSuccess(params: AuthSuccessParams): Promise<stri
     : '';
 
   return template
-    .replace(/\{\{accountId\}\}/g, safeAccountId)
-    .replace('{{email}}', emailSection)
-    .replace('{{tokenPath}}', tokenPathSection)
+    .replace('{{accountInfo}}', accountInfoSection)
     .replace('{{closeButton}}', closeButtonSection)
     .replace('{{script}}', scriptSection);
 }
