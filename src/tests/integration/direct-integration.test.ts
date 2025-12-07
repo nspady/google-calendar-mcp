@@ -2758,6 +2758,88 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
     });
   });
 
+  describe('Account Management', () => {
+    describe('manage-accounts list', () => {
+      it('should list authenticated accounts with details', async () => {
+        const result = await client.callTool({
+          name: 'manage-accounts',
+          arguments: { action: 'list' }
+        }) as { content: Array<{ type: string; text: string }> };
+
+        const response = JSON.parse(result.content[0].text);
+        expect(response.total_accounts).toBeGreaterThan(0);
+        expect(response.accounts).toBeInstanceOf(Array);
+        expect(response.accounts[0]).toHaveProperty('account_id');
+        expect(response.accounts[0]).toHaveProperty('status');
+        expect(response.message).toBeDefined();
+
+        console.log(`✅ Listed ${response.total_accounts} account(s)`);
+      });
+
+      it('should return specific account when account_id provided', async () => {
+        // First get list to find an account
+        const listResult = await client.callTool({
+          name: 'manage-accounts',
+          arguments: { action: 'list' }
+        }) as { content: Array<{ type: string; text: string }> };
+
+        const accounts = JSON.parse(listResult.content[0].text).accounts;
+        if (accounts.length === 0) {
+          console.log('⚠️ No accounts to test specific lookup');
+          return;
+        }
+
+        const accountId = accounts[0].account_id;
+
+        // Then query specific account
+        const result = await client.callTool({
+          name: 'manage-accounts',
+          arguments: { action: 'list', account_id: accountId }
+        }) as { content: Array<{ type: string; text: string }> };
+
+        const response = JSON.parse(result.content[0].text);
+        expect(response.total_accounts).toBe(1);
+        expect(response.accounts[0].account_id).toBe(accountId);
+
+        console.log(`✅ Retrieved specific account: ${accountId}`);
+      });
+    });
+
+    // NOTE: 'add' action skipped in integration tests
+    // - Cannot complete OAuth flow (requires browser interaction)
+    // - Would leave auth server running until 5 min timeout
+    // - Fully covered by unit tests instead
+
+    describe('manage-accounts remove', () => {
+      // Note: Cannot test actual removal without affecting test auth
+      // Test error cases only
+
+      it('should reject removal of non-existent account', async () => {
+        const result = await client.callTool({
+          name: 'manage-accounts',
+          arguments: { action: 'remove', account_id: 'nonexistent-account-xyz' }
+        }) as { content: Array<{ type: string; text: string }> };
+
+        const text = result.content[0].text;
+        expect(text).toContain('not found');
+
+        console.log('✅ Correctly rejected removal of non-existent account');
+      });
+
+      it('should require account_id for remove action', async () => {
+        const result = await client.callTool({
+          name: 'manage-accounts',
+          arguments: { action: 'remove' }
+        }) as { content: Array<{ type: string; text: string }> };
+
+        const text = result.content[0].text;
+        expect(text).toContain('required');
+
+        console.log('✅ Correctly required account_id for remove action');
+      });
+    });
+  });
+
   describe('Performance Benchmarks', () => {
     it('should complete basic operations within reasonable time limits', async () => {
       // Create a test event for performance testing

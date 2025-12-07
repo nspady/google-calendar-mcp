@@ -20,7 +20,8 @@
 - **Multi-account support**: Connect and manage multiple Google accounts simultaneously
   - Query events across all accounts with automatic result merging
   - Permission-based account auto-selection for write operations
-  - Case-insensitive account IDs and calendar name resolution
+  - Case-insensitive account nicknames and calendar name resolution
+- **`manage-accounts` tool**: Add, list, and remove Google accounts directly from chat - no terminal or browser needed
 - **Account management UI**: Web-based interface at `/accounts` endpoint (HTTP mode)
 - **CalendarRegistry service**: Centralized calendar discovery with caching and deduplication
 

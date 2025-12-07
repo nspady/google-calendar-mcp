@@ -91,7 +91,7 @@ export class ManageAccountsHandler {
       const response: AccountStatusResponse = {
         accounts: [],
         total_accounts: 0,
-        message: "No authenticated accounts found. Use manage-accounts with action 'add' to authenticate a new Google account."
+        message: "No authenticated accounts found. Use manage-accounts with action 'add' and provide a nickname to connect a Google account."
       };
 
       return {
@@ -173,7 +173,14 @@ export class ManageAccountsHandler {
 
   // ============ ADD ACTION ============
   private async addAccount(accountId: string | undefined, context: ServerContext): Promise<CallToolResult> {
-    const normalizedId = (accountId || 'normal').toLowerCase();
+    if (!accountId) {
+      throw new McpError(
+        ErrorCode.InvalidRequest,
+        "account_id is required for 'add' action. Provide a nickname like 'work' or 'personal' to identify this account."
+      );
+    }
+
+    const normalizedId = accountId.toLowerCase();
 
     // Validate account ID format
     try {
@@ -181,7 +188,7 @@ export class ManageAccountsHandler {
     } catch (error) {
       throw new McpError(
         ErrorCode.InvalidRequest,
-        error instanceof Error ? error.message : 'Invalid account ID format'
+        error instanceof Error ? error.message : 'Invalid account nickname format'
       );
     }
 
@@ -190,7 +197,7 @@ export class ManageAccountsHandler {
       const response: AddAccountResponse = {
         status: 'already_authenticated',
         account_id: normalizedId,
-        message: `Account "${normalizedId}" is already authenticated. Use action 'list' to view account details.`
+        message: `An account with nickname "${normalizedId}" is already connected. Use action 'list' to view account details.`
       };
 
       return {
@@ -221,9 +228,9 @@ export class ManageAccountsHandler {
         account_id: normalizedId,
         auth_url: started.authUrl!,
         callback_url: started.callbackUrl!,
-        instructions: 'Visit the auth_url in your browser to authenticate with Google. The page will confirm when authentication is complete.',
+        instructions: `Visit the auth_url in your browser to connect your Google account. This will be saved with the nickname '${normalizedId}'.`,
         expires_in_minutes: 5,
-        next_step: "After authenticating in your browser, use manage-accounts with action 'list' to verify the account was added successfully."
+        next_step: "After authenticating in your browser, use manage-accounts with action 'list' to verify the account was connected successfully."
       };
 
       return {
@@ -248,7 +255,7 @@ export class ManageAccountsHandler {
     if (!accountId) {
       throw new McpError(
         ErrorCode.InvalidRequest,
-        "account_id is required for 'remove' action"
+        "account_id is required for 'remove' action. Specify the nickname of the account to remove."
       );
     }
 
@@ -260,7 +267,7 @@ export class ManageAccountsHandler {
     } catch (error) {
       throw new McpError(
         ErrorCode.InvalidRequest,
-        error instanceof Error ? error.message : 'Invalid account ID format'
+        error instanceof Error ? error.message : 'Invalid account nickname format'
       );
     }
 
@@ -280,7 +287,7 @@ export class ManageAccountsHandler {
     if (accounts.size === 1) {
       throw new McpError(
         ErrorCode.InvalidRequest,
-        `Cannot remove the last authenticated account. Use action 'add' to add another account first, then remove this one.`
+        `Cannot remove the last authenticated account. Use action 'add' to connect another account first, then remove this one.`
       );
     }
 

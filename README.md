@@ -118,15 +118,11 @@ See [Authentication Guide](docs/authentication.md#moving-to-production-mode-reco
 
 Connect multiple Google accounts and use them simultaneously.
 
-**CLI / stdio:**
-```bash
-npm run account auth work      # Add "work" account
-npm run account auth personal  # Add "personal" account
-npm run account list           # List all accounts
-```
+**In chat (recommended):** Use the `manage-accounts` tool to add, list, or remove accounts directly from your AI assistant - no terminal needed. See the [Authentication Guide](docs/authentication.md#managing-multiple-accounts) for details.
 
-**HTTP / Docker:**
-Visit `http://localhost:3000/accounts` to manage accounts in the browser.
+**CLI:** For initial setup, use `npm run account auth <nickname>` (e.g., `npm run account auth work`).
+
+**HTTP / Docker:** Visit `http://localhost:3000/accounts` to manage accounts in the browser.
 
 When no `account` parameter is supplied to a tool, read-only tools merge results from all accounts, while write tools auto-select the account with appropriate permissions.
 

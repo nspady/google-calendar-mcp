@@ -137,7 +137,29 @@ The server will guide you through the authentication flow again.
 
 The server supports connecting multiple Google accounts simultaneously (e.g., "work", "personal", "family").
 
-### Using the CLI (Stdio / Claude Desktop)
+### Using the manage-accounts Tool (Recommended)
+
+The easiest way to manage accounts is directly from your AI assistant using the `manage-accounts` tool. No terminal or browser required!
+
+**List connected accounts:**
+```
+manage-accounts with action: "list"
+```
+
+**Add a new account:**
+```
+manage-accounts with action: "add", account_id: "work"
+```
+This returns an authentication URL. Click it, sign in with Google, and you're done. The `account_id` is a nickname you choose to identify this account.
+
+**Remove an account:**
+```
+manage-accounts with action: "remove", account_id: "work"
+```
+
+### Using the CLI
+
+For initial setup or scripting, you can use the command line:
 
 ```bash
 npm run account auth work      # Add "work" account
@@ -146,14 +168,9 @@ npm run account list           # List all accounts + status
 npm run account clear work     # Remove an account
 ```
 
-### Using the Web UI (Docker / HTTP)
+### Using the Web UI (HTTP Mode)
 
-If you are running the server in HTTP mode or via Docker, you can manage accounts through the built-in web interface.
-
-1.  Open your browser to `http://localhost:3000/accounts` (or the port you configured).
-2.  Use the **Add Account** form to enter an account ID (e.g., "work").
-3.  Click **Add Account** and complete the Google OAuth flow in the popup window.
-4.  The account will appear in the list below. You can also re-authenticate or remove accounts from this view.
+If running in HTTP mode or via Docker, visit `http://localhost:3000/accounts` to manage accounts through a web interface.
 
 ## Important Notes
 

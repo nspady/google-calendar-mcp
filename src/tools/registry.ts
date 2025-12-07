@@ -105,10 +105,10 @@ const sharedExtendedPropertySchema = z
 
 // Single account schema - for write operations (create, update, delete)
 const singleAccountSchema = z.string()
-  .regex(/^[a-z0-9_-]{1,64}$/, "Account ID must be 1-64 characters: lowercase letters, numbers, dashes, underscores only")
+  .regex(/^[a-z0-9_-]{1,64}$/, "Account nickname must be 1-64 characters: lowercase letters, numbers, dashes, underscores only")
   .optional()
   .describe(
-    "Account ID to use for this operation (e.g., 'work', 'personal'). Optional when only one account is authenticated - will auto-select the account with appropriate permissions. Use 'list-calendars' to see available accounts."
+    "Account nickname to use for this operation (e.g., 'work', 'personal') - the friendly name you gave when connecting the account. Optional when only one account is connected - will auto-select the account with appropriate permissions. Use 'list-calendars' to see available accounts."
   );
 
 // Account ID validation regex
@@ -145,16 +145,16 @@ const multiAccountSchema = z.preprocess(
   parseAccountJsonString,
   z.union([
     z.string()
-      .regex(accountIdRegex, "Account ID must be 1-64 characters: lowercase letters, numbers, dashes, underscores only"),
+      .regex(accountIdRegex, "Account nickname must be 1-64 characters: lowercase letters, numbers, dashes, underscores only"),
     z.array(z.string()
-      .regex(accountIdRegex, "Account ID must be 1-64 characters: lowercase letters, numbers, dashes, underscores only"))
-      .min(1, "At least one account ID is required")
+      .regex(accountIdRegex, "Account nickname must be 1-64 characters: lowercase letters, numbers, dashes, underscores only"))
+      .min(1, "At least one account nickname is required")
       .max(10, "Maximum 10 accounts allowed per request")
   ])
 )
   .optional()
   .describe(
-    "Account ID(s) to query (e.g., 'work' or ['work', 'personal']). Optional - if omitted, queries all authenticated accounts and merges results. Use 'list-calendars' to see available accounts."
+    "Account nickname(s) to query (e.g., 'work' or ['work', 'personal']) - the friendly names you gave when connecting accounts. Optional - if omitted, queries all connected accounts and merges results. Use 'list-calendars' to see available accounts."
   );
 
 // Define all tool schemas with TypeScript inference
@@ -518,7 +518,7 @@ export const ToolSchemas = {
 
   'get-freebusy': z.object({
     account: multiAccountSchema.describe(
-      "Account ID(s) to query from (e.g., 'work' or ['work', 'personal']). Optional - if omitted, queries from all authenticated accounts to maximize calendar accessibility."
+      "Account nickname(s) to query from (e.g., 'work' or ['work', 'personal']). Optional - if omitted, queries from all connected accounts to maximize calendar accessibility."
     ),
     calendars: z.array(z.object({
       id: z.string().describe("ID of the calendar (use 'primary' for the main calendar)")
@@ -559,7 +559,7 @@ export const ToolSchemas = {
     calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
     eventId: z.string().describe("ID of the event to respond to"),
     account: z.string().optional().describe(
-      "Account ID to use for this operation (e.g., 'work', 'personal'). Optional when only one account is authenticated - will auto-select the account with appropriate permissions. Use 'list-calendars' to see available accounts."
+      "Account nickname to use for this operation (e.g., 'work', 'personal'). Optional when only one account is connected - will auto-select the account with appropriate permissions. Use 'list-calendars' to see available accounts."
     ),
     response: z.enum(["accepted", "declined", "tentative", "needsAction"]).describe(
       "Your response to the event invitation: 'accepted' (accept), 'declined' (decline), 'tentative' (maybe), 'needsAction' (no response)"

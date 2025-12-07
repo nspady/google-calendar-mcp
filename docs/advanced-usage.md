@@ -8,10 +8,21 @@ The server allows you to connect multiple Google accounts simultaneously (e.g., 
 
 ### Add or Remove Accounts
 
-| Workflow | How to Add Accounts |
-|----------|---------------------|
-| **CLI / stdio** | `npm run account auth work` |
+| Workflow | How to Manage Accounts |
+|----------|------------------------|
+| **In chat (recommended)** | Use the `manage-accounts` tool |
+| **CLI** | `npm run account auth <nickname>` |
 | **HTTP / Docker** | Visit `http://localhost:3000/accounts` |
+
+The `manage-accounts` tool lets you add, list, and remove accounts directly from your AI assistant:
+
+```
+manage-accounts with action: "add", account_id: "work"      # Add account
+manage-accounts with action: "list"                          # List accounts
+manage-accounts with action: "remove", account_id: "work"   # Remove account
+```
+
+Or use the CLI for initial setup:
 
 ```bash
 npm run account auth work      # Authenticate "work" account

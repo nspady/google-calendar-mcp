@@ -131,9 +131,9 @@ export class GoogleCalendarMcpServer {
         action: z.enum(['list', 'add', 'remove'])
           .describe("Action to perform: 'list' shows all accounts, 'add' authenticates a new account, 'remove' removes an account"),
         account_id: z.string()
-          .regex(/^[a-z0-9_-]{1,64}$/, "Account ID must be 1-64 characters: lowercase letters, numbers, dashes, underscores only")
+          .regex(/^[a-z0-9_-]{1,64}$/, "Account nickname must be 1-64 characters: lowercase letters, numbers, dashes, underscores only")
           .optional()
-          .describe("Account identifier (e.g., 'work', 'personal'). Required for 'remove', optional for 'add' (defaults to 'normal'), optional for 'list' (shows all if omitted)")
+          .describe("Account nickname (e.g., 'work', 'personal') - a friendly name to identify this Google account. Required for 'add' and 'remove'. Optional for 'list' (shows all if omitted)")
       },
       async (args) => {
         return manageAccountsHandler.runTool(args, serverContext);

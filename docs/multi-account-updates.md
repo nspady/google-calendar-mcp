@@ -13,7 +13,7 @@ This document tracks the ongoing work required to provide seamless multi-account
 
 ## Usage Notes
 
-1. **CLI / stdio**: run `npm run account auth <accountId>` for every account you want to connect. The server automatically picks the right account for each operation.
+1. **CLI / stdio**: run `npm run account auth <nickname>` for every account you want to connect (e.g., `work`, `personal`). The server automatically picks the right account for each operation.
 2. **HTTP / Docker**: visit `http://<host>:<port>/accounts` to add, re-auth, or remove accounts with a browser.
 3. **Tool parameters**: pass `account: "work"` (or `["work","personal"]`) to target specific accounts. Omitting `account` lets read-only tools merge data from every authenticated account, while write tools pick the account that has the highest permission on the requested calendar.
 
