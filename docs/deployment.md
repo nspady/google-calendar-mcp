@@ -187,17 +187,6 @@ Always use HTTPS in production:
 curl http://localhost:3000/health
 ```
 
-### Logging
-
-```bash
-# Enable debug logging
-DEBUG=mcp:* npm run start:http
-
-# JSON logging for production
-NODE_ENV=production npm run start:http
-```
-
-
 ## Production Checklist
 
 **OAuth App Setup:**
@@ -235,5 +224,3 @@ NODE_ENV=production npm run start:http
 - Enable caching headers
 - Use CDN for static assets
 - Monitor memory usage
-
-See [Troubleshooting Guide](troubleshooting.md) for more solutions.

@@ -51,13 +51,24 @@ if (isWatch) {
     await chmod(buildOptions.outfile, 0o755);
   }
 
-  // Copy static files (HTML, etc.) to build directory
+  // Copy static files (HTML, CSS, etc.) to build directory
   const { mkdir, copyFile } = await import('fs/promises');
   const webDir = join(__dirname, '../build/web');
   await mkdir(webDir, { recursive: true });
-  await copyFile(
-    join(__dirname, '../src/web/accounts.html'),
-    join(webDir, 'accounts.html')
-  );
+
+  const staticFiles = [
+    'accounts.html',
+    'auth-landing.html',
+    'auth-success.html',
+    'auth-error.html',
+    'styles.css'
+  ];
+
+  await Promise.all(staticFiles.map(file =>
+    copyFile(
+      join(__dirname, '../src/web', file),
+      join(webDir, file)
+    )
+  ));
   process.stderr.write('Static files copied to build directory\n');
 } 

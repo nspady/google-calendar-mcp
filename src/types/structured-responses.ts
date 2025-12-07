@@ -343,6 +343,57 @@ export interface GetCurrentTimeResponse {
 }
 
 /**
+ * Response format for adding a new account via OAuth
+ */
+export interface AddAccountResponse {
+  status: 'awaiting_authentication' | 'already_authenticated' | 'error';
+  account_id: string;
+  auth_url?: string;
+  callback_url?: string;
+  instructions?: string;
+  expires_in_minutes?: number;
+  next_step?: string;
+  message?: string;
+  error?: string;
+}
+
+/**
+ * Information about a single authenticated account
+ */
+export interface AccountInfo {
+  account_id: string;
+  status: 'active' | 'expired' | 'invalid' | 'error';
+  email?: string;
+  calendar_count?: number;
+  primary_calendar?: {
+    id: string;
+    name: string;
+    timezone: string;
+  };
+  token_expiry?: string;
+  error?: string;
+}
+
+/**
+ * Response format for account status queries
+ */
+export interface AccountStatusResponse {
+  accounts: AccountInfo[];
+  total_accounts: number;
+  message?: string;
+}
+
+/**
+ * Response format for removing an account
+ */
+export interface RemoveAccountResponse {
+  success: boolean;
+  account_id: string;
+  message: string;
+  remaining_accounts: string[];
+}
+
+/**
  * Converts a Google Calendar API event to our structured format
  * @param event - The Google Calendar API event object
  * @param calendarId - Optional calendar ID to include in the response

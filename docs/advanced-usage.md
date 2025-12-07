@@ -4,21 +4,7 @@ This guide covers advanced features and use cases for the Google Calendar MCP Se
 
 ## Multi-Account Support
 
-The server allows you to connect multiple Google accounts simultaneously (e.g., personal, work, family) and interact with all of them seamlessly.
-
-### Add or Remove Accounts
-
-| Workflow | How to Add Accounts |
-|----------|---------------------|
-| **CLI / stdio** | `npm run account auth work` |
-| **HTTP / Docker** | Visit `http://localhost:3000/accounts` |
-
-```bash
-npm run account auth work      # Authenticate "work" account
-npm run account auth personal  # Authenticate "personal" account
-npm run account list           # List all accounts + status
-npm run account clear work     # Remove an account
-```
+The server allows you to connect multiple Google accounts simultaneously (e.g., personal, work, family) and interact with all of them seamlessly. See [Authentication Guide](authentication.md#managing-multiple-accounts) for setup instructions.
 
 ### Using Accounts with Tools
 
@@ -132,10 +118,10 @@ The server supports all Google Calendar recurrence rules:
 
 ## Timezone Handling
 
-All times require explicit timezone information:
-- Automatic timezone detection based on your calendar settings
-- Support for scheduling across timezones
+- If no timezone is specified, the server uses your calendar's default timezone
+- You can explicitly set a timezone using the `timeZone` parameter
 - Proper handling of daylight saving time transitions
+- Support for scheduling across timezones
 
 ### Availability Checking
 
@@ -200,7 +186,6 @@ Combine multiple criteria:
 
 Built-in protection against API limits:
 - Automatic retry with exponential backoff in batch operations
-- HTTP transport includes basic rate limiting (100 requests per IP per 15 minutes)
 
 ## Integration Examples
 
@@ -240,16 +225,8 @@ The server only requests necessary permissions:
 
 ## Debugging
 
-### Enable Debug Logging
-
-```bash
-DEBUG=mcp:* npm start
-```
-
 ### Common Issues
 
 1. **Token refresh failures**: Check network connectivity
 2. **API quota exceeded**: Implement backoff strategies
 3. **Timezone mismatches**: Ensure consistent timezone usage
-
-See [Troubleshooting Guide](troubleshooting.md) for detailed solutions.

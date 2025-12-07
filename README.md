@@ -4,15 +4,14 @@ A Model Context Protocol (MCP) server that provides Google Calendar integration 
 
 ## Features
 
-- **Multi-Account Support**: Connect and query multiple Google accounts simultaneously (e.g. work, personal)
-- **Multi-Calendar Support**: List events from multiple calendars simultaneously
-- **Multi-Account Access**: Connect personal, work, and test Google accounts at the same time
+- **Multi-Account Support**: Connect multiple Google accounts (e.g., work, personal) and query them simultaneously
+- **Multi-Calendar Support**: List events from multiple calendars in a single request
 - **Cross-Account Conflicts**: Detect overlapping events across any combination of calendars
 - **Event Management**: Create, update, delete, and search calendar events
 - **Recurring Events**: Advanced modification capabilities for recurring events
 - **Free/Busy Queries**: Check availability across calendars
 - **Smart Scheduling**: Natural language understanding for dates and times
-- **Inteligent Import**: Add calendar events from images, PDFs or web links
+- **Intelligent Import**: Add calendar events from images, PDFs, or web links
 
 ## Quick Start
 
@@ -110,23 +109,19 @@ npm run auth
 **To avoid weekly re-authentication**, publish your app to production mode (without verification):
 1. Go to Google Cloud Console → "APIs & Services" → "OAuth consent screen"
 2. Click "PUBLISH APP" and confirm
-3. Your tokens will no longer expire after 7 days but Google will show a more threatning warning when connecting to the app about it being unverified. 
+3. Your tokens will no longer expire after 7 days but Google will show a warning about the app being unverified. 
 
-See [Authentication Guide](docs/authentication.md#moving-to-production-mode-recommended) for details.
+See [Authentication Guide](docs/authentication.md#avoiding-token-expiration) for details.
 
 ## Managing Multiple Accounts
 
 Connect multiple Google accounts and use them simultaneously.
 
-**CLI / stdio:**
-```bash
-npm run account auth work      # Add "work" account
-npm run account auth personal  # Add "personal" account
-npm run account list           # List all accounts
-```
+**In chat (recommended):** Use the `manage-accounts` tool to add, list, or remove accounts directly from your AI assistant - no terminal needed. See the [Authentication Guide](docs/authentication.md#managing-multiple-accounts) for details.
 
-**HTTP / Docker:**
-Visit `http://localhost:3000/accounts` to manage accounts in the browser.
+**CLI:** For initial setup, use `npm run account auth <nickname>` (e.g., `npm run account auth work`).
+
+**HTTP / Docker:** Visit `http://localhost:3000/accounts` to manage accounts in the browser.
 
 When no `account` parameter is supplied to a tool, read-only tools merge results from all accounts, while write tools auto-select the account with appropriate permissions.
 
@@ -172,7 +167,7 @@ Along with the normal capabilities you would expect for a calendar integration y
    ```
 6. Auto coordinate events:
    ```
-   Here's some available that was provided to me by someone. {available times}
+   Here's some availability that was provided to me by someone. {available times}
    Take a look at the times provided and let me know which ones are open on my calendar.
    ```
 
@@ -182,13 +177,16 @@ Along with the normal capabilities you would expect for a calendar integration y
 |------|-------------|
 | `list-calendars` | List all available calendars |
 | `list-events` | List events with date filtering |
+| `get-event` | Get details of a specific event by ID |
 | `search-events` | Search events by text query |
 | `create-event` | Create new calendar events |
 | `update-event` | Update existing events |
 | `delete-event` | Delete events |
 | `respond-to-event` | Respond to event invitations (Accept, Decline, Maybe, No Response) |
 | `get-freebusy` | Check availability across calendars, including external calendars |
+| `get-current-time` | Get current date and time in calendar's timezone |
 | `list-colors` | List available event colors |
+| `manage-accounts` | Add, list, or remove connected Google accounts |
 
 ## Documentation
 
@@ -196,7 +194,6 @@ Along with the normal capabilities you would expect for a calendar integration y
 - [Advanced Usage](docs/advanced-usage.md) - Multi-account, batch operations
 - [Deployment Guide](docs/deployment.md) - HTTP transport, remote access
 - [Docker Guide](docs/docker.md) - Docker deployment with stdio and HTTP modes
-- [OAuth Verification](docs/oauth-verification.md) - Moving from test to production mode
 - [Architecture](docs/architecture.md) - Technical architecture overview
 - [Development](docs/development.md) - Contributing and testing
 - [Testing](docs/testing.md) - Unit and integration testing guide
@@ -207,11 +204,6 @@ Along with the normal capabilities you would expect for a calendar integration y
 **Environment Variables:**
 - `GOOGLE_OAUTH_CREDENTIALS` - Path to OAuth credentials file
 - `GOOGLE_CALENDAR_MCP_TOKEN_PATH` - Custom token storage location (optional)
-
-**Claude Desktop Config Location:**
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-
 
 ## Security
 
@@ -236,25 +228,14 @@ Along with the normal capabilities you would expect for a calendar integration y
    - Check Node.js version (use LTS)
    - Delete the `build/` directory and run `npm run build`
 4. **"Something went wrong" screen during browser authentication**
-   - Perform manual authentication per the below steps
-   - Use a Chromium-based browser to open the authentication URL. Test app authentication may not be supported on some non-Chromium browsers.
+   - Run the auth command manually (see [Re-authentication](#re-authentication) above)
+   - Use a Chromium-based browser. Test app authentication may not work on some non-Chromium browsers.
 
 5. **"User Rate Limit Exceeded" errors**
    - This typically occurs when your OAuth credentials are missing project information
    - Ensure your `gcp-oauth.keys.json` file includes `project_id`
    - Re-download credentials from Google Cloud Console if needed
    - The file should have format: `{"installed": {"project_id": "your-project-id", ...}}`
-
-### Manual Authentication
-For re-authentication or troubleshooting:
-```bash
-# For npx installations
-export GOOGLE_OAUTH_CREDENTIALS="/path/to/your/credentials.json"
-npx @cocal/google-calendar-mcp auth
-
-# For local installations
-npm run auth
-```
 
 ## License
 
