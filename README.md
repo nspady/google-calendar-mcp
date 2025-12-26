@@ -1,5 +1,8 @@
 # Google Calendar MCP Server
 
+[![Run in Smithery](https://smithery.ai/badge/skills/nspady)](https://smithery.ai/skills?ns=nspady&utm_source=github&utm_medium=badge)
+
+
 A Model Context Protocol (MCP) server that provides Google Calendar integration for AI assistants like Claude.
 
 ## Features
