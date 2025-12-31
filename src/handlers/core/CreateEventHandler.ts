@@ -119,6 +119,7 @@ export class CreateEventHandler extends BaseToolHandler {
                 extendedProperties: args.extendedProperties,
                 attachments: args.attachments,
                 source: args.source,
+                eventType: args.eventType,
                 ...(args.eventId && { id: args.eventId }) // Include custom ID if provided
             };
             
