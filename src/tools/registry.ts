@@ -364,11 +364,11 @@ export const ToolSchemas = {
     allowDuplicates: z.boolean().optional().describe(
       "If true, allows creation even when exact duplicates are detected (similarity >= 0.95). Default is false which blocks duplicate creation"
     ),
-    eventType: z.enum(["default", "focusTime", "outOfOffice", "workingLocation"]).optional().describe(
-      "Type of the event. 'default' for regular events, 'focusTime' for Focus Time blocks, 'outOfOffice' for Out of Office, 'workingLocation' for Working Location events."
+    eventType: z.enum(["default", "focusTime"]).optional().describe(
+      "Type of the event. 'default' for regular events, 'focusTime' for Focus Time blocks."
     )
   }),
-  
+
   'update-event': z.object({
     account: singleAccountSchema,
     calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
@@ -470,8 +470,8 @@ export const ToolSchemas = {
       iconLink: z.string().optional().describe("URL link to the attachment's icon"),
       fileId: z.string().optional().describe("ID of the attached Google Drive file")
     })).optional().describe("File attachments for the event"),
-    eventType: z.enum(["default", "focusTime", "outOfOffice", "workingLocation"]).optional().describe(
-      "Type of the event. 'default' for regular events, 'focusTime' for Focus Time blocks, 'outOfOffice' for Out of Office, 'workingLocation' for Working Location events."
+    eventType: z.enum(["default", "focusTime"]).optional().describe(
+      "Type of the event. 'default' for regular events, 'focusTime' for Focus Time blocks."
     )
   }).refine(
     (data) => {
