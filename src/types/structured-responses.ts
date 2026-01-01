@@ -73,6 +73,41 @@ export interface Reminder {
 }
 
 /**
+ * Focus Time event properties (Google Workspace feature)
+ */
+export interface FocusTimeProperties {
+  autoDeclineMode?: 'declineNone' | 'declineAllConflictingInvitations' | 'declineOnlyNewConflictingInvitations';
+  chatStatus?: 'available' | 'doNotDisturb';
+  declineMessage?: string;
+}
+
+/**
+ * Out of Office event properties (Google Workspace feature)
+ */
+export interface OutOfOfficeProperties {
+  autoDeclineMode?: 'declineNone' | 'declineAllConflictingInvitations' | 'declineOnlyNewConflictingInvitations';
+  declineMessage?: string;
+}
+
+/**
+ * Working Location event properties (Google Workspace feature)
+ */
+export interface WorkingLocationProperties {
+  type?: 'homeOffice' | 'officeLocation' | 'customLocation';
+  homeOffice?: Record<string, unknown>;
+  officeLocation?: {
+    label?: string;
+    buildingId?: string;
+    floorId?: string;
+    floorSectionId?: string;
+    deskId?: string;
+  };
+  customLocation?: {
+    label?: string;
+  };
+}
+
+/**
  * Complete structured representation of a Google Calendar event
  */
 export interface StructuredEvent {
@@ -121,6 +156,9 @@ export interface StructuredEvent {
     fileId?: string;
   }>;
   eventType?: 'default' | 'outOfOffice' | 'focusTime' | 'workingLocation';
+  focusTimeProperties?: FocusTimeProperties;
+  outOfOfficeProperties?: OutOfOfficeProperties;
+  workingLocationProperties?: WorkingLocationProperties;
   conferenceData?: ConferenceData;
   extendedProperties?: ExtendedProperties;
   hangoutLink?: string;
@@ -476,6 +514,9 @@ export function convertGoogleEventToStructured(
       fileId: a.fileId ?? undefined,
     })),
     eventType: event.eventType as any,
+    focusTimeProperties: event.focusTimeProperties as FocusTimeProperties,
+    outOfOfficeProperties: event.outOfOfficeProperties as OutOfOfficeProperties,
+    workingLocationProperties: event.workingLocationProperties as WorkingLocationProperties,
     conferenceData: event.conferenceData as ConferenceData,
     extendedProperties: event.extendedProperties as ExtendedProperties,
     hangoutLink: event.hangoutLink ?? undefined,

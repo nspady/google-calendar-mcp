@@ -735,4 +735,141 @@ describe('CreateEventHandler', () => {
       expect(callArgs.sendUpdates).toBe('all');
     });
   });
+
+  describe('Focus Time Events', () => {
+    it('should create a focus time event with eventType', async () => {
+      const mockCreatedEvent = {
+        id: 'focus-time-123',
+        summary: 'Focus Time',
+        eventType: 'focusTime',
+        transparency: 'opaque',
+        start: { dateTime: '2025-01-15T10:00:00Z' },
+        end: { dateTime: '2025-01-15T12:00:00Z' }
+      };
+
+      mockCalendar.events.insert.mockResolvedValue({ data: mockCreatedEvent });
+
+      const args = {
+        calendarId: 'primary',
+        summary: 'Focus Time',
+        start: '2025-01-15T10:00:00',
+        end: '2025-01-15T12:00:00',
+        eventType: 'focusTime' as const
+      };
+
+      await handler.runTool(args, mockAccounts);
+
+      expect(mockCalendar.events.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestBody: expect.objectContaining({
+            eventType: 'focusTime',
+            transparency: 'opaque' // Auto-set for focusTime
+          })
+        })
+      );
+    });
+
+    it('should auto-set transparency to opaque for focusTime events', async () => {
+      const mockCreatedEvent = {
+        id: 'focus-time-123',
+        summary: 'Deep Work',
+        eventType: 'focusTime',
+        transparency: 'opaque'
+      };
+
+      mockCalendar.events.insert.mockResolvedValue({ data: mockCreatedEvent });
+
+      const args = {
+        calendarId: 'primary',
+        summary: 'Deep Work',
+        start: '2025-01-15T14:00:00',
+        end: '2025-01-15T16:00:00',
+        eventType: 'focusTime' as const
+        // Note: no transparency specified - should auto-set to opaque
+      };
+
+      await handler.runTool(args, mockAccounts);
+
+      expect(mockCalendar.events.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestBody: expect.objectContaining({
+            transparency: 'opaque'
+          })
+        })
+      );
+    });
+
+    it('should respect explicit transparency for focusTime events', async () => {
+      const mockCreatedEvent = {
+        id: 'focus-time-123',
+        summary: 'Optional Focus',
+        eventType: 'focusTime',
+        transparency: 'transparent'
+      };
+
+      mockCalendar.events.insert.mockResolvedValue({ data: mockCreatedEvent });
+
+      const args = {
+        calendarId: 'primary',
+        summary: 'Optional Focus',
+        start: '2025-01-15T14:00:00',
+        end: '2025-01-15T16:00:00',
+        eventType: 'focusTime' as const,
+        transparency: 'transparent' as const // Explicitly set to transparent
+      };
+
+      await handler.runTool(args, mockAccounts);
+
+      expect(mockCalendar.events.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestBody: expect.objectContaining({
+            transparency: 'transparent'
+          })
+        })
+      );
+    });
+
+    it('should create focus time event with focusTimeProperties', async () => {
+      const mockCreatedEvent = {
+        id: 'focus-time-123',
+        summary: 'Focus Time',
+        eventType: 'focusTime',
+        focusTimeProperties: {
+          autoDeclineMode: 'declineAllConflictingInvitations',
+          chatStatus: 'doNotDisturb',
+          declineMessage: 'I am in focus time'
+        }
+      };
+
+      mockCalendar.events.insert.mockResolvedValue({ data: mockCreatedEvent });
+
+      const args = {
+        calendarId: 'primary',
+        summary: 'Focus Time',
+        start: '2025-01-15T10:00:00',
+        end: '2025-01-15T12:00:00',
+        eventType: 'focusTime' as const,
+        focusTimeProperties: {
+          autoDeclineMode: 'declineAllConflictingInvitations' as const,
+          chatStatus: 'doNotDisturb' as const,
+          declineMessage: 'I am in focus time'
+        }
+      };
+
+      await handler.runTool(args, mockAccounts);
+
+      expect(mockCalendar.events.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestBody: expect.objectContaining({
+            eventType: 'focusTime',
+            focusTimeProperties: {
+              autoDeclineMode: 'declineAllConflictingInvitations',
+              chatStatus: 'doNotDisturb',
+              declineMessage: 'I am in focus time'
+            }
+          })
+        })
+      );
+    });
+  });
 });
