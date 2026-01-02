@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.0](https://github.com/nspady/google-calendar-mcp/compare/v2.2.0...v2.3.0) (2026-01-02)
+
+
+### Features
+
+* Add Focus Time, Out of Office, and Working Location event types ([#144](https://github.com/nspady/google-calendar-mcp/issues/144)) ([ee5f870](https://github.com/nspady/google-calendar-mcp/commit/ee5f870830d0c9f10b01d3624ebd2c24764bf928))
+
 ## [2.2.0](https://github.com/nspady/google-calendar-mcp/compare/v2.1.0...v2.2.0) (2025-12-07)
 
 
