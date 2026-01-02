@@ -132,6 +132,7 @@ export class RecurringEventHelpers {
     if (args.anyoneCanAddSelf !== undefined && args.anyoneCanAddSelf !== null) requestBody.anyoneCanAddSelf = args.anyoneCanAddSelf;
     if (args.extendedProperties !== undefined && args.extendedProperties !== null) requestBody.extendedProperties = args.extendedProperties;
     if (args.attachments !== undefined && args.attachments !== null) requestBody.attachments = args.attachments;
+    if (args.eventType !== undefined && args.eventType !== null) requestBody.eventType = args.eventType;
 
     // Handle time changes - use createTimeObject to support both timed and all-day events
     const effectiveTimeZone = args.timeZone || defaultTimeZone;

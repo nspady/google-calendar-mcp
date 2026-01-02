@@ -98,7 +98,12 @@ export class CreateEventHandler extends BaseToolHandler {
             
             // Use provided timezone or calendar's default timezone
             const timezone = args.timeZone || await this.getCalendarTimezone(client, args.calendarId);
-            
+
+            // Auto-set transparency to 'opaque' for focusTime if not specified
+            const transparency = args.eventType === 'focusTime' && !args.transparency
+                ? 'opaque'
+                : args.transparency;
+
             const requestBody: calendar_v3.Schema$Event = {
                 summary: args.summary,
                 description: args.description,
@@ -109,7 +114,7 @@ export class CreateEventHandler extends BaseToolHandler {
                 colorId: args.colorId,
                 reminders: args.reminders,
                 recurrence: args.recurrence,
-                transparency: args.transparency,
+                transparency: transparency,
                 visibility: args.visibility,
                 guestsCanInviteOthers: args.guestsCanInviteOthers,
                 guestsCanModify: args.guestsCanModify,
@@ -119,7 +124,9 @@ export class CreateEventHandler extends BaseToolHandler {
                 extendedProperties: args.extendedProperties,
                 attachments: args.attachments,
                 source: args.source,
-                ...(args.eventId && { id: args.eventId }) // Include custom ID if provided
+                eventType: args.eventType,
+                ...(args.eventId && { id: args.eventId }), // Include custom ID if provided
+                ...(args.focusTimeProperties && { focusTimeProperties: args.focusTimeProperties })
             };
             
             // Determine if we need to enable conference data or attachments
