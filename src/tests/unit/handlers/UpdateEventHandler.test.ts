@@ -270,6 +270,139 @@ describe('UpdateEventHandler', () => {
       expect(response.event).toBeDefined();
     });
 
+    it('should preserve existing attendee responseStatus when adding new attendees', async () => {
+      // Existing event has attendees with responseStatus
+      const existingEventWithAttendees = {
+        recurrence: null,
+        attendees: [
+          { email: 'alice@example.com', responseStatus: 'accepted', displayName: 'Alice' },
+          { email: 'bob@example.com', responseStatus: 'tentative', displayName: 'Bob' }
+        ]
+      };
+
+      const mockUpdatedEvent = {
+        id: 'event123',
+        summary: 'Meeting',
+        attendees: [
+          { email: 'alice@example.com', responseStatus: 'accepted', displayName: 'Alice' },
+          { email: 'bob@example.com', responseStatus: 'tentative', displayName: 'Bob' },
+          { email: 'room@resource.calendar.google.com' }
+        ]
+      };
+
+      mockCalendar.events.get.mockResolvedValue({ data: existingEventWithAttendees });
+      mockCalendar.events.patch.mockResolvedValue({ data: mockUpdatedEvent });
+
+      const args = {
+        calendarId: 'primary',
+        eventId: 'event123',
+        attendees: [
+          { email: 'alice@example.com' },
+          { email: 'bob@example.com' },
+          { email: 'room@resource.calendar.google.com' }  // New meeting room
+        ]
+      };
+
+      await handler.runTool(args, mockAccounts);
+
+      // Verify that existing attendees preserve their responseStatus
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+        calendarId: 'primary',
+        eventId: 'event123',
+        requestBody: expect.objectContaining({
+          attendees: [
+            { email: 'alice@example.com', responseStatus: 'accepted', displayName: 'Alice' },
+            { email: 'bob@example.com', responseStatus: 'tentative', displayName: 'Bob' },
+            { email: 'room@resource.calendar.google.com' }
+          ]
+        })
+      });
+    });
+
+    it('should handle case-insensitive email matching when merging attendees', async () => {
+      const existingEventWithAttendees = {
+        recurrence: null,
+        attendees: [
+          { email: 'Alice@Example.COM', responseStatus: 'accepted' }
+        ]
+      };
+
+      const mockUpdatedEvent = {
+        id: 'event123',
+        summary: 'Meeting',
+        attendees: [
+          { email: 'Alice@Example.COM', responseStatus: 'accepted' }
+        ]
+      };
+
+      mockCalendar.events.get.mockResolvedValue({ data: existingEventWithAttendees });
+      mockCalendar.events.patch.mockResolvedValue({ data: mockUpdatedEvent });
+
+      const args = {
+        calendarId: 'primary',
+        eventId: 'event123',
+        attendees: [
+          { email: 'alice@example.com' }  // Different case
+        ]
+      };
+
+      await handler.runTool(args, mockAccounts);
+
+      // Should match existing attendee despite case difference
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+        calendarId: 'primary',
+        eventId: 'event123',
+        requestBody: expect.objectContaining({
+          attendees: [
+            { email: 'Alice@Example.COM', responseStatus: 'accepted' }
+          ]
+        })
+      });
+    });
+
+    it('should remove attendees not in the new list', async () => {
+      const existingEventWithAttendees = {
+        recurrence: null,
+        attendees: [
+          { email: 'alice@example.com', responseStatus: 'accepted' },
+          { email: 'bob@example.com', responseStatus: 'declined' },
+          { email: 'charlie@example.com', responseStatus: 'tentative' }
+        ]
+      };
+
+      const mockUpdatedEvent = {
+        id: 'event123',
+        summary: 'Meeting',
+        attendees: [
+          { email: 'alice@example.com', responseStatus: 'accepted' }
+        ]
+      };
+
+      mockCalendar.events.get.mockResolvedValue({ data: existingEventWithAttendees });
+      mockCalendar.events.patch.mockResolvedValue({ data: mockUpdatedEvent });
+
+      const args = {
+        calendarId: 'primary',
+        eventId: 'event123',
+        attendees: [
+          { email: 'alice@example.com' }  // Only keep Alice
+        ]
+      };
+
+      await handler.runTool(args, mockAccounts);
+
+      // Bob and Charlie should be removed
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+        calendarId: 'primary',
+        eventId: 'event123',
+        requestBody: expect.objectContaining({
+          attendees: [
+            { email: 'alice@example.com', responseStatus: 'accepted' }
+          ]
+        })
+      });
+    });
+
     it('should update reminders', async () => {
       const mockUpdatedEvent = {
         id: 'event123',

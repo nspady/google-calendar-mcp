@@ -18,12 +18,12 @@ import {
 
 export class UpdateEventHandler extends BaseToolHandler {
     private conflictDetectionService: ConflictDetectionService;
-    
+
     constructor() {
         super();
         this.conflictDetectionService = new ConflictDetectionService();
     }
-    
+
     async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
         const validArgs = args as UpdateEventInput;
 
@@ -36,30 +36,39 @@ export class UpdateEventHandler extends BaseToolHandler {
             'write'
         );
 
-        // Check for conflicts if enabled
-        let conflicts = null;
-        if (validArgs.checkConflicts !== false && (validArgs.start || validArgs.end)) {
-            // Get the existing event to merge with updates
-            const calendar = this.getCalendar(oauth2Client);
-            const existingEvent = await calendar.events.get({
+        const calendar = this.getCalendar(oauth2Client);
+
+        // Fetch existing event if needed for conflict checking or attendees merge
+        const needsExistingEvent =
+            (validArgs.checkConflicts !== false && (validArgs.start || validArgs.end)) ||
+            (validArgs.attendees !== undefined && validArgs.attendees !== null);
+
+        let existingEvent: calendar_v3.Schema$Event | null = null;
+        if (needsExistingEvent) {
+            const existingEventResponse = await calendar.events.get({
                 calendarId: resolvedCalendarId,
                 eventId: validArgs.eventId
             });
+            existingEvent = existingEventResponse.data;
 
-            if (!existingEvent.data) {
+            if (!existingEvent) {
                 throw new Error('Event not found');
             }
+        }
 
+        // Check for conflicts if enabled
+        let conflicts = null;
+        if (validArgs.checkConflicts !== false && (validArgs.start || validArgs.end) && existingEvent) {
             // Create updated event object for conflict checking
             const timezone = validArgs.timeZone || await this.getCalendarTimezone(oauth2Client, resolvedCalendarId);
             const eventToCheck: calendar_v3.Schema$Event = {
-                ...existingEvent.data,
+                ...existingEvent,
                 id: validArgs.eventId,
-                summary: validArgs.summary || existingEvent.data.summary,
-                description: validArgs.description || existingEvent.data.description,
-                start: validArgs.start ? createTimeObject(validArgs.start, timezone) : existingEvent.data.start,
-                end: validArgs.end ? createTimeObject(validArgs.end, timezone) : existingEvent.data.end,
-                location: validArgs.location || existingEvent.data.location,
+                summary: validArgs.summary || existingEvent.summary,
+                description: validArgs.description || existingEvent.description,
+                start: validArgs.start ? createTimeObject(validArgs.start, timezone) : existingEvent.start,
+                end: validArgs.end ? createTimeObject(validArgs.end, timezone) : existingEvent.end,
+                location: validArgs.location || existingEvent.location,
             };
 
             // Check for conflicts
@@ -75,9 +84,19 @@ export class UpdateEventHandler extends BaseToolHandler {
             );
         }
 
-        // Update the event with resolved calendar ID
-        const argsWithResolvedCalendar = { ...validArgs, calendarId: resolvedCalendarId };
-        const event = await this.updateEventWithScope(oauth2Client, argsWithResolvedCalendar);
+        // Merge attendees if provided - preserve existing attendee properties (responseStatus, etc.)
+        let argsWithMergedAttendees: UpdateEventInput & { calendarId: string } = { ...validArgs, calendarId: resolvedCalendarId };
+        if (validArgs.attendees !== undefined && validArgs.attendees !== null && existingEvent) {
+            const mergedAttendees = this.mergeAttendees(existingEvent.attendees || [], validArgs.attendees);
+            // Cast needed because mergeAttendees returns full attendee objects with responseStatus etc.
+            argsWithMergedAttendees = {
+                ...argsWithMergedAttendees,
+                attendees: mergedAttendees as UpdateEventInput['attendees']
+            };
+        }
+
+        // Update the event with resolved calendar ID and merged attendees
+        const event = await this.updateEventWithScope(oauth2Client, argsWithMergedAttendees);
 
         // Create structured response
         const response: UpdateEventResponse = {
@@ -264,6 +283,39 @@ export class UpdateEventHandler extends BaseToolHandler {
 
         if (!response.data) throw new Error('Failed to create new recurring event');
         return response.data;
+    }
+
+    /**
+     * Merge new attendees with existing attendees, preserving properties like responseStatus.
+     * - Existing attendees: keep all their properties (responseStatus, displayName, etc.)
+     * - New attendees (not in existing list): add with only the provided email
+     */
+    private mergeAttendees(
+        existingAttendees: calendar_v3.Schema$EventAttendee[],
+        newAttendees: Array<{ email: string }>
+    ): calendar_v3.Schema$EventAttendee[] {
+        const existingByEmail = new Map<string, calendar_v3.Schema$EventAttendee>();
+        for (const attendee of existingAttendees) {
+            if (attendee.email) {
+                existingByEmail.set(attendee.email.toLowerCase(), attendee);
+            }
+        }
+
+        const mergedAttendees: calendar_v3.Schema$EventAttendee[] = [];
+
+        // Process new attendees list - preserve existing data or add new
+        for (const newAttendee of newAttendees) {
+            const existing = existingByEmail.get(newAttendee.email.toLowerCase());
+            if (existing) {
+                // Preserve all existing properties (responseStatus, displayName, etc.)
+                mergedAttendees.push(existing);
+            } else {
+                // New attendee - add with only the email
+                mergedAttendees.push({ email: newAttendee.email });
+            }
+        }
+
+        return mergedAttendees;
     }
 
 }
