@@ -1,6 +1,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { parseArgs } from '../../../config/TransportConfig.js';
 import { ToolRegistry } from '../../../tools/registry.js';
+import { GoogleCalendarMcpServer } from '../../../server.js';
+
+// Mock dependencies for server tests
+vi.mock('../../../auth/client.js', () => ({
+  initializeOAuth2Client: vi.fn().mockResolvedValue({})
+}));
+vi.mock('../../../auth/server.js', () => ({
+  AuthServer: vi.fn().mockImplementation(() => ({}))
+}));
+vi.mock('../../../auth/tokenManager.js', () => ({
+  TokenManager: vi.fn().mockImplementation(() => ({
+    loadAllAccounts: vi.fn().mockResolvedValue(new Map()),
+    validateTokens: vi.fn().mockResolvedValue(true),
+    getAccountMode: vi.fn().mockReturnValue('default')
+  }))
+}));
 
 describe('Tool Filtering', () => {
   describe('parseArgs', () => {
@@ -123,6 +139,49 @@ describe('Tool Filtering', () => {
     it('should return an array', () => {
       const toolNames = ToolRegistry.getAvailableToolNames();
       expect(Array.isArray(toolNames)).toBe(true);
+    });
+  });
+
+  describe('Server Instructions', () => {
+    it('should generate instructions listing disabled tools when filtering is active', () => {
+      const config = {
+        transport: { type: 'stdio' as const },
+        enabledTools: ['list-events', 'get-current-time']
+      };
+
+      // Access private method via any cast for testing
+      const server = new GoogleCalendarMcpServer(config);
+      const instructions = (server as any).generateInstructions();
+
+      expect(instructions).toContain('Tool filtering is active');
+      expect(instructions).toContain('create-event');
+      expect(instructions).toContain('delete-event');
+      expect(instructions).not.toContain('list-events');
+      expect(instructions).not.toContain('get-current-time');
+    });
+
+    it('should return undefined when no filtering is active', () => {
+      const config = {
+        transport: { type: 'stdio' as const }
+      };
+
+      const server = new GoogleCalendarMcpServer(config);
+      const instructions = (server as any).generateInstructions();
+
+      expect(instructions).toBeUndefined();
+    });
+
+    it('should return undefined when all tools are enabled', () => {
+      const allTools = ToolRegistry.getAvailableToolNames();
+      const config = {
+        transport: { type: 'stdio' as const },
+        enabledTools: allTools
+      };
+
+      const server = new GoogleCalendarMcpServer(config);
+      const instructions = (server as any).generateInstructions();
+
+      expect(instructions).toBeUndefined();
     });
   });
 });

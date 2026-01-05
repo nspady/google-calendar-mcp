@@ -33,8 +33,28 @@ export class GoogleCalendarMcpServer {
     this.config = config;
     this.server = new McpServer({
       name: "google-calendar",
-      version: "1.3.0"
+      version: "1.3.0",
+      instructions: this.generateInstructions()
     });
+  }
+
+  /**
+   * Generate server instructions, including info about disabled tools if filtering is active.
+   */
+  private generateInstructions(): string | undefined {
+    if (!this.config.enabledTools || this.config.enabledTools.length === 0) {
+      return undefined;
+    }
+
+    const allTools = ToolRegistry.getAvailableToolNames();
+    const enabledSet = new Set(this.config.enabledTools);
+    const disabledTools = allTools.filter(t => !enabledSet.has(t));
+
+    if (disabledTools.length === 0) {
+      return undefined;
+    }
+
+    return `Tool filtering is active. The following tools are available but currently disabled: ${disabledTools.join(', ')}. To enable them, update the ENABLED_TOOLS configuration.`;
   }
 
   async initialize(): Promise<void> {

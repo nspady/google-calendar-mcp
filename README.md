@@ -238,6 +238,8 @@ npx @cocal/google-calendar-mcp start --enable-tools list-events,create-event,get
 
 **Note:** The `manage-accounts` tool is always available regardless of filtering, as it's needed for authentication management.
 
+When tool filtering is active, the server provides instructions to the AI assistant listing which tools are disabled. This allows the AI to inform users that additional functionality exists but is currently unavailable, without consuming the full token cost of those tool schemas.
+
 If the list is empty or contains only commas, the server will fail to start with an error.
 
 If an invalid tool name is specified, the server will fail to start with an error listing all available tools.
