@@ -99,7 +99,7 @@ export class GoogleCalendarMcpServer {
   }
 
   private registerTools(): void {
-    ToolRegistry.registerAll(this.server, this.executeWithHandler.bind(this));
+    ToolRegistry.registerAll(this.server, this.executeWithHandler.bind(this), this.config);
 
     // Register account management tools separately (they need special context)
     this.registerAccountManagementTools();
