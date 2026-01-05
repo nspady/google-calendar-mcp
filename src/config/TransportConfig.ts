@@ -10,6 +10,20 @@ export interface ServerConfig {
   enabledTools?: string[];
 }
 
+function parseEnabledTools(value: string | undefined, source: string): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const parsed = value.split(',').map(t => t.trim()).filter(t => t.length > 0);
+  if (parsed.length === 0) {
+    process.stderr.write(`Error: ${source} requires at least one tool name\n`);
+    process.exit(1);
+  }
+
+  return parsed;
+}
+
 export function parseArgs(args: string[]): ServerConfig {
   // Start with environment variables as base config
   const config: ServerConfig = {
@@ -19,9 +33,7 @@ export function parseArgs(args: string[]): ServerConfig {
       host: process.env.HOST || '127.0.0.1'
     },
     debug: process.env.DEBUG === 'true' || false,
-    enabledTools: process.env.ENABLED_TOOLS
-      ? process.env.ENABLED_TOOLS.split(',').map(t => t.trim()).filter(t => t.length > 0)
-      : undefined
+    enabledTools: parseEnabledTools(process.env.ENABLED_TOOLS, 'ENABLED_TOOLS')
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -49,7 +61,7 @@ export function parseArgs(args: string[]): ServerConfig {
           process.stderr.write('Error: --enable-tools requires a comma-separated list of tool names\n');
           process.exit(1);
         }
-        config.enabledTools = enabledTools.split(',').map(t => t.trim()).filter(t => t.length > 0);
+        config.enabledTools = parseEnabledTools(enabledTools, '--enable-tools');
         break;
       case '--help':
         process.stderr.write(`

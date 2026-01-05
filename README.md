@@ -234,9 +234,11 @@ npx @cocal/google-calendar-mcp start --enable-tools list-events,create-event,get
 }
 ```
 
-**Available tool names:** `list-calendars`, `list-events`, `search-events`, `get-event`, `list-colors`, `create-event`, `update-event`, `delete-event`, `get-freebusy`, `get-current-time`, `respond-to-event`, `set-out-of-office`, `set-working-location`
+**Available tool names:** `list-calendars`, `list-events`, `search-events`, `get-event`, `list-colors`, `create-event`, `update-event`, `delete-event`, `get-freebusy`, `get-current-time`, `respond-to-event`, `set-out-of-office`, `set-working-location`, `manage-accounts`
 
 **Note:** The `manage-accounts` tool is always available regardless of filtering, as it's needed for authentication management.
+
+If the list is empty or contains only commas, the server will fail to start with an error.
 
 If an invalid tool name is specified, the server will fail to start with an error listing all available tools.
 

@@ -951,11 +951,11 @@ export class ToolRegistry {
    * @throws Error if any tool name is invalid
    */
   static validateToolNames(toolNames: string[]): void {
-    const availableTools = new Set(this.getAvailableToolNames());
+    const availableTools = new Set([...this.getAvailableToolNames(), 'manage-accounts']);
     const invalidTools = toolNames.filter(name => !availableTools.has(name));
 
     if (invalidTools.length > 0) {
-      const available = this.getAvailableToolNames().join(', ');
+      const available = [...this.getAvailableToolNames(), 'manage-accounts'].join(', ');
       throw new Error(
         `Invalid tool name(s): ${invalidTools.join(', ')}. ` +
         `Available tools: ${available}`
@@ -972,7 +972,10 @@ export class ToolRegistry {
     config?: ServerConfig
   ) {
     // Validate enabledTools if provided
-    if (config?.enabledTools && config.enabledTools.length > 0) {
+    if (config?.enabledTools) {
+      if (config.enabledTools.length === 0) {
+        throw new Error('Enabled tools list is empty. Provide at least one tool name.');
+      }
       this.validateToolNames(config.enabledTools);
       const enabledSet = new Set(config.enabledTools);
       process.stderr.write(`Tool filtering enabled: ${config.enabledTools.join(', ')}\n`);

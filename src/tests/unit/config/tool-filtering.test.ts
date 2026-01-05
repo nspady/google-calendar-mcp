@@ -5,6 +5,7 @@ import { ToolRegistry } from '../../../tools/registry.js';
 describe('Tool Filtering', () => {
   describe('parseArgs', () => {
     const originalEnv = process.env;
+    const originalExit = process.exit;
 
     beforeEach(() => {
       process.env = { ...originalEnv };
@@ -12,6 +13,7 @@ describe('Tool Filtering', () => {
 
     afterEach(() => {
       process.env = originalEnv;
+      process.exit = originalExit;
     });
 
     it('should parse --enable-tools from CLI arguments', () => {
@@ -45,12 +47,37 @@ describe('Tool Filtering', () => {
       const config = parseArgs(['--enable-tools', 'list-events']);
       expect(config.enabledTools).toEqual(['list-events']);
     });
+
+    it('should error when --enable-tools parses to an empty list', () => {
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+        throw new Error(`process.exit:${code}`);
+      }) as never);
+
+      expect(() => parseArgs(['--enable-tools', ', ,'])).toThrow(/process\.exit:1/);
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it('should error when ENABLED_TOOLS parses to an empty list', () => {
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+        throw new Error(`process.exit:${code}`);
+      }) as never);
+
+      process.env.ENABLED_TOOLS = ',,';
+      expect(() => parseArgs([])).toThrow(/process\.exit:1/);
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
   });
 
   describe('ToolRegistry.validateToolNames', () => {
     it('should not throw for valid tool names', () => {
       expect(() => {
         ToolRegistry.validateToolNames(['list-events', 'create-event', 'get-current-time']);
+      }).not.toThrow();
+    });
+
+    it('should allow manage-accounts in the allowlist', () => {
+      expect(() => {
+        ToolRegistry.validateToolNames(['manage-accounts', 'list-events']);
       }).not.toThrow();
     });
 
