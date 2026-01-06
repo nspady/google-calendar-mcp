@@ -586,31 +586,6 @@ function formatComparisonMarkdown(comparison: BaselineComparison): string {
     lines.push('');
   }
 
-  // New duplicates
-  if (diff.newDuplicates.length > 0) {
-    lines.push('### :warning: New Duplicate Patterns');
-    lines.push('');
-    lines.push('These description texts now appear in multiple places:');
-    lines.push('');
-
-    for (const dup of diff.newDuplicates.slice(0, 5)) {
-      const truncated = dup.text.length > 100 ? dup.text.substring(0, 100) + '...' : dup.text;
-      lines.push(`- **${dup.occurrences}x** in ${dup.tools.join(', ')}: "${truncated}"`);
-    }
-    if (diff.newDuplicates.length > 5) {
-      lines.push(`- _...and ${diff.newDuplicates.length - 5} more_`);
-    }
-    lines.push('');
-  }
-
-  // Removed duplicates (good news!)
-  if (diff.removedDuplicates.length > 0) {
-    lines.push('### :white_check_mark: Resolved Duplicates');
-    lines.push('');
-    lines.push(`${diff.removedDuplicates.length} duplicate pattern(s) were resolved, saving ~${diff.removedDuplicates.reduce((s, d) => s + d.totalTokensSaved, 0)} tokens.`);
-    lines.push('');
-  }
-
   // Detailed breakdown (collapsible)
   lines.push('<details>');
   lines.push('<summary>Full token breakdown by tool</summary>');
