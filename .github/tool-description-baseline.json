@@ -1,12 +1,12 @@
 {
-  "generated": "2026-01-06T18:35:09.151Z",
+  "generated": "2026-01-06T20:10:37.941Z",
   "version": "1.0.0",
   "summary": {
-    "totalTools": 13,
-    "totalTokens": 7126,
+    "totalTools": 11,
+    "totalTokens": 6750,
     "duplicatePatterns": 12,
-    "potentialSavings": 1144,
-    "savingsPercentage": "16.1%"
+    "potentialSavings": 958,
+    "savingsPercentage": "14.2%"
   },
   "tools": [
     {
@@ -807,16 +807,18 @@
         },
         {
           "name": "eventType",
-          "description": "Type of the event. 'default' for regular events, 'focusTime' for Focus Time blocks.",
-          "descriptionTokens": 21,
+          "description": "Type of the event. 'default' for regular events, 'focusTime' for Focus Time blocks, 'outOfOffice' for Out of Office events, 'workingLocation' for Working Location events. Note: outOfOffice and workingLocation require Google Workspace and only work on primary calendar.",
+          "descriptionTokens": 59,
           "type": "enum",
           "hasEnum": true,
           "enumValues": [
             "default",
-            "focusTime"
+            "focusTime",
+            "outOfOffice",
+            "workingLocation"
           ],
-          "enumTokens": 6,
-          "totalTokens": 29
+          "enumTokens": 13,
+          "totalTokens": 74
         },
         {
           "name": "focusTimeProperties",
@@ -864,17 +866,162 @@
             }
           ],
           "totalTokens": 80
+        },
+        {
+          "name": "outOfOfficeProperties",
+          "description": "Out of Office properties. Only used when eventType is 'outOfOffice'. Requires Google Workspace.",
+          "descriptionTokens": 19,
+          "type": "object",
+          "hasEnum": false,
+          "enumTokens": 0,
+          "nestedProperties": [
+            {
+              "name": "autoDeclineMode",
+              "description": "How to handle conflicting meetings. Default is to decline all conflicts.",
+              "descriptionTokens": 13,
+              "type": "enum",
+              "hasEnum": true,
+              "enumValues": [
+                "declineNone",
+                "declineAllConflictingInvitations",
+                "declineOnlyNewConflictingInvitations"
+              ],
+              "enumTokens": 22,
+              "totalTokens": 40
+            },
+            {
+              "name": "declineMessage",
+              "description": "Message sent when declining invitations (e.g., 'I'm out of office, will respond when I return')",
+              "descriptionTokens": 22,
+              "type": "string",
+              "hasEnum": false,
+              "enumTokens": 0,
+              "totalTokens": 26
+            }
+          ],
+          "totalTokens": 90
+        },
+        {
+          "name": "workingLocationProperties",
+          "description": "Working Location properties. Only used when eventType is 'workingLocation'. Requires Google Workspace.",
+          "descriptionTokens": 17,
+          "type": "object",
+          "hasEnum": false,
+          "enumTokens": 0,
+          "nestedProperties": [
+            {
+              "name": "type",
+              "description": "Type of working location",
+              "descriptionTokens": 4,
+              "type": "enum",
+              "hasEnum": true,
+              "enumValues": [
+                "homeOffice",
+                "officeLocation",
+                "customLocation"
+              ],
+              "enumTokens": 10,
+              "totalTokens": 16
+            },
+            {
+              "name": "homeOffice",
+              "description": "Empty object for home office type",
+              "descriptionTokens": 6,
+              "type": "object",
+              "hasEnum": false,
+              "enumTokens": 0,
+              "nestedProperties": [],
+              "totalTokens": 9
+            },
+            {
+              "name": "officeLocation",
+              "description": "Office location details",
+              "descriptionTokens": 3,
+              "type": "object",
+              "hasEnum": false,
+              "enumTokens": 0,
+              "nestedProperties": [
+                {
+                  "name": "label",
+                  "description": "Office name shown in Calendar (e.g., 'HQ Building', 'NYC Office')",
+                  "descriptionTokens": 18,
+                  "type": "string",
+                  "hasEnum": false,
+                  "enumTokens": 0,
+                  "totalTokens": 20
+                },
+                {
+                  "name": "buildingId",
+                  "description": "Building identifier from organization's Resources",
+                  "descriptionTokens": 6,
+                  "type": "string",
+                  "hasEnum": false,
+                  "enumTokens": 0,
+                  "totalTokens": 9
+                },
+                {
+                  "name": "floorId",
+                  "description": "Floor identifier",
+                  "descriptionTokens": 2,
+                  "type": "string",
+                  "hasEnum": false,
+                  "enumTokens": 0,
+                  "totalTokens": 5
+                },
+                {
+                  "name": "floorSectionId",
+                  "description": "Floor section identifier",
+                  "descriptionTokens": 3,
+                  "type": "string",
+                  "hasEnum": false,
+                  "enumTokens": 0,
+                  "totalTokens": 7
+                },
+                {
+                  "name": "deskId",
+                  "description": "Desk identifier",
+                  "descriptionTokens": 2,
+                  "type": "string",
+                  "hasEnum": false,
+                  "enumTokens": 0,
+                  "totalTokens": 5
+                }
+              ],
+              "totalTokens": 52
+            },
+            {
+              "name": "customLocation",
+              "description": "Custom location details",
+              "descriptionTokens": 3,
+              "type": "object",
+              "hasEnum": false,
+              "enumTokens": 0,
+              "nestedProperties": [
+                {
+                  "name": "label",
+                  "description": "Label for custom location (e.g., 'Coffee Shop', 'Client Site')",
+                  "descriptionTokens": 16,
+                  "type": "string",
+                  "hasEnum": false,
+                  "enumTokens": 0,
+                  "totalTokens": 18
+                }
+              ],
+              "totalTokens": 24
+            }
+          ],
+          "totalTokens": 122
         }
       ],
-      "schemaTokens": 1740,
-      "totalTokens": 1746,
+      "schemaTokens": 2152,
+      "totalTokens": 2158,
       "breakdown": {
         "toolDescription": 6,
-        "propertyDescriptions": 848,
-        "propertyNames": 109,
-        "typeDefinitions": 29,
-        "enumValues": 92,
-        "structuralOverhead": 662
+        "propertyDescriptions": 1020,
+        "propertyNames": 141,
+        "typeDefinitions": 31,
+        "enumValues": 131,
+        "structuralOverhead": 829
       }
     },
     {
@@ -1623,254 +1770,19 @@
         "enumValues": 27,
         "structuralOverhead": 98
       }
-    },
-    {
-      "name": "set-out-of-office",
-      "description": "Set an Out of Office event on your calendar with auto-decline settings for conflicting meetings. Requires Google Workspace.",
-      "descriptionTokens": 22,
-      "properties": [
-        {
-          "name": "account",
-          "description": "Account nickname to use for this operation (e.g., 'work', 'personal') - the friendly name you gave when connecting the account. Optional when only one account is connected - will auto-select the account with appropriate permissions. Use 'list-calendars' to see available accounts.",
-          "descriptionTokens": 56,
-          "type": "string",
-          "hasEnum": false,
-          "enumTokens": 0,
-          "totalTokens": 58
-        },
-        {
-          "name": "calendarId",
-          "description": "Calendar ID (use 'primary' for the main calendar). Out of Office events only work on primary calendar.",
-          "descriptionTokens": 22,
-          "type": "string",
-          "hasEnum": false,
-          "enumTokens": 0,
-          "totalTokens": 25
-        },
-        {
-          "name": "summary",
-          "description": "Title for the out of office event",
-          "descriptionTokens": 7,
-          "type": "string",
-          "hasEnum": false,
-          "enumTokens": 0,
-          "totalTokens": 9
-        },
-        {
-          "name": "start",
-          "description": "Start time (must be dateTime format, not all-day)",
-          "descriptionTokens": 12,
-          "type": "string",
-          "hasEnum": false,
-          "enumTokens": 0,
-          "totalTokens": 14
-        },
-        {
-          "name": "end",
-          "description": "End time (must be dateTime format, not all-day)",
-          "descriptionTokens": 12,
-          "type": "string",
-          "hasEnum": false,
-          "enumTokens": 0,
-          "totalTokens": 14
-        },
-        {
-          "name": "timeZone",
-          "description": "Timezone as IANA Time Zone Database name (e.g., America/Los_Angeles). Takes priority over calendar's default timezone. Only used for timezone-naive datetime strings.",
-          "descriptionTokens": 37,
-          "type": "string",
-          "hasEnum": false,
-          "enumTokens": 0,
-          "totalTokens": 40
-        },
-        {
-          "name": "autoDeclineMode",
-          "description": "How to handle conflicting meetings. Default is to decline all conflicts.",
-          "descriptionTokens": 13,
-          "type": "enum",
-          "hasEnum": true,
-          "enumValues": [
-            "declineNone",
-            "declineAllConflictingInvitations",
-            "declineOnlyNewConflictingInvitations"
-          ],
-          "enumTokens": 22,
-          "totalTokens": 40
-        },
-        {
-          "name": "declineMessage",
-          "description": "Message sent when declining invitations (e.g., 'I'm out of office, will respond when I return')",
-          "descriptionTokens": 22,
-          "type": "string",
-          "hasEnum": false,
-          "enumTokens": 0,
-          "totalTokens": 26
-        }
-      ],
-      "schemaTokens": 351,
-      "totalTokens": 373,
-      "breakdown": {
-        "toolDescription": 22,
-        "propertyDescriptions": 181,
-        "propertyNames": 15,
-        "typeDefinitions": 8,
-        "enumValues": 22,
-        "structuralOverhead": 125
-      }
-    },
-    {
-      "name": "set-working-location",
-      "description": "Set your working location (home, office, or custom location) on your calendar. Requires Google Workspace.",
-      "descriptionTokens": 21,
-      "properties": [
-        {
-          "name": "account",
-          "description": "Account nickname to use for this operation (e.g., 'work', 'personal') - the friendly name you gave when connecting the account. Optional when only one account is connected - will auto-select the account with appropriate permissions. Use 'list-calendars' to see available accounts.",
-          "descriptionTokens": 56,
-          "type": "string",
-          "hasEnum": false,
-          "enumTokens": 0,
-          "totalTokens": 58
-        },
-        {
-          "name": "calendarId",
-          "description": "Calendar ID (use 'primary' for the main calendar). Working Location events only work on primary calendar.",
-          "descriptionTokens": 21,
-          "type": "string",
-          "hasEnum": false,
-          "enumTokens": 0,
-          "totalTokens": 24
-        },
-        {
-          "name": "summary",
-          "description": "Optional title (auto-generated based on location type if not provided)",
-          "descriptionTokens": 13,
-          "type": "string",
-          "hasEnum": false,
-          "enumTokens": 0,
-          "totalTokens": 15
-        },
-        {
-          "name": "start",
-          "description": "Start (dateTime or date for all-day)",
-          "descriptionTokens": 9,
-          "type": "string",
-          "hasEnum": false,
-          "enumTokens": 0,
-          "totalTokens": 11
-        },
-        {
-          "name": "end",
-          "description": "End (dateTime or date for all-day)",
-          "descriptionTokens": 9,
-          "type": "string",
-          "hasEnum": false,
-          "enumTokens": 0,
-          "totalTokens": 11
-        },
-        {
-          "name": "timeZone",
-          "description": "Timezone as IANA Time Zone Database name (e.g., America/Los_Angeles). Takes priority over calendar's default timezone. Only used for timezone-naive datetime strings.",
-          "descriptionTokens": 37,
-          "type": "string",
-          "hasEnum": false,
-          "enumTokens": 0,
-          "totalTokens": 40
-        },
-        {
-          "name": "locationType",
-          "description": "Type of working location",
-          "descriptionTokens": 4,
-          "type": "enum",
-          "hasEnum": true,
-          "enumValues": [
-            "homeOffice",
-            "officeLocation",
-            "customLocation"
-          ],
-          "enumTokens": 10,
-          "totalTokens": 17
-        },
-        {
-          "name": "officeLabel",
-          "description": "Office name shown in Calendar (e.g., 'HQ Building', 'NYC Office')",
-          "descriptionTokens": 18,
-          "type": "string",
-          "hasEnum": false,
-          "enumTokens": 0,
-          "totalTokens": 21
-        },
-        {
-          "name": "buildingId",
-          "description": "Building identifier from organization's Resources (Google Workspace)",
-          "descriptionTokens": 10,
-          "type": "string",
-          "hasEnum": false,
-          "enumTokens": 0,
-          "totalTokens": 13
-        },
-        {
-          "name": "floorId",
-          "description": "Floor identifier",
-          "descriptionTokens": 2,
-          "type": "string",
-          "hasEnum": false,
-          "enumTokens": 0,
-          "totalTokens": 5
-        },
-        {
-          "name": "floorSectionId",
-          "description": "Floor section identifier",
-          "descriptionTokens": 3,
-          "type": "string",
-          "hasEnum": false,
-          "enumTokens": 0,
-          "totalTokens": 7
-        },
-        {
-          "name": "deskId",
-          "description": "Desk identifier",
-          "descriptionTokens": 2,
-          "type": "string",
-          "hasEnum": false,
-          "enumTokens": 0,
-          "totalTokens": 5
-        },
-        {
-          "name": "customLocationLabel",
-          "description": "Label for custom location (e.g., 'Coffee Shop', 'Client Site')",
-          "descriptionTokens": 16,
-          "type": "string",
-          "hasEnum": false,
-          "enumTokens": 0,
-          "totalTokens": 20
-        }
-      ],
-      "schemaTokens": 394,
-      "totalTokens": 415,
-      "breakdown": {
-        "toolDescription": 21,
-        "propertyDescriptions": 200,
-        "propertyNames": 24,
-        "typeDefinitions": 13,
-        "enumValues": 10,
-        "structuralOverhead": 147
-      }
     }
   ],
   "duplicates": [
     {
       "text": "Account nickname to use for this operation (e.g., 'work', 'personal') - the friendly name you gave when connecting the account. Optional when only one account is connected - will auto-select the account with appropriate permissions. Use 'list-calendars' to see available accounts.",
-      "occurrences": 8,
+      "occurrences": 6,
       "tools": [
         "get-event",
         "list-colors",
         "create-event",
         "update-event",
         "delete-event",
-        "get-current-time",
-        "set-out-of-office",
-        "set-working-location"
+        "get-current-time"
       ],
       "locations": [
         {
@@ -1896,53 +1808,10 @@
         {
           "tool": "get-current-time",
           "property": "account"
-        },
-        {
-          "tool": "set-out-of-office",
-          "property": "account"
-        },
-        {
-          "tool": "set-working-location",
-          "property": "account"
         }
       ],
       "tokenCount": 56,
-      "totalTokensSaved": 392
-    },
-    {
-      "text": "Timezone as IANA Time Zone Database name (e.g., America/Los_Angeles). Takes priority over calendar's default timezone. Only used for timezone-naive datetime strings.",
-      "occurrences": 5,
-      "tools": [
-        "list-events",
-        "search-events",
-        "create-event",
-        "set-out-of-office",
-        "set-working-location"
-      ],
-      "locations": [
-        {
-          "tool": "list-events",
-          "property": "timeZone"
-        },
-        {
-          "tool": "search-events",
-          "property": "timeZone"
-        },
-        {
-          "tool": "create-event",
-          "property": "timeZone"
-        },
-        {
-          "tool": "set-out-of-office",
-          "property": "timeZone"
-        },
-        {
-          "tool": "set-working-location",
-          "property": "timeZone"
-        }
-      ],
-      "tokenCount": 37,
-      "totalTokensSaved": 148
+      "totalTokensSaved": 280
     },
     {
       "text": "Start time boundary. Preferred: '2024-01-01T00:00:00' (uses timeZone parameter or calendar timezone). Also accepts: '2024-01-01T00:00:00Z' or '2024-01-01T00:00:00-08:00'.",
@@ -2043,6 +1912,31 @@
       ],
       "tokenCount": 39,
       "totalTokensSaved": 78
+    },
+    {
+      "text": "Timezone as IANA Time Zone Database name (e.g., America/Los_Angeles). Takes priority over calendar's default timezone. Only used for timezone-naive datetime strings.",
+      "occurrences": 3,
+      "tools": [
+        "list-events",
+        "search-events",
+        "create-event"
+      ],
+      "locations": [
+        {
+          "tool": "list-events",
+          "property": "timeZone"
+        },
+        {
+          "tool": "search-events",
+          "property": "timeZone"
+        },
+        {
+          "tool": "create-event",
+          "property": "timeZone"
+        }
+      ],
+      "tokenCount": 37,
+      "totalTokensSaved": 74
     },
     {
       "text": "ID of the calendar (use 'primary' for the main calendar)",
