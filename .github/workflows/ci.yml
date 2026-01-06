@@ -171,10 +171,6 @@ jobs:
         }
         toolChanges.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
 
-        // Find new duplicates
-        const baseDupTexts = new Set((base.duplicates || []).map(d => d.text));
-        const newDups = (pr.duplicates || []).filter(d => !baseDupTexts.has(d.text));
-
         // Generate markdown
         let md = [];
         md.push('## :bar_chart: Tool Description Token Analysis');
@@ -199,16 +195,6 @@ jobs:
           }
           if (toolChanges.length > 10) {
             md.push(`| _...and ${toolChanges.length - 10} more_ | | | | |`);
-          }
-          md.push('');
-        }
-
-        if (newDups.length > 0) {
-          md.push('### :warning: New Duplicate Patterns');
-          md.push('');
-          for (const d of newDups.slice(0, 3)) {
-            const text = d.text.length > 80 ? d.text.substring(0, 80) + '...' : d.text;
-            md.push(`- **${d.occurrences}x** in ${d.tools.join(', ')}: "${text}"`);
           }
           md.push('');
         }
