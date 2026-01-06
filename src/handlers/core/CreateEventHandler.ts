@@ -30,6 +30,17 @@ export class CreateEventHandler extends BaseToolHandler {
             'write'
         );
 
+        // Validate primary calendar requirement for outOfOffice and workingLocation events
+        if (validArgs.eventType === 'outOfOffice' || validArgs.eventType === 'workingLocation') {
+            if (resolvedCalendarId !== 'primary' && !resolvedCalendarId.includes('@')) {
+                const eventTypeName = validArgs.eventType === 'outOfOffice' ? 'Out of Office' : 'Working Location';
+                throw new Error(
+                    `${eventTypeName} events can only be created on the primary calendar. ` +
+                    'Use calendarId: "primary" or your email address.'
+                );
+            }
+        }
+
         // Create the event object for conflict checking
         const timezone = args.timeZone || await this.getCalendarTimezone(oauth2Client, resolvedCalendarId);
         const eventToCheck: calendar_v3.Schema$Event = {
@@ -99,13 +110,16 @@ export class CreateEventHandler extends BaseToolHandler {
             // Use provided timezone or calendar's default timezone
             const timezone = args.timeZone || await this.getCalendarTimezone(client, args.calendarId);
 
-            // Auto-set transparency to 'opaque' for focusTime if not specified
-            const transparency = args.eventType === 'focusTime' && !args.transparency
-                ? 'opaque'
-                : args.transparency;
+            // Determine transparency and visibility based on event type
+            const { transparency, visibility } = this.getEventTypeDefaults(args);
+
+            // Generate summary for workingLocation if not provided
+            const summary = args.eventType === 'workingLocation' && !args.summary
+                ? this.generateWorkingLocationSummary(args)
+                : args.summary;
 
             const requestBody: calendar_v3.Schema$Event = {
-                summary: args.summary,
+                summary: summary,
                 description: args.description,
                 start: createTimeObject(args.start, timezone),
                 end: createTimeObject(args.end, timezone),
@@ -115,7 +129,7 @@ export class CreateEventHandler extends BaseToolHandler {
                 reminders: args.reminders,
                 recurrence: args.recurrence,
                 transparency: transparency,
-                visibility: args.visibility,
+                visibility: visibility,
                 guestsCanInviteOthers: args.guestsCanInviteOthers,
                 guestsCanModify: args.guestsCanModify,
                 guestsCanSeeOtherGuests: args.guestsCanSeeOtherGuests,
@@ -126,7 +140,9 @@ export class CreateEventHandler extends BaseToolHandler {
                 source: args.source,
                 eventType: args.eventType,
                 ...(args.eventId && { id: args.eventId }), // Include custom ID if provided
-                ...(args.focusTimeProperties && { focusTimeProperties: args.focusTimeProperties })
+                ...(args.focusTimeProperties && { focusTimeProperties: args.focusTimeProperties }),
+                ...(args.eventType === 'outOfOffice' && { outOfOfficeProperties: this.buildOutOfOfficeProperties(args) }),
+                ...(args.eventType === 'workingLocation' && { workingLocationProperties: this.buildWorkingLocationProperties(args) })
             };
             
             // Determine if we need to enable conference data or attachments
@@ -149,6 +165,95 @@ export class CreateEventHandler extends BaseToolHandler {
                 throw new Error(`Event ID '${args.eventId}' already exists. Please use a different ID.`);
             }
             throw this.handleGoogleApiError(error);
+        }
+    }
+
+    /**
+     * Get default transparency and visibility based on event type
+     */
+    private getEventTypeDefaults(args: CreateEventInput): {
+        transparency: string | undefined;
+        visibility: string | undefined;
+    } {
+        // Use explicit values if provided
+        let transparency = args.transparency;
+        let visibility = args.visibility;
+
+        switch (args.eventType) {
+            case 'focusTime':
+            case 'outOfOffice':
+                // Focus Time and Out of Office block time by default
+                if (!transparency) transparency = 'opaque';
+                break;
+            case 'workingLocation':
+                // Working Location events are visible but don't block time
+                if (!transparency) transparency = 'transparent';
+                if (!visibility) visibility = 'public';
+                break;
+        }
+
+        return { transparency, visibility };
+    }
+
+    /**
+     * Build outOfOfficeProperties from args
+     */
+    private buildOutOfOfficeProperties(args: CreateEventInput): calendar_v3.Schema$EventOutOfOfficeProperties {
+        const props = args.outOfOfficeProperties;
+        return {
+            autoDeclineMode: props?.autoDeclineMode || 'declineAllConflictingInvitations',
+            ...(props?.declineMessage && { declineMessage: props.declineMessage })
+        };
+    }
+
+    /**
+     * Build workingLocationProperties from args
+     */
+    private buildWorkingLocationProperties(args: CreateEventInput): calendar_v3.Schema$EventWorkingLocationProperties {
+        const props = args.workingLocationProperties;
+        if (!props) {
+            throw new Error('workingLocationProperties is required when eventType is "workingLocation"');
+        }
+
+        const properties: calendar_v3.Schema$EventWorkingLocationProperties = {
+            type: props.type
+        };
+
+        switch (props.type) {
+            case 'homeOffice':
+                properties.homeOffice = {};
+                break;
+            case 'officeLocation':
+                properties.officeLocation = props.officeLocation || {};
+                break;
+            case 'customLocation':
+                properties.customLocation = props.customLocation || {};
+                break;
+        }
+
+        return properties;
+    }
+
+    /**
+     * Generate summary for working location events if not provided
+     */
+    private generateWorkingLocationSummary(args: CreateEventInput): string {
+        const props = args.workingLocationProperties;
+        if (!props) return 'Working location';
+
+        switch (props.type) {
+            case 'homeOffice':
+                return 'Working from home';
+            case 'officeLocation':
+                return props.officeLocation?.label
+                    ? `Working from ${props.officeLocation.label}`
+                    : 'Working from office';
+            case 'customLocation':
+                return props.customLocation?.label
+                    ? `Working from ${props.customLocation.label}`
+                    : 'Working from custom location';
+            default:
+                return 'Working location';
         }
     }
 }

@@ -116,8 +116,6 @@ describe('Tool Filtering', () => {
       expect(toolNames).toContain('get-freebusy');
       expect(toolNames).toContain('list-colors');
       expect(toolNames).toContain('respond-to-event');
-      expect(toolNames).toContain('set-out-of-office');
-      expect(toolNames).toContain('set-working-location');
     });
 
     it('should return an array', () => {
