@@ -65,3 +65,189 @@ jobs:
         path: coverage/
         retention-days: 30
 
+  # Job 2: Tool Description Token Analysis (PR only)
+  tool-description-analysis:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+    - name: Checkout PR branch
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+
+    - name: Checkout base branch for baseline
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.base.sha }}
+        path: base-branch
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies (PR branch)
+      run: npm ci
+
+    - name: Build (PR branch)
+      run: npm run build
+
+    - name: Generate PR branch analysis
+      run: |
+        npx tsx scripts/analyze-tool-descriptions.ts json > /tmp/pr-analysis.json
+
+    - name: Install and build base branch
+      run: |
+        cd base-branch
+        npm ci
+        npm run build
+
+    - name: Generate base branch analysis
+      run: |
+        cd base-branch
+        # Check if the script exists in base branch
+        if [ -f "scripts/analyze-tool-descriptions.ts" ]; then
+          npx tsx scripts/analyze-tool-descriptions.ts json > /tmp/base-analysis.json
+        else
+          # Create a minimal baseline if script doesn't exist in base
+          echo '{"summary":{"totalTools":0,"totalTokens":0,"duplicatePatterns":0,"potentialSavings":0},"tools":[],"duplicates":[]}' > /tmp/base-analysis.json
+        fi
+
+    - name: Generate comparison report
+      id: comparison
+      run: |
+        # Create comparison script inline since we need to compare two JSON files
+        node << 'EOF' > /tmp/comparison.md
+        const fs = require('fs');
+
+        const base = JSON.parse(fs.readFileSync('/tmp/base-analysis.json', 'utf-8'));
+        const pr = JSON.parse(fs.readFileSync('/tmp/pr-analysis.json', 'utf-8'));
+
+        const formatNumber = (n) => n.toLocaleString();
+        const formatDiff = (n) => {
+          if (n === 0) return '—';
+          return (n > 0 ? '+' : '') + formatNumber(n);
+        };
+        const diffEmoji = (n) => {
+          if (n === 0) return '';
+          if (n > 100) return ' :warning:';
+          if (n > 0) return ' :small_red_triangle:';
+          if (n < -50) return ' :white_check_mark:';
+          return ' :small_red_triangle_down:';
+        };
+
+        const tokenDiff = pr.summary.totalTokens - base.summary.totalTokens;
+        const pctChange = base.summary.totalTokens > 0
+          ? ((tokenDiff / base.summary.totalTokens) * 100).toFixed(1)
+          : 'N/A';
+
+        // Build tool comparison
+        const baseToolMap = new Map((base.tools || []).map(t => [t.name, t]));
+        const prToolMap = new Map((pr.tools || []).map(t => [t.name, t]));
+        const allTools = new Set([...baseToolMap.keys(), ...prToolMap.keys()]);
+
+        const toolChanges = [];
+        for (const name of allTools) {
+          const baseTool = baseToolMap.get(name);
+          const prTool = prToolMap.get(name);
+          const before = baseTool?.totalTokens || 0;
+          const after = prTool?.totalTokens || 0;
+          const diff = after - before;
+          if (diff !== 0 || !baseTool || !prTool) {
+            toolChanges.push({
+              name,
+              before,
+              after,
+              diff,
+              status: !baseTool ? 'added' : !prTool ? 'removed' : 'changed',
+              breakdown: prTool?.breakdown
+            });
+          }
+        }
+        toolChanges.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+
+        // Find new duplicates
+        const baseDupTexts = new Set((base.duplicates || []).map(d => d.text));
+        const newDups = (pr.duplicates || []).filter(d => !baseDupTexts.has(d.text));
+
+        // Generate markdown
+        let md = [];
+        md.push('## :bar_chart: Tool Description Token Analysis');
+        md.push('');
+        md.push('### Summary');
+        md.push('');
+        md.push('| Metric | Baseline | PR | Diff |');
+        md.push('|--------|----------|-----|------|');
+        md.push(`| **Total Tokens** | ${formatNumber(base.summary.totalTokens)} | ${formatNumber(pr.summary.totalTokens)} | ${formatDiff(tokenDiff)} (${pctChange}%)${diffEmoji(tokenDiff)} |`);
+        md.push(`| Duplicate Patterns | ${base.summary.duplicatePatterns} | ${pr.summary.duplicatePatterns} | ${formatDiff(pr.summary.duplicatePatterns - base.summary.duplicatePatterns)} |`);
+        md.push(`| Potential Savings | ${formatNumber(base.summary.potentialSavings)} | ${formatNumber(pr.summary.potentialSavings)} | ${formatDiff(pr.summary.potentialSavings - base.summary.potentialSavings)} |`);
+        md.push('');
+
+        if (toolChanges.length > 0) {
+          md.push('### Tool Changes');
+          md.push('');
+          md.push('| Tool | Baseline | PR | Diff | Status |');
+          md.push('|------|----------|-----|------|--------|');
+          for (const t of toolChanges.slice(0, 10)) {
+            const emoji = t.status === 'added' ? ':new:' : t.status === 'removed' ? ':x:' : (t.diff > 0 ? ':arrow_up:' : ':arrow_down:');
+            md.push(`| \`${t.name}\` | ${formatNumber(t.before)} | ${formatNumber(t.after)} | ${formatDiff(t.diff)} | ${emoji} |`);
+          }
+          if (toolChanges.length > 10) {
+            md.push(`| _...and ${toolChanges.length - 10} more_ | | | | |`);
+          }
+          md.push('');
+        }
+
+        if (newDups.length > 0) {
+          md.push('### :warning: New Duplicate Patterns');
+          md.push('');
+          for (const d of newDups.slice(0, 3)) {
+            const text = d.text.length > 80 ? d.text.substring(0, 80) + '...' : d.text;
+            md.push(`- **${d.occurrences}x** in ${d.tools.join(', ')}: "${text}"`);
+          }
+          md.push('');
+        }
+
+        // Full breakdown (collapsed)
+        md.push('<details>');
+        md.push('<summary>Full token breakdown by tool</summary>');
+        md.push('');
+        md.push('| Tool | Desc | Props | Names | Types | Enums | Overhead | **Total** |');
+        md.push('|------|------|-------|-------|-------|-------|----------|-----------|');
+        const sortedTools = [...(pr.tools || [])].sort((a, b) => b.totalTokens - a.totalTokens);
+        for (const t of sortedTools) {
+          const b = t.breakdown || {};
+          md.push(`| \`${t.name}\` | ${b.toolDescription || 0} | ${b.propertyDescriptions || 0} | ${b.propertyNames || 0} | ${b.typeDefinitions || 0} | ${b.enumValues || 0} | ${b.structuralOverhead || 0} | **${t.totalTokens}** |`);
+        }
+        md.push('');
+        md.push('</details>');
+        md.push('');
+        md.push('---');
+        md.push(`_Analysis generated at ${new Date().toISOString()}_`);
+
+        console.log(md.join('\n'));
+        EOF
+
+        cat /tmp/comparison.md
+
+    - name: Find existing comment
+      uses: peter-evans/find-comment@v3
+      id: find-comment
+      with:
+        issue-number: ${{ github.event.pull_request.number }}
+        comment-author: 'github-actions[bot]'
+        body-includes: 'Tool Description Token Analysis'
+
+    - name: Post or update PR comment
+      uses: peter-evans/create-or-update-comment@v4
+      with:
+        comment-id: ${{ steps.find-comment.outputs.comment-id }}
+        issue-number: ${{ github.event.pull_request.number }}
+        body-path: /tmp/comparison.md
+        edit-mode: replace
+

@@ -45,7 +45,8 @@
     "test:all": "vitest run src/tests",
     "test:coverage": "vitest run src/tests/unit --coverage",
     "start:http": "node build/index.js --transport http --port 3000",
-    "start:http:public": "node build/index.js --transport http --port 3000 --host 0.0.0.0"
+    "start:http:public": "node build/index.js --transport http --port 3000 --host 0.0.0.0",
+    "analyze:tokens:compare": "npx tsx scripts/analyze-tool-descriptions.ts compare --output markdown"
   },
   "dependencies": {
     "@google-cloud/local-auth": "^3.0.1",
@@ -61,6 +62,7 @@
     "@types/node": "^20.10.4",
     "@vitest/coverage-v8": "^3.1.1",
     "esbuild": "^0.25.0",
+    "js-tiktoken": "^1.0.21",
     "openai": "^4.104.0",
     "typescript": "^5.3.3",
     "vitest": "^3.1.1"
