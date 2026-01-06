@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.0](https://github.com/nspady/google-calendar-mcp/compare/v2.3.1...v2.4.0) (2026-01-06)
+
+
+### Features
+
+* add tool description token analysis for PRs ([ee56e8c](https://github.com/nspady/google-calendar-mcp/commit/ee56e8cbcc198f1de70fc2a0782ddbfab06af916))
+
 ## [2.3.1](https://github.com/nspady/google-calendar-mcp/compare/v2.3.0...v2.3.1) (2026-01-07)
 
 
