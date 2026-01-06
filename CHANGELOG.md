@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.3.0](https://github.com/nspady/google-calendar-mcp/compare/v2.2.0...v2.3.0) (2026-01-06)
+
+
+### Features
+
+* Add Focus Time, Out of Office, and Working Location event types ([#144](https://github.com/nspady/google-calendar-mcp/issues/144)) ([ee5f870](https://github.com/nspady/google-calendar-mcp/commit/ee5f870830d0c9f10b01d3624ebd2c24764bf928))
+* add tool filtering via --enable-tools flag ([#149](https://github.com/nspady/google-calendar-mcp/issues/149)) ([7cdba06](https://github.com/nspady/google-calendar-mcp/commit/7cdba06a0339d37d6f3616d7a984039ffadc8e88))
+
+
+### Bug Fixes
+
+* **update-event:** preserve attendee responseStatus when updating attendees ([#148](https://github.com/nspady/google-calendar-mcp/issues/148)) ([48d5f3f](https://github.com/nspady/google-calendar-mcp/commit/48d5f3f28b563cc8b83d2a64a9ecb6fa59111761))
+
 ## [2.2.0](https://github.com/nspady/google-calendar-mcp/compare/v2.1.0...v2.2.0) (2025-12-07)
 
 
