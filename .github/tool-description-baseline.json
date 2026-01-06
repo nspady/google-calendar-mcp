@@ -1,12 +1,12 @@
 {
-  "generated": "2026-01-06T20:10:37.941Z",
+  "generated": "2026-01-06T20:11:32.721Z",
   "version": "1.0.0",
   "summary": {
     "totalTools": 11,
-    "totalTokens": 6750,
+    "totalTokens": 6110,
     "duplicatePatterns": 12,
-    "potentialSavings": 958,
-    "savingsPercentage": "14.2%"
+    "potentialSavings": 493,
+    "savingsPercentage": "8.1%"
   },
   "tools": [
     {
@@ -16,19 +16,19 @@
       "properties": [
         {
           "name": "account",
-          "description": "Account nickname(s) to query (e.g., 'work' or ['work', 'personal']) - the friendly names you gave when connecting accounts. Optional - if omitted, queries all connected accounts and merges results. Use 'list-calendars' to see available accounts.",
-          "descriptionTokens": 54,
+          "description": "Account nickname(s) to query (e.g., 'work' or ['work', 'personal']). Omit to query all accounts.",
+          "descriptionTokens": 27,
           "type": "union",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 56
+          "totalTokens": 29
         }
       ],
-      "schemaTokens": 145,
-      "totalTokens": 149,
+      "schemaTokens": 118,
+      "totalTokens": 122,
       "breakdown": {
         "toolDescription": 4,
-        "propertyDescriptions": 54,
+        "propertyDescriptions": 27,
         "propertyNames": 1,
         "typeDefinitions": 1,
         "enumValues": 0,
@@ -42,12 +42,12 @@
       "properties": [
         {
           "name": "account",
-          "description": "Account nickname(s) to query (e.g., 'work' or ['work', 'personal']) - the friendly names you gave when connecting accounts. Optional - if omitted, queries all connected accounts and merges results. Use 'list-calendars' to see available accounts.",
-          "descriptionTokens": 54,
+          "description": "Account nickname(s) to query (e.g., 'work' or ['work', 'personal']). Omit to query all accounts.",
+          "descriptionTokens": 27,
           "type": "union",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 56
+          "totalTokens": 29
         },
         {
           "name": "calendarId",
@@ -60,39 +60,39 @@
         },
         {
           "name": "timeMin",
-          "description": "Start time boundary. Preferred: '2024-01-01T00:00:00' (uses timeZone parameter or calendar timezone). Also accepts: '2024-01-01T00:00:00Z' or '2024-01-01T00:00:00-08:00'.",
-          "descriptionTokens": 65,
+          "description": "Start of time range (ISO 8601, e.g., '2024-01-01T00:00:00').",
+          "descriptionTokens": 27,
           "type": "string",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 68
+          "totalTokens": 30
         },
         {
           "name": "timeMax",
-          "description": "End time boundary. Preferred: '2024-01-01T23:59:59' (uses timeZone parameter or calendar timezone). Also accepts: '2024-01-01T23:59:59Z' or '2024-01-01T23:59:59-08:00'.",
-          "descriptionTokens": 65,
+          "description": "End of time range (ISO 8601, e.g., '2024-01-31T23:59:59').",
+          "descriptionTokens": 27,
           "type": "string",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 68
+          "totalTokens": 30
         },
         {
           "name": "timeZone",
-          "description": "Timezone as IANA Time Zone Database name (e.g., America/Los_Angeles). Takes priority over calendar's default timezone. Only used for timezone-naive datetime strings.",
-          "descriptionTokens": 37,
+          "description": "IANA timezone (e.g., 'America/Los_Angeles'). Defaults to calendar's timezone.",
+          "descriptionTokens": 21,
           "type": "string",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 40
+          "totalTokens": 24
         },
         {
           "name": "fields",
-          "description": "Optional array of additional event fields to retrieve. Available fields are strictly validated. Default fields (id, summary, start, end, status, htmlLink, location, attendees) are always included.",
-          "descriptionTokens": 39,
+          "description": "Additional fields to include beyond defaults (id, summary, start, end, status, htmlLink, location, attendees).",
+          "descriptionTokens": 24,
           "type": "array",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 41
+          "totalTokens": 26
         },
         {
           "name": "privateExtendedProperty",
@@ -113,15 +113,15 @@
           "totalTokens": 21
         }
       ],
-      "schemaTokens": 721,
-      "totalTokens": 737,
+      "schemaTokens": 585,
+      "totalTokens": 601,
       "breakdown": {
         "toolDescription": 16,
-        "propertyDescriptions": 294,
+        "propertyDescriptions": 160,
         "propertyNames": 16,
         "typeDefinitions": 8,
         "enumValues": 0,
-        "structuralOverhead": 403
+        "structuralOverhead": 401
       }
     },
     {
@@ -131,12 +131,12 @@
       "properties": [
         {
           "name": "account",
-          "description": "Account nickname(s) to query (e.g., 'work' or ['work', 'personal']) - the friendly names you gave when connecting accounts. Optional - if omitted, queries all connected accounts and merges results. Use 'list-calendars' to see available accounts.",
-          "descriptionTokens": 54,
+          "description": "Account nickname(s) to query (e.g., 'work' or ['work', 'personal']). Omit to query all accounts.",
+          "descriptionTokens": 27,
           "type": "union",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 56
+          "totalTokens": 29
         },
         {
           "name": "calendarId",
@@ -158,39 +158,39 @@
         },
         {
           "name": "timeMin",
-          "description": "Start time boundary. Preferred: '2024-01-01T00:00:00' (uses timeZone parameter or calendar timezone). Also accepts: '2024-01-01T00:00:00Z' or '2024-01-01T00:00:00-08:00'.",
-          "descriptionTokens": 65,
+          "description": "Start of time range (ISO 8601, e.g., '2024-01-01T00:00:00').",
+          "descriptionTokens": 27,
           "type": "string",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 68
+          "totalTokens": 30
         },
         {
           "name": "timeMax",
-          "description": "End time boundary. Preferred: '2024-01-01T23:59:59' (uses timeZone parameter or calendar timezone). Also accepts: '2024-01-01T23:59:59Z' or '2024-01-01T23:59:59-08:00'.",
-          "descriptionTokens": 65,
+          "description": "End of time range (ISO 8601, e.g., '2024-01-31T23:59:59').",
+          "descriptionTokens": 27,
           "type": "string",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 68
+          "totalTokens": 30
         },
         {
           "name": "timeZone",
-          "description": "Timezone as IANA Time Zone Database name (e.g., America/Los_Angeles). Takes priority over calendar's default timezone. Only used for timezone-naive datetime strings.",
-          "descriptionTokens": 37,
+          "description": "IANA timezone (e.g., 'America/Los_Angeles'). Defaults to calendar's timezone.",
+          "descriptionTokens": 21,
           "type": "string",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 40
+          "totalTokens": 24
         },
         {
           "name": "fields",
-          "description": "Optional array of additional event fields to retrieve. Available fields are strictly validated. Default fields (id, summary, start, end, status, htmlLink, location, attendees) are always included.",
-          "descriptionTokens": 39,
+          "description": "Additional fields to include beyond defaults (id, summary, start, end, status, htmlLink, location, attendees).",
+          "descriptionTokens": 24,
           "type": "array",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 41
+          "totalTokens": 26
         },
         {
           "name": "privateExtendedProperty",
@@ -211,15 +211,15 @@
           "totalTokens": 21
         }
       ],
-      "schemaTokens": 743,
-      "totalTokens": 753,
+      "schemaTokens": 607,
+      "totalTokens": 617,
       "breakdown": {
         "toolDescription": 10,
-        "propertyDescriptions": 331,
+        "propertyDescriptions": 197,
         "propertyNames": 17,
         "typeDefinitions": 9,
         "enumValues": 0,
-        "structuralOverhead": 386
+        "structuralOverhead": 384
       }
     },
     {
@@ -229,12 +229,12 @@
       "properties": [
         {
           "name": "account",
-          "description": "Account nickname to use for this operation (e.g., 'work', 'personal') - the friendly name you gave when connecting the account. Optional when only one account is connected - will auto-select the account with appropriate permissions. Use 'list-calendars' to see available accounts.",
-          "descriptionTokens": 56,
+          "description": "Account nickname (e.g., 'work'). Optional if only one account connected.",
+          "descriptionTokens": 16,
           "type": "string",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 58
+          "totalTokens": 18
         },
         {
           "name": "calendarId",
@@ -264,11 +264,11 @@
           "totalTokens": 41
         }
       ],
-      "schemaTokens": 314,
-      "totalTokens": 323,
+      "schemaTokens": 274,
+      "totalTokens": 283,
       "breakdown": {
         "toolDescription": 9,
-        "propertyDescriptions": 115,
+        "propertyDescriptions": 75,
         "propertyNames": 5,
         "typeDefinitions": 4,
         "enumValues": 0,
@@ -282,19 +282,19 @@
       "properties": [
         {
           "name": "account",
-          "description": "Account nickname to use for this operation (e.g., 'work', 'personal') - the friendly name you gave when connecting the account. Optional when only one account is connected - will auto-select the account with appropriate permissions. Use 'list-calendars' to see available accounts.",
-          "descriptionTokens": 56,
+          "description": "Account nickname (e.g., 'work'). Optional if only one account connected.",
+          "descriptionTokens": 16,
           "type": "string",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 58
+          "totalTokens": 18
         }
       ],
-      "schemaTokens": 108,
-      "totalTokens": 118,
+      "schemaTokens": 68,
+      "totalTokens": 78,
       "breakdown": {
         "toolDescription": 10,
-        "propertyDescriptions": 56,
+        "propertyDescriptions": 16,
         "propertyNames": 1,
         "typeDefinitions": 1,
         "enumValues": 0,
@@ -308,12 +308,12 @@
       "properties": [
         {
           "name": "account",
-          "description": "Account nickname to use for this operation (e.g., 'work', 'personal') - the friendly name you gave when connecting the account. Optional when only one account is connected - will auto-select the account with appropriate permissions. Use 'list-calendars' to see available accounts.",
-          "descriptionTokens": 56,
+          "description": "Account nickname (e.g., 'work'). Optional if only one account connected.",
+          "descriptionTokens": 16,
           "type": "string",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 58
+          "totalTokens": 18
         },
         {
           "name": "calendarId",
@@ -1013,11 +1013,11 @@
           "totalTokens": 122
         }
       ],
-      "schemaTokens": 2152,
-      "totalTokens": 2158,
+      "schemaTokens": 2112,
+      "totalTokens": 2118,
       "breakdown": {
         "toolDescription": 6,
-        "propertyDescriptions": 1020,
+        "propertyDescriptions": 980,
         "propertyNames": 141,
         "typeDefinitions": 31,
         "enumValues": 131,
@@ -1031,12 +1031,12 @@
       "properties": [
         {
           "name": "account",
-          "description": "Account nickname to use for this operation (e.g., 'work', 'personal') - the friendly name you gave when connecting the account. Optional when only one account is connected - will auto-select the account with appropriate permissions. Use 'list-calendars' to see available accounts.",
-          "descriptionTokens": 56,
+          "description": "Account nickname (e.g., 'work'). Optional if only one account connected.",
+          "descriptionTokens": 16,
           "type": "string",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 58
+          "totalTokens": 18
         },
         {
           "name": "calendarId",
@@ -1472,11 +1472,11 @@
           "totalTokens": 50
         }
       ],
-      "schemaTokens": 1303,
-      "totalTokens": 1315,
+      "schemaTokens": 1263,
+      "totalTokens": 1275,
       "breakdown": {
         "toolDescription": 12,
-        "propertyDescriptions": 588,
+        "propertyDescriptions": 548,
         "propertyNames": 88,
         "typeDefinitions": 28,
         "enumValues": 55,
@@ -1490,12 +1490,12 @@
       "properties": [
         {
           "name": "account",
-          "description": "Account nickname to use for this operation (e.g., 'work', 'personal') - the friendly name you gave when connecting the account. Optional when only one account is connected - will auto-select the account with appropriate permissions. Use 'list-calendars' to see available accounts.",
-          "descriptionTokens": 56,
+          "description": "Account nickname (e.g., 'work'). Optional if only one account connected.",
+          "descriptionTokens": 16,
           "type": "string",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 58
+          "totalTokens": 18
         },
         {
           "name": "calendarId",
@@ -1530,11 +1530,11 @@
           "totalTokens": 16
         }
       ],
-      "schemaTokens": 182,
-      "totalTokens": 187,
+      "schemaTokens": 142,
+      "totalTokens": 147,
       "breakdown": {
         "toolDescription": 5,
-        "propertyDescriptions": 81,
+        "propertyDescriptions": 41,
         "propertyNames": 6,
         "typeDefinitions": 4,
         "enumValues": 8,
@@ -1548,12 +1548,12 @@
       "properties": [
         {
           "name": "account",
-          "description": "Account nickname(s) to query from (e.g., 'work' or ['work', 'personal']). Optional - if omitted, queries from all connected accounts to maximize calendar accessibility.",
-          "descriptionTokens": 36,
+          "description": "Account nickname(s) to query (e.g., 'work' or ['work', 'personal']). Omit to query all accounts.",
+          "descriptionTokens": 27,
           "type": "union",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 38
+          "totalTokens": 29
         },
         {
           "name": "calendars",
@@ -1577,30 +1577,30 @@
         },
         {
           "name": "timeMin",
-          "description": "Start time boundary. Preferred: '2024-01-01T00:00:00' (uses timeZone parameter or calendar timezone). Also accepts: '2024-01-01T00:00:00Z' or '2024-01-01T00:00:00-08:00'.",
-          "descriptionTokens": 65,
+          "description": "Start of time range (ISO 8601, e.g., '2024-01-01T00:00:00').",
+          "descriptionTokens": 27,
           "type": "string",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 68
+          "totalTokens": 30
         },
         {
           "name": "timeMax",
-          "description": "End time boundary. Preferred: '2024-01-01T23:59:59' (uses timeZone parameter or calendar timezone). Also accepts: '2024-01-01T23:59:59Z' or '2024-01-01T23:59:59-08:00'.",
-          "descriptionTokens": 65,
+          "description": "End of time range (ISO 8601, e.g., '2024-01-31T23:59:59').",
+          "descriptionTokens": 27,
           "type": "string",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 68
+          "totalTokens": 30
         },
         {
           "name": "timeZone",
-          "description": "Timezone for the query",
-          "descriptionTokens": 5,
+          "description": "IANA timezone for the query.",
+          "descriptionTokens": 7,
           "type": "string",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 8
+          "totalTokens": 10
         },
         {
           "name": "groupExpansionMax",
@@ -1621,15 +1621,15 @@
           "totalTokens": 15
         }
       ],
-      "schemaTokens": 423,
-      "totalTokens": 451,
+      "schemaTokens": 338,
+      "totalTokens": 366,
       "breakdown": {
         "toolDescription": 28,
-        "propertyDescriptions": 222,
+        "propertyDescriptions": 139,
         "propertyNames": 16,
         "typeDefinitions": 7,
         "enumValues": 0,
-        "structuralOverhead": 178
+        "structuralOverhead": 176
       }
     },
     {
@@ -1639,28 +1639,28 @@
       "properties": [
         {
           "name": "account",
-          "description": "Account nickname to use for this operation (e.g., 'work', 'personal') - the friendly name you gave when connecting the account. Optional when only one account is connected - will auto-select the account with appropriate permissions. Use 'list-calendars' to see available accounts.",
-          "descriptionTokens": 56,
+          "description": "Account nickname (e.g., 'work'). Optional if only one account connected.",
+          "descriptionTokens": 16,
           "type": "string",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 58
+          "totalTokens": 18
         },
         {
           "name": "timeZone",
-          "description": "Optional IANA timezone (e.g., 'America/Los_Angeles', 'Europe/London', 'UTC'). If not provided, uses the primary Google Calendar's default timezone.",
-          "descriptionTokens": 37,
+          "description": "IANA timezone (e.g., 'America/Los_Angeles'). Defaults to calendar's timezone.",
+          "descriptionTokens": 21,
           "type": "string",
           "hasEnum": false,
           "enumTokens": 0,
-          "totalTokens": 40
+          "totalTokens": 24
         }
       ],
-      "schemaTokens": 155,
-      "totalTokens": 184,
+      "schemaTokens": 99,
+      "totalTokens": 128,
       "breakdown": {
         "toolDescription": 29,
-        "propertyDescriptions": 93,
+        "propertyDescriptions": 37,
         "propertyNames": 3,
         "typeDefinitions": 2,
         "enumValues": 0,
@@ -1774,7 +1774,37 @@
   ],
   "duplicates": [
     {
-      "text": "Account nickname to use for this operation (e.g., 'work', 'personal') - the friendly name you gave when connecting the account. Optional when only one account is connected - will auto-select the account with appropriate permissions. Use 'list-calendars' to see available accounts.",
+      "text": "Account nickname(s) to query (e.g., 'work' or ['work', 'personal']). Omit to query all accounts.",
+      "occurrences": 4,
+      "tools": [
+        "list-calendars",
+        "list-events",
+        "search-events",
+        "get-freebusy"
+      ],
+      "locations": [
+        {
+          "tool": "list-calendars",
+          "property": "account"
+        },
+        {
+          "tool": "list-events",
+          "property": "account"
+        },
+        {
+          "tool": "search-events",
+          "property": "account"
+        },
+        {
+          "tool": "get-freebusy",
+          "property": "account"
+        }
+      ],
+      "tokenCount": 27,
+      "totalTokensSaved": 81
+    },
+    {
+      "text": "Account nickname (e.g., 'work'). Optional if only one account connected.",
       "occurrences": 6,
       "tools": [
         "get-event",
@@ -1810,133 +1840,8 @@
           "property": "account"
         }
       ],
-      "tokenCount": 56,
-      "totalTokensSaved": 280
-    },
-    {
-      "text": "Start time boundary. Preferred: '2024-01-01T00:00:00' (uses timeZone parameter or calendar timezone). Also accepts: '2024-01-01T00:00:00Z' or '2024-01-01T00:00:00-08:00'.",
-      "occurrences": 3,
-      "tools": [
-        "list-events",
-        "search-events",
-        "get-freebusy"
-      ],
-      "locations": [
-        {
-          "tool": "list-events",
-          "property": "timeMin"
-        },
-        {
-          "tool": "search-events",
-          "property": "timeMin"
-        },
-        {
-          "tool": "get-freebusy",
-          "property": "timeMin"
-        }
-      ],
-      "tokenCount": 65,
-      "totalTokensSaved": 130
-    },
-    {
-      "text": "End time boundary. Preferred: '2024-01-01T23:59:59' (uses timeZone parameter or calendar timezone). Also accepts: '2024-01-01T23:59:59Z' or '2024-01-01T23:59:59-08:00'.",
-      "occurrences": 3,
-      "tools": [
-        "list-events",
-        "search-events",
-        "get-freebusy"
-      ],
-      "locations": [
-        {
-          "tool": "list-events",
-          "property": "timeMax"
-        },
-        {
-          "tool": "search-events",
-          "property": "timeMax"
-        },
-        {
-          "tool": "get-freebusy",
-          "property": "timeMax"
-        }
-      ],
-      "tokenCount": 65,
-      "totalTokensSaved": 130
-    },
-    {
-      "text": "Account nickname(s) to query (e.g., 'work' or ['work', 'personal']) - the friendly names you gave when connecting accounts. Optional - if omitted, queries all connected accounts and merges results. Use 'list-calendars' to see available accounts.",
-      "occurrences": 3,
-      "tools": [
-        "list-calendars",
-        "list-events",
-        "search-events"
-      ],
-      "locations": [
-        {
-          "tool": "list-calendars",
-          "property": "account"
-        },
-        {
-          "tool": "list-events",
-          "property": "account"
-        },
-        {
-          "tool": "search-events",
-          "property": "account"
-        }
-      ],
-      "tokenCount": 54,
-      "totalTokensSaved": 108
-    },
-    {
-      "text": "Optional array of additional event fields to retrieve. Available fields are strictly validated. Default fields (id, summary, start, end, status, htmlLink, location, attendees) are always included.",
-      "occurrences": 3,
-      "tools": [
-        "list-events",
-        "search-events",
-        "get-event"
-      ],
-      "locations": [
-        {
-          "tool": "list-events",
-          "property": "fields"
-        },
-        {
-          "tool": "search-events",
-          "property": "fields"
-        },
-        {
-          "tool": "get-event",
-          "property": "fields"
-        }
-      ],
-      "tokenCount": 39,
-      "totalTokensSaved": 78
-    },
-    {
-      "text": "Timezone as IANA Time Zone Database name (e.g., America/Los_Angeles). Takes priority over calendar's default timezone. Only used for timezone-naive datetime strings.",
-      "occurrences": 3,
-      "tools": [
-        "list-events",
-        "search-events",
-        "create-event"
-      ],
-      "locations": [
-        {
-          "tool": "list-events",
-          "property": "timeZone"
-        },
-        {
-          "tool": "search-events",
-          "property": "timeZone"
-        },
-        {
-          "tool": "create-event",
-          "property": "timeZone"
-        }
-      ],
-      "tokenCount": 37,
-      "totalTokensSaved": 74
+      "tokenCount": 16,
+      "totalTokensSaved": 80
     },
     {
       "text": "ID of the calendar (use 'primary' for the main calendar)",
@@ -1979,6 +1884,81 @@
       "totalTokensSaved": 70
     },
     {
+      "text": "Start of time range (ISO 8601, e.g., '2024-01-01T00:00:00').",
+      "occurrences": 3,
+      "tools": [
+        "list-events",
+        "search-events",
+        "get-freebusy"
+      ],
+      "locations": [
+        {
+          "tool": "list-events",
+          "property": "timeMin"
+        },
+        {
+          "tool": "search-events",
+          "property": "timeMin"
+        },
+        {
+          "tool": "get-freebusy",
+          "property": "timeMin"
+        }
+      ],
+      "tokenCount": 27,
+      "totalTokensSaved": 54
+    },
+    {
+      "text": "End of time range (ISO 8601, e.g., '2024-01-31T23:59:59').",
+      "occurrences": 3,
+      "tools": [
+        "list-events",
+        "search-events",
+        "get-freebusy"
+      ],
+      "locations": [
+        {
+          "tool": "list-events",
+          "property": "timeMax"
+        },
+        {
+          "tool": "search-events",
+          "property": "timeMax"
+        },
+        {
+          "tool": "get-freebusy",
+          "property": "timeMax"
+        }
+      ],
+      "tokenCount": 27,
+      "totalTokensSaved": 54
+    },
+    {
+      "text": "IANA timezone (e.g., 'America/Los_Angeles'). Defaults to calendar's timezone.",
+      "occurrences": 3,
+      "tools": [
+        "list-events",
+        "search-events",
+        "get-current-time"
+      ],
+      "locations": [
+        {
+          "tool": "list-events",
+          "property": "timeZone"
+        },
+        {
+          "tool": "search-events",
+          "property": "timeZone"
+        },
+        {
+          "tool": "get-current-time",
+          "property": "timeZone"
+        }
+      ],
+      "tokenCount": 21,
+      "totalTokensSaved": 42
+    },
+    {
       "text": "Recurrence rules in RFC5545 format (e.g., [\"RRULE:FREQ=WEEKLY;COUNT=5\"])",
       "occurrences": 2,
       "tools": [
@@ -1997,6 +1977,26 @@
       ],
       "tokenCount": 25,
       "totalTokensSaved": 25
+    },
+    {
+      "text": "Additional fields to include beyond defaults (id, summary, start, end, status, htmlLink, location, attendees).",
+      "occurrences": 2,
+      "tools": [
+        "list-events",
+        "search-events"
+      ],
+      "locations": [
+        {
+          "tool": "list-events",
+          "property": "fields"
+        },
+        {
+          "tool": "search-events",
+          "property": "fields"
+        }
+      ],
+      "tokenCount": 24,
+      "totalTokensSaved": 24
     },
     {
       "text": "Filter by private extended properties (key=value). Matches events that have all specified properties.",

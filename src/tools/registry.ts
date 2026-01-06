@@ -28,7 +28,7 @@ const timeMinSchema = z.string()
     const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
     return withTimezone || withoutTimezone;
   }, "Must be ISO 8601 format: '2026-01-01T00:00:00'")
-  .describe("Start time boundary. Preferred: '2024-01-01T00:00:00' (uses timeZone parameter or calendar timezone). Also accepts: '2024-01-01T00:00:00Z' or '2024-01-01T00:00:00-08:00'.")
+  .describe("Start of time range (ISO 8601, e.g., '2024-01-01T00:00:00').")
   .optional();
 
 const timeMaxSchema = z.string()
@@ -37,11 +37,11 @@ const timeMaxSchema = z.string()
     const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
     return withTimezone || withoutTimezone;
   }, "Must be ISO 8601 format: '2026-01-01T00:00:00'")
-  .describe("End time boundary. Preferred: '2024-01-01T23:59:59' (uses timeZone parameter or calendar timezone). Also accepts: '2024-01-01T23:59:59Z' or '2024-01-01T23:59:59-08:00'.")
+  .describe("End of time range (ISO 8601, e.g., '2024-01-31T23:59:59').")
   .optional();
 
 const timeZoneSchema = z.string().optional().describe(
-  "Timezone as IANA Time Zone Database name (e.g., America/Los_Angeles). Takes priority over calendar's default timezone. Only used for timezone-naive datetime strings."
+  "IANA timezone (e.g., 'America/Los_Angeles'). Defaults to calendar's timezone."
 );
 
 // Generic helper to parse JSON string arrays
@@ -73,7 +73,7 @@ const fieldsSchema = z.preprocess(
   parseJsonStringArray,
   z.array(z.enum(ALLOWED_EVENT_FIELDS))
 ).optional().describe(
-  "Optional array of additional event fields to retrieve. Available fields are strictly validated. Default fields (id, summary, start, end, status, htmlLink, location, attendees) are always included."
+  "Additional fields to include beyond defaults (id, summary, start, end, status, htmlLink, location, attendees)."
 );
 
 const calendarsToCheckSchema = z.preprocess(
@@ -109,7 +109,7 @@ const singleAccountSchema = z.string()
   .regex(/^[a-z0-9_-]{1,64}$/, "Account nickname must be 1-64 characters: lowercase letters, numbers, dashes, underscores only")
   .optional()
   .describe(
-    "Account nickname to use for this operation (e.g., 'work', 'personal') - the friendly name you gave when connecting the account. Optional when only one account is connected - will auto-select the account with appropriate permissions. Use 'list-calendars' to see available accounts."
+    "Account nickname (e.g., 'work'). Optional if only one account connected."
   );
 
 // Account ID validation regex
@@ -155,7 +155,7 @@ const multiAccountSchema = z.preprocess(
 )
   .optional()
   .describe(
-    "Account nickname(s) to query (e.g., 'work' or ['work', 'personal']) - the friendly names you gave when connecting accounts. Optional - if omitted, queries all connected accounts and merges results. Use 'list-calendars' to see available accounts."
+    "Account nickname(s) to query (e.g., 'work' or ['work', 'personal']). Omit to query all accounts."
   );
 
 // Define all tool schemas with TypeScript inference
@@ -216,19 +216,19 @@ export const ToolSchemas = {
         const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
         return withTimezone || withoutTimezone;
       }, "Must be ISO 8601 format: '2026-01-01T00:00:00'")
-      .describe("Start time boundary. Preferred: '2024-01-01T00:00:00' (uses timeZone parameter or calendar timezone). Also accepts: '2024-01-01T00:00:00Z' or '2024-01-01T00:00:00-08:00'."),
+      .describe("Start of time range (ISO 8601, e.g., '2024-01-01T00:00:00')."),
     timeMax: z.string()
       .refine((val) => {
         const withTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(val);
         const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
         return withTimezone || withoutTimezone;
       }, "Must be ISO 8601 format: '2026-01-01T00:00:00'")
-      .describe("End time boundary. Preferred: '2024-01-01T23:59:59' (uses timeZone parameter or calendar timezone). Also accepts: '2024-01-01T23:59:59Z' or '2024-01-01T23:59:59-08:00'."),
+      .describe("End of time range (ISO 8601, e.g., '2024-01-31T23:59:59')."),
     timeZone: z.string().optional().describe(
-      "Timezone as IANA Time Zone Database name (e.g., America/Los_Angeles). Takes priority over calendar's default timezone. Only used for timezone-naive datetime strings."
+      "IANA timezone (e.g., 'America/Los_Angeles'). Defaults to calendar's timezone."
     ),
     fields: z.array(z.enum(ALLOWED_EVENT_FIELDS)).optional().describe(
-      "Optional array of additional event fields to retrieve. Available fields are strictly validated. Default fields (id, summary, start, end, status, htmlLink, location, attendees) are always included."
+      "Additional fields to include beyond defaults (id, summary, start, end, status, htmlLink, location, attendees)."
     ),
     privateExtendedProperty: z
       .array(z.string().regex(/^[^=]+=[^=]+$/, "Must be in key=value format"))
@@ -581,7 +581,7 @@ export const ToolSchemas = {
 
   'get-freebusy': z.object({
     account: multiAccountSchema.describe(
-      "Account nickname(s) to query from (e.g., 'work' or ['work', 'personal']). Optional - if omitted, queries from all connected accounts to maximize calendar accessibility."
+      "Account nickname(s) to query (e.g., 'work' or ['work', 'personal']). Omit to query all accounts."
     ),
     calendars: z.array(z.object({
       id: z.string().describe("ID of the calendar (use 'primary' for the main calendar)")
@@ -594,15 +594,15 @@ export const ToolSchemas = {
         const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
         return withTimezone || withoutTimezone;
       }, "Must be ISO 8601 format: '2026-01-01T00:00:00'")
-      .describe("Start time boundary. Preferred: '2024-01-01T00:00:00' (uses timeZone parameter or calendar timezone). Also accepts: '2024-01-01T00:00:00Z' or '2024-01-01T00:00:00-08:00'."),
+      .describe("Start of time range (ISO 8601, e.g., '2024-01-01T00:00:00')."),
     timeMax: z.string()
       .refine((val) => {
         const withTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(val);
         const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
         return withTimezone || withoutTimezone;
       }, "Must be ISO 8601 format: '2026-01-01T00:00:00'")
-      .describe("End time boundary. Preferred: '2024-01-01T23:59:59' (uses timeZone parameter or calendar timezone). Also accepts: '2024-01-01T23:59:59Z' or '2024-01-01T23:59:59-08:00'."),
-    timeZone: z.string().optional().describe("Timezone for the query"),
+      .describe("End of time range (ISO 8601, e.g., '2024-01-31T23:59:59')."),
+    timeZone: z.string().optional().describe("IANA timezone for the query."),
     groupExpansionMax: z.number().int().max(100).optional().describe(
       "Maximum number of calendars to expand per group (max 100)"
     ),
@@ -614,7 +614,7 @@ export const ToolSchemas = {
   'get-current-time': z.object({
     account: singleAccountSchema,
     timeZone: z.string().optional().describe(
-      "Optional IANA timezone (e.g., 'America/Los_Angeles', 'Europe/London', 'UTC'). If not provided, uses the primary Google Calendar's default timezone."
+      "IANA timezone (e.g., 'America/Los_Angeles'). Defaults to calendar's timezone."
     )
   }),
 
