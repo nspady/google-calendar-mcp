@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.1](https://github.com/nspady/google-calendar-mcp/compare/v2.3.0...v2.3.1) (2026-01-07)
+
+
+### Features
+
+* consolidate event types into create-event tool ([#151](https://github.com/nspady/google-calendar-mcp/issues/151)) ([7bbacf8](https://github.com/nspady/google-calendar-mcp/commit/7bbacf8f7dd4a5a9e3a4f0f6c38917401c49d0af))
+
 ## [2.3.0](https://github.com/nspady/google-calendar-mcp/compare/v2.2.0...v2.3.0) (2026-01-06)
 
 
