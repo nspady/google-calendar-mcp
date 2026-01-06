@@ -17,8 +17,6 @@ import { DeleteEventHandler } from "../handlers/core/DeleteEventHandler.js";
 import { FreeBusyEventHandler } from "../handlers/core/FreeBusyEventHandler.js";
 import { GetCurrentTimeHandler } from "../handlers/core/GetCurrentTimeHandler.js";
 import { RespondToEventHandler } from "../handlers/core/RespondToEventHandler.js";
-import { SetOutOfOfficeHandler } from "../handlers/core/SetOutOfOfficeHandler.js";
-import { SetWorkingLocationHandler } from "../handlers/core/SetWorkingLocationHandler.js";
 
 // Define shared schema fields for reuse
 // Note: Event datetime fields (start/end) are NOT shared to avoid $ref generation
@@ -367,8 +365,8 @@ export const ToolSchemas = {
     allowDuplicates: z.boolean().optional().describe(
       "If true, allows creation even when exact duplicates are detected (similarity >= 0.95). Default is false which blocks duplicate creation"
     ),
-    eventType: z.enum(["default", "focusTime"]).optional().describe(
-      "Type of the event. 'default' for regular events, 'focusTime' for Focus Time blocks."
+    eventType: z.enum(["default", "focusTime", "outOfOffice", "workingLocation"]).optional().describe(
+      "Type of the event. 'default' for regular events, 'focusTime' for Focus Time blocks, 'outOfOffice' for Out of Office events, 'workingLocation' for Working Location events. Note: outOfOffice and workingLocation require Google Workspace and only work on primary calendar."
     ),
     focusTimeProperties: z.object({
       autoDeclineMode: z.enum([
@@ -382,11 +380,41 @@ export const ToolSchemas = {
         .describe("Message sent when declining invitations")
     }).optional().describe(
       "Focus Time properties. Only used when eventType is 'focusTime'. Requires Google Workspace."
+    ),
+    outOfOfficeProperties: z.object({
+      autoDeclineMode: z.enum([
+        "declineNone",
+        "declineAllConflictingInvitations",
+        "declineOnlyNewConflictingInvitations"
+      ]).optional().default("declineAllConflictingInvitations")
+        .describe("How to handle conflicting meetings. Default is to decline all conflicts."),
+      declineMessage: z.string().optional()
+        .describe("Message sent when declining invitations (e.g., 'I'm out of office, will respond when I return')")
+    }).optional().describe(
+      "Out of Office properties. Only used when eventType is 'outOfOffice'. Requires Google Workspace."
+    ),
+    workingLocationProperties: z.object({
+      type: z.enum(["homeOffice", "officeLocation", "customLocation"])
+        .describe("Type of working location"),
+      homeOffice: z.object({}).optional()
+        .describe("Empty object for home office type"),
+      officeLocation: z.object({
+        label: z.string().optional().describe("Office name shown in Calendar (e.g., 'HQ Building', 'NYC Office')"),
+        buildingId: z.string().optional().describe("Building identifier from organization's Resources"),
+        floorId: z.string().optional().describe("Floor identifier"),
+        floorSectionId: z.string().optional().describe("Floor section identifier"),
+        deskId: z.string().optional().describe("Desk identifier")
+      }).optional().describe("Office location details"),
+      customLocation: z.object({
+        label: z.string().optional().describe("Label for custom location (e.g., 'Coffee Shop', 'Client Site')")
+      }).optional().describe("Custom location details")
+    }).optional().describe(
+      "Working Location properties. Only used when eventType is 'workingLocation'. Requires Google Workspace."
     )
   }).refine(
     (data) => {
-      // Validate that focusTime events use dateTime (not all-day date format)
-      if (data.eventType === 'focusTime') {
+      // Validate that focusTime and outOfOffice events use dateTime (not all-day date format)
+      if (data.eventType === 'focusTime' || data.eventType === 'outOfOffice') {
         const dateOnlyRegex = /^\d{4}-\d{2}-\d{2}$/;
         if (dateOnlyRegex.test(data.start) || dateOnlyRegex.test(data.end)) {
           return false;
@@ -395,7 +423,7 @@ export const ToolSchemas = {
       return true;
     },
     {
-      message: "Focus Time events cannot be all-day events. Use dateTime format (e.g., '2025-01-01T10:00:00') instead of date format.",
+      message: "Focus Time and Out of Office events cannot be all-day events. Use dateTime format (e.g., '2025-01-01T10:00:00') instead of date format.",
       path: ["eventType"]
     }
   ),
@@ -628,77 +656,7 @@ export const ToolSchemas = {
       message: "originalStartTime is required when modificationScope is 'thisEventOnly'",
       path: ["originalStartTime"]
     }
-  ),
-
-  'set-out-of-office': z.object({
-    account: singleAccountSchema,
-    calendarId: z.string().describe("Calendar ID (use 'primary' for the main calendar). Out of Office events only work on primary calendar."),
-    summary: z.string().optional().default("Out of office")
-      .describe("Title for the out of office event"),
-    start: z.string()
-      .refine((val) => {
-        const withTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(val);
-        const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
-        return withTimezone || withoutTimezone;
-      }, "Must be ISO 8601 dateTime format (not all-day): '2025-01-01T09:00:00'")
-      .describe("Start time (must be dateTime format, not all-day)"),
-    end: z.string()
-      .refine((val) => {
-        const withTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(val);
-        const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
-        return withTimezone || withoutTimezone;
-      }, "Must be ISO 8601 dateTime format (not all-day): '2025-01-01T17:00:00'")
-      .describe("End time (must be dateTime format, not all-day)"),
-    timeZone: timeZoneSchema,
-    autoDeclineMode: z.enum([
-      "declineNone",
-      "declineAllConflictingInvitations",
-      "declineOnlyNewConflictingInvitations"
-    ]).optional().default("declineAllConflictingInvitations")
-      .describe("How to handle conflicting meetings. Default is to decline all conflicts."),
-    declineMessage: z.string().optional()
-      .describe("Message sent when declining invitations (e.g., 'I'm out of office, will respond when I return')")
-  }),
-
-  'set-working-location': z.object({
-    account: singleAccountSchema,
-    calendarId: z.string().describe("Calendar ID (use 'primary' for the main calendar). Working Location events only work on primary calendar."),
-    summary: z.string().optional()
-      .describe("Optional title (auto-generated based on location type if not provided)"),
-    start: z.string()
-      .refine((val) => {
-        const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(val);
-        const withTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(val);
-        const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
-        return dateOnly || withTimezone || withoutTimezone;
-      }, "Must be ISO 8601 format: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events")
-      .describe("Start (dateTime or date for all-day)"),
-    end: z.string()
-      .refine((val) => {
-        const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(val);
-        const withTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(val);
-        const withoutTimezone = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(val);
-        return dateOnly || withTimezone || withoutTimezone;
-      }, "Must be ISO 8601 format: '2025-01-01T17:00:00' for timed events or '2025-01-02' for all-day events")
-      .describe("End (dateTime or date for all-day)"),
-    timeZone: timeZoneSchema,
-    locationType: z.enum(["homeOffice", "officeLocation", "customLocation"])
-      .describe("Type of working location"),
-    // For officeLocation
-    officeLabel: z.string().optional()
-      .describe("Office name shown in Calendar (e.g., 'HQ Building', 'NYC Office')"),
-    buildingId: z.string().optional()
-      .describe("Building identifier from organization's Resources (Google Workspace)"),
-    floorId: z.string().optional()
-      .describe("Floor identifier"),
-    floorSectionId: z.string().optional()
-      .describe("Floor section identifier"),
-    deskId: z.string().optional()
-      .describe("Desk identifier"),
-    // For customLocation
-    customLocationLabel: z.string().optional()
-      .describe("Label for custom location (e.g., 'Coffee Shop', 'Client Site')")
-  })
+  )
 } as const;
 
 // Generate TypeScript types from schemas
@@ -718,8 +676,6 @@ export type DeleteEventInput = ToolInputs['delete-event'];
 export type GetFreeBusyInput = ToolInputs['get-freebusy'];
 export type GetCurrentTimeInput = ToolInputs['get-current-time'];
 export type RespondToEventInput = ToolInputs['respond-to-event'];
-export type SetOutOfOfficeInput = ToolInputs['set-out-of-office'];
-export type SetWorkingLocationInput = ToolInputs['set-working-location'];
 
 interface ToolDefinition {
   name: keyof typeof ToolSchemas;
@@ -881,18 +837,6 @@ export class ToolRegistry {
       description: "Respond to a calendar event invitation with Accept, Decline, Maybe (Tentative), or No Response.",
       schema: ToolSchemas['respond-to-event'],
       handler: RespondToEventHandler
-    },
-    {
-      name: "set-out-of-office",
-      description: "Set an Out of Office event on your calendar with auto-decline settings for conflicting meetings. Requires Google Workspace.",
-      schema: ToolSchemas['set-out-of-office'],
-      handler: SetOutOfOfficeHandler
-    },
-    {
-      name: "set-working-location",
-      description: "Set your working location (home, office, or custom location) on your calendar. Requires Google Workspace.",
-      schema: ToolSchemas['set-working-location'],
-      handler: SetWorkingLocationHandler
     }
   ];
 
@@ -916,7 +860,7 @@ export class ToolRegistry {
    */
   private static normalizeDateTimeFields(toolName: string, args: any): any {
     // Only normalize for tools that have datetime fields
-    const toolsWithDateTime = ['create-event', 'update-event', 'set-out-of-office', 'set-working-location'];
+    const toolsWithDateTime = ['create-event', 'update-event'];
     if (!toolsWithDateTime.includes(toolName)) {
       return args;
     }

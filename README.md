@@ -234,7 +234,7 @@ npx @cocal/google-calendar-mcp start --enable-tools list-events,create-event,get
 }
 ```
 
-**Available tool names:** `list-calendars`, `list-events`, `search-events`, `get-event`, `list-colors`, `create-event`, `update-event`, `delete-event`, `get-freebusy`, `get-current-time`, `respond-to-event`, `set-out-of-office`, `set-working-location`, `manage-accounts`
+**Available tool names:** `list-calendars`, `list-events`, `search-events`, `get-event`, `list-colors`, `create-event`, `update-event`, `delete-event`, `get-freebusy`, `get-current-time`, `respond-to-event`, `manage-accounts`
 
 **Note:** The `manage-accounts` tool is always available regardless of filtering, as it's needed for authentication management.
 

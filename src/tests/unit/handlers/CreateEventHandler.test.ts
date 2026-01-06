@@ -872,4 +872,300 @@ describe('CreateEventHandler', () => {
       );
     });
   });
+
+  describe('Out of Office Events', () => {
+    it('should create an out of office event with eventType', async () => {
+      const mockCreatedEvent = {
+        id: 'ooo-123',
+        summary: 'Out of office',
+        eventType: 'outOfOffice',
+        transparency: 'opaque',
+        start: { dateTime: '2025-01-15T09:00:00Z' },
+        end: { dateTime: '2025-01-15T17:00:00Z' }
+      };
+
+      mockCalendar.events.insert.mockResolvedValue({ data: mockCreatedEvent });
+
+      const args = {
+        calendarId: 'primary',
+        summary: 'Out of office',
+        start: '2025-01-15T09:00:00',
+        end: '2025-01-15T17:00:00',
+        eventType: 'outOfOffice' as const
+      };
+
+      await handler.runTool(args, mockAccounts);
+
+      expect(mockCalendar.events.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestBody: expect.objectContaining({
+            eventType: 'outOfOffice',
+            transparency: 'opaque', // Auto-set for outOfOffice
+            outOfOfficeProperties: {
+              autoDeclineMode: 'declineAllConflictingInvitations'
+            }
+          })
+        })
+      );
+    });
+
+    it('should create out of office event with outOfOfficeProperties', async () => {
+      const mockCreatedEvent = {
+        id: 'ooo-123',
+        summary: 'Vacation',
+        eventType: 'outOfOffice',
+        outOfOfficeProperties: {
+          autoDeclineMode: 'declineOnlyNewConflictingInvitations',
+          declineMessage: 'I am on vacation'
+        }
+      };
+
+      mockCalendar.events.insert.mockResolvedValue({ data: mockCreatedEvent });
+
+      const args = {
+        calendarId: 'primary',
+        summary: 'Vacation',
+        start: '2025-01-15T09:00:00',
+        end: '2025-01-20T17:00:00',
+        eventType: 'outOfOffice' as const,
+        outOfOfficeProperties: {
+          autoDeclineMode: 'declineOnlyNewConflictingInvitations' as const,
+          declineMessage: 'I am on vacation'
+        }
+      };
+
+      await handler.runTool(args, mockAccounts);
+
+      expect(mockCalendar.events.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestBody: expect.objectContaining({
+            eventType: 'outOfOffice',
+            outOfOfficeProperties: {
+              autoDeclineMode: 'declineOnlyNewConflictingInvitations',
+              declineMessage: 'I am on vacation'
+            }
+          })
+        })
+      );
+    });
+
+    it('should reject out of office events on non-primary calendar', async () => {
+      // Override the mock to return a non-primary calendar
+      vi.spyOn(handler as any, 'getClientWithAutoSelection').mockResolvedValue({
+        client: mockOAuth2Client,
+        accountId: 'test',
+        calendarId: 'secondary-calendar',
+        wasAutoSelected: true
+      });
+
+      const args = {
+        calendarId: 'secondary-calendar',
+        summary: 'Out of office',
+        start: '2025-01-15T09:00:00',
+        end: '2025-01-15T17:00:00',
+        eventType: 'outOfOffice' as const
+      };
+
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
+        'Out of Office events can only be created on the primary calendar'
+      );
+    });
+  });
+
+  describe('Working Location Events', () => {
+    it('should create a working location event for home office', async () => {
+      const mockCreatedEvent = {
+        id: 'wl-123',
+        summary: 'Working from home',
+        eventType: 'workingLocation',
+        transparency: 'transparent',
+        visibility: 'public',
+        start: { dateTime: '2025-01-15T09:00:00Z' },
+        end: { dateTime: '2025-01-15T17:00:00Z' }
+      };
+
+      mockCalendar.events.insert.mockResolvedValue({ data: mockCreatedEvent });
+
+      const args = {
+        calendarId: 'primary',
+        start: '2025-01-15T09:00:00',
+        end: '2025-01-15T17:00:00',
+        eventType: 'workingLocation' as const,
+        workingLocationProperties: {
+          type: 'homeOffice' as const
+        }
+      };
+
+      await handler.runTool(args, mockAccounts);
+
+      expect(mockCalendar.events.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestBody: expect.objectContaining({
+            summary: 'Working from home', // Auto-generated
+            eventType: 'workingLocation',
+            transparency: 'transparent', // Auto-set for workingLocation
+            visibility: 'public', // Auto-set for workingLocation
+            workingLocationProperties: {
+              type: 'homeOffice',
+              homeOffice: {}
+            }
+          })
+        })
+      );
+    });
+
+    it('should create a working location event for office location', async () => {
+      const mockCreatedEvent = {
+        id: 'wl-123',
+        summary: 'Working from HQ',
+        eventType: 'workingLocation'
+      };
+
+      mockCalendar.events.insert.mockResolvedValue({ data: mockCreatedEvent });
+
+      const args = {
+        calendarId: 'primary',
+        start: '2025-01-15T09:00:00',
+        end: '2025-01-15T17:00:00',
+        eventType: 'workingLocation' as const,
+        workingLocationProperties: {
+          type: 'officeLocation' as const,
+          officeLocation: {
+            label: 'HQ',
+            buildingId: 'building-1',
+            floorId: '3'
+          }
+        }
+      };
+
+      await handler.runTool(args, mockAccounts);
+
+      expect(mockCalendar.events.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestBody: expect.objectContaining({
+            summary: 'Working from HQ', // Auto-generated from label
+            eventType: 'workingLocation',
+            workingLocationProperties: {
+              type: 'officeLocation',
+              officeLocation: {
+                label: 'HQ',
+                buildingId: 'building-1',
+                floorId: '3'
+              }
+            }
+          })
+        })
+      );
+    });
+
+    it('should create a working location event for custom location', async () => {
+      const mockCreatedEvent = {
+        id: 'wl-123',
+        summary: 'Working from Coffee Shop',
+        eventType: 'workingLocation'
+      };
+
+      mockCalendar.events.insert.mockResolvedValue({ data: mockCreatedEvent });
+
+      const args = {
+        calendarId: 'primary',
+        start: '2025-01-15T09:00:00',
+        end: '2025-01-15T17:00:00',
+        eventType: 'workingLocation' as const,
+        workingLocationProperties: {
+          type: 'customLocation' as const,
+          customLocation: {
+            label: 'Coffee Shop'
+          }
+        }
+      };
+
+      await handler.runTool(args, mockAccounts);
+
+      expect(mockCalendar.events.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestBody: expect.objectContaining({
+            summary: 'Working from Coffee Shop', // Auto-generated from label
+            eventType: 'workingLocation',
+            workingLocationProperties: {
+              type: 'customLocation',
+              customLocation: {
+                label: 'Coffee Shop'
+              }
+            }
+          })
+        })
+      );
+    });
+
+    it('should use custom summary if provided for working location', async () => {
+      const mockCreatedEvent = {
+        id: 'wl-123',
+        summary: 'Remote Day',
+        eventType: 'workingLocation'
+      };
+
+      mockCalendar.events.insert.mockResolvedValue({ data: mockCreatedEvent });
+
+      const args = {
+        calendarId: 'primary',
+        summary: 'Remote Day', // Custom summary
+        start: '2025-01-15T09:00:00',
+        end: '2025-01-15T17:00:00',
+        eventType: 'workingLocation' as const,
+        workingLocationProperties: {
+          type: 'homeOffice' as const
+        }
+      };
+
+      await handler.runTool(args, mockAccounts);
+
+      expect(mockCalendar.events.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestBody: expect.objectContaining({
+            summary: 'Remote Day' // Uses provided summary
+          })
+        })
+      );
+    });
+
+    it('should reject working location events on non-primary calendar', async () => {
+      // Override the mock to return a non-primary calendar
+      vi.spyOn(handler as any, 'getClientWithAutoSelection').mockResolvedValue({
+        client: mockOAuth2Client,
+        accountId: 'test',
+        calendarId: 'secondary-calendar',
+        wasAutoSelected: true
+      });
+
+      const args = {
+        calendarId: 'secondary-calendar',
+        start: '2025-01-15T09:00:00',
+        end: '2025-01-15T17:00:00',
+        eventType: 'workingLocation' as const,
+        workingLocationProperties: {
+          type: 'homeOffice' as const
+        }
+      };
+
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
+        'Working Location events can only be created on the primary calendar'
+      );
+    });
+
+    it('should require workingLocationProperties when eventType is workingLocation', async () => {
+      const args = {
+        calendarId: 'primary',
+        summary: 'Working',
+        start: '2025-01-15T09:00:00',
+        end: '2025-01-15T17:00:00',
+        eventType: 'workingLocation' as const
+        // Missing workingLocationProperties
+      };
+
+      await expect(handler.runTool(args, mockAccounts)).rejects.toThrow(
+        'workingLocationProperties is required when eventType is "workingLocation"'
+      );
+    });
+  });
 });
