@@ -3,6 +3,7 @@ import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { BaseToolHandler } from "../handlers/core/BaseToolHandler.js";
 import { ALLOWED_EVENT_FIELDS } from "../utils/field-mask-builder.js";
+import { ServerConfig } from "../config/TransportConfig.js";
 
 // Import all handlers
 import { ListCalendarsHandler } from "../handlers/core/ListCalendarsHandler.js";
@@ -938,16 +939,73 @@ export class ToolRegistry {
     return normalized;
   }
 
+  /**
+   * Get all available tool names for validation
+   */
+  static getAvailableToolNames(): string[] {
+    return this.tools.map(t => t.name);
+  }
+
+  /**
+   * Validate that all tool names in a list exist
+   * @throws Error if any tool name is invalid
+   */
+  static validateToolNames(toolNames: string[]): void {
+    const availableTools = new Set([...this.getAvailableToolNames(), 'manage-accounts']);
+    const invalidTools = toolNames.filter(name => !availableTools.has(name));
+
+    if (invalidTools.length > 0) {
+      const available = [...this.getAvailableToolNames(), 'manage-accounts'].join(', ');
+      throw new Error(
+        `Invalid tool name(s): ${invalidTools.join(', ')}. ` +
+        `Available tools: ${available}`
+      );
+    }
+  }
+
   static async registerAll(
     server: McpServer,
     executeWithHandler: (
       handler: any,
       args: any
+    ) => Promise<{ content: Array<{ type: "text"; text: string }> }>,
+    config?: ServerConfig
+  ) {
+    // Validate enabledTools if provided
+    if (config?.enabledTools) {
+      if (config.enabledTools.length === 0) {
+        throw new Error('Enabled tools list is empty. Provide at least one tool name.');
+      }
+      this.validateToolNames(config.enabledTools);
+      const enabledSet = new Set(config.enabledTools);
+      process.stderr.write(`Tool filtering enabled: ${config.enabledTools.join(', ')}\n`);
+
+      // Filter and register only enabled tools
+      for (const tool of this.tools) {
+        if (!enabledSet.has(tool.name)) {
+          continue;
+        }
+        this.registerSingleTool(server, tool, executeWithHandler);
+      }
+      return;
+    }
+
+    // No filtering - register all tools
+    for (const tool of this.tools) {
+      this.registerSingleTool(server, tool, executeWithHandler);
+    }
+  }
+
+  private static registerSingleTool(
+    server: McpServer,
+    tool: ToolDefinition,
+    executeWithHandler: (
+      handler: any,
+      args: any
     ) => Promise<{ content: Array<{ type: "text"; text: string }> }>
   ) {
-    for (const tool of this.tools) {
-      // Use the existing registerTool method which handles schema conversion properly
-      server.registerTool(
+    // Use the existing registerTool method which handles schema conversion properly
+    server.registerTool(
         tool.name,
         {
           description: tool.description,
@@ -969,6 +1027,5 @@ export class ToolRegistry {
           return executeWithHandler(handler, processedArgs);
         }
       );
-    }
   }
 }

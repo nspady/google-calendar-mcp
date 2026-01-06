@@ -7,6 +7,21 @@ export interface TransportConfig {
 export interface ServerConfig {
   transport: TransportConfig;
   debug?: boolean;
+  enabledTools?: string[];
+}
+
+function parseEnabledTools(value: string | undefined, source: string): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const parsed = value.split(',').map(t => t.trim()).filter(t => t.length > 0);
+  if (parsed.length === 0) {
+    process.stderr.write(`Error: ${source} requires at least one tool name\n`);
+    process.exit(1);
+  }
+
+  return parsed;
 }
 
 export function parseArgs(args: string[]): ServerConfig {
@@ -17,7 +32,8 @@ export function parseArgs(args: string[]): ServerConfig {
       port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
       host: process.env.HOST || '127.0.0.1'
     },
-    debug: process.env.DEBUG === 'true' || false
+    debug: process.env.DEBUG === 'true' || false,
+    enabledTools: parseEnabledTools(process.env.ENABLED_TOOLS, 'ENABLED_TOOLS')
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -39,6 +55,14 @@ export function parseArgs(args: string[]): ServerConfig {
       case '--debug':
         config.debug = true;
         break;
+      case '--enable-tools':
+        const enabledTools = args[++i];
+        if (!enabledTools) {
+          process.stderr.write('Error: --enable-tools requires a comma-separated list of tool names\n');
+          process.exit(1);
+        }
+        config.enabledTools = parseEnabledTools(enabledTools, '--enable-tools');
+        break;
       case '--help':
         process.stderr.write(`
 Google Calendar MCP Server
@@ -50,6 +74,7 @@ Options:
   --port <number>          Port for HTTP transport (default: 3000)
   --host <string>          Host for HTTP transport (default: 127.0.0.1)
   --debug                  Enable debug logging
+  --enable-tools <list>    Comma-separated list of tools to enable (whitelist)
   --help                   Show this help message
 
 Environment Variables:
@@ -57,10 +82,12 @@ Environment Variables:
   PORT                   Port for HTTP transport
   HOST                   Host for HTTP transport
   DEBUG                  Enable debug logging (true/false)
+  ENABLED_TOOLS          Comma-separated list of tools to enable
 
 Examples:
   node build/index.js                              # stdio (local use)
   node build/index.js --transport http --port 3000 # HTTP server
+  node build/index.js --enable-tools list-events,create-event,get-current-time
   PORT=3000 TRANSPORT=http node build/index.js     # Using env vars
         `);
         process.exit(0);

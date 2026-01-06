@@ -204,6 +204,45 @@ Along with the normal capabilities you would expect for a calendar integration y
 **Environment Variables:**
 - `GOOGLE_OAUTH_CREDENTIALS` - Path to OAuth credentials file
 - `GOOGLE_CALENDAR_MCP_TOKEN_PATH` - Custom token storage location (optional)
+- `ENABLED_TOOLS` - Comma-separated list of tools to enable (see Tool Filtering below)
+
+### Tool Filtering
+
+You can limit which tools are exposed to the AI assistant using the `--enable-tools` flag or `ENABLED_TOOLS` environment variable. This is useful for:
+- **Reducing context usage**: Each tool consumes tokens from the AI's context window. Limiting tools can help preserve context for longer conversations.
+- **Security**: Restrict capabilities to read-only operations or specific functionality.
+- **Simplicity**: Only expose the tools your workflow actually needs.
+
+**Via command line:**
+```bash
+npx @cocal/google-calendar-mcp start --enable-tools list-events,create-event,get-current-time
+```
+
+**Via environment variable in Claude Desktop config:**
+```json
+{
+  "mcpServers": {
+    "google-calendar": {
+      "command": "npx",
+      "args": ["@cocal/google-calendar-mcp"],
+      "env": {
+        "GOOGLE_OAUTH_CREDENTIALS": "/path/to/credentials.json",
+        "ENABLED_TOOLS": "list-events,create-event,get-current-time,update-event"
+      }
+    }
+  }
+}
+```
+
+**Available tool names:** `list-calendars`, `list-events`, `search-events`, `get-event`, `list-colors`, `create-event`, `update-event`, `delete-event`, `get-freebusy`, `get-current-time`, `respond-to-event`, `set-out-of-office`, `set-working-location`, `manage-accounts`
+
+**Note:** The `manage-accounts` tool is always available regardless of filtering, as it's needed for authentication management.
+
+When tool filtering is active, the server provides instructions to the AI assistant listing which tools are disabled. This allows the AI to inform users that additional functionality exists but is currently unavailable, without consuming the full token cost of those tool schemas.
+
+If the list is empty or contains only commas, the server will fail to start with an error.
+
+If an invalid tool name is specified, the server will fail to start with an error listing all available tools.
 
 ## Security
 
