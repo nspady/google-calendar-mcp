@@ -8,6 +8,7 @@ export interface ServerConfig {
   transport: TransportConfig;
   debug?: boolean;
   enabledTools?: string[];
+  enableTasks?: boolean;
 }
 
 function parseEnabledTools(value: string | undefined, source: string): string[] | undefined {
@@ -33,7 +34,8 @@ export function parseArgs(args: string[]): ServerConfig {
       host: process.env.HOST || '127.0.0.1'
     },
     debug: process.env.DEBUG === 'true' || false,
-    enabledTools: parseEnabledTools(process.env.ENABLED_TOOLS, 'ENABLED_TOOLS')
+    enabledTools: parseEnabledTools(process.env.ENABLED_TOOLS, 'ENABLED_TOOLS'),
+    enableTasks: process.env.ENABLE_TASKS === 'true' || false
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -63,6 +65,9 @@ export function parseArgs(args: string[]): ServerConfig {
         }
         config.enabledTools = parseEnabledTools(enabledTools, '--enable-tools');
         break;
+      case '--enable-tasks':
+        config.enableTasks = true;
+        break;
       case '--help':
         process.stderr.write(`
 Google Calendar MCP Server
@@ -75,6 +80,7 @@ Options:
   --host <string>          Host for HTTP transport (default: 127.0.0.1)
   --debug                  Enable debug logging
   --enable-tools <list>    Comma-separated list of tools to enable (whitelist)
+  --enable-tasks           Enable Google Tasks integration (off by default)
   --help                   Show this help message
 
 Environment Variables:
@@ -83,11 +89,13 @@ Environment Variables:
   HOST                   Host for HTTP transport
   DEBUG                  Enable debug logging (true/false)
   ENABLED_TOOLS          Comma-separated list of tools to enable
+  ENABLE_TASKS           Enable Google Tasks integration (true/false)
 
 Examples:
   node build/index.js                              # stdio (local use)
   node build/index.js --transport http --port 3000 # HTTP server
   node build/index.js --enable-tools list-events,create-event,get-current-time
+  node build/index.js --enable-tasks              # Enable Tasks feature
   PORT=3000 TRANSPORT=http node build/index.js     # Using env vars
         `);
         process.exit(0);

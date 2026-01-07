@@ -107,6 +107,7 @@ Commands:
 
 Options:
   --enable-tools <list>   Comma-separated list of tools to enable (whitelist)
+  --enable-tasks          Enable Google Tasks integration (requires Tasks API enabled)
 
 Examples:
   npx @cocal/google-calendar-mcp auth              # Authenticate default account
@@ -119,6 +120,7 @@ Environment Variables:
   GOOGLE_OAUTH_CREDENTIALS    Path to OAuth credentials file
   GOOGLE_ACCOUNT_MODE         Account ID to use (alternative to auth argument)
   ENABLED_TOOLS               Comma-separated list of tools to enable
+  ENABLE_TASKS                Set to 'true' to enable Google Tasks integration
 `);
 }
 
