@@ -12,8 +12,9 @@ async function runAuthServer() {
   let authServer: AuthServer | null = null; // Keep reference for cleanup
   try {
     const oauth2Client = await initializeOAuth2Client();
-    
-    authServer = new AuthServer(oauth2Client);
+
+    const enableTasks = process.env.ENABLE_TASKS === 'true';
+    authServer = new AuthServer(oauth2Client, enableTasks);
     
     const success = await authServer.start(true);
     

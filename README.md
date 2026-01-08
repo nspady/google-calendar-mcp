@@ -205,57 +205,31 @@ Enable Google Tasks integration with `ENABLE_TASKS=true`. See [Google Tasks Inte
 
 ## Google Tasks Integration *(Optional)*
 
-Google Tasks integration is disabled by default to keep the OAuth scope minimal. To enable:
+Google Tasks integration is disabled by default to keep the OAuth scope minimal. Quick setup:
 
-### Setup
+1. **Enable the Tasks API** in [Google Cloud Console](https://console.cloud.google.com/apis/library/tasks.googleapis.com)
 
-1. **Enable the Tasks API** in your Google Cloud project:
-   - Go to [Google Cloud Console APIs](https://console.cloud.google.com/apis/library/tasks.googleapis.com)
-   - Enable the "Tasks API"
-
-2. **Enable via environment variable:**
+2. **Add to your MCP configuration:**
    ```json
    {
-     "mcpServers": {
-       "google-calendar": {
-         "command": "npx",
-         "args": ["@cocal/google-calendar-mcp"],
-         "env": {
-           "GOOGLE_OAUTH_CREDENTIALS": "/path/to/credentials.json",
-           "ENABLE_TASKS": "true"
-         }
-       }
+     "env": {
+       "GOOGLE_OAUTH_CREDENTIALS": "/path/to/credentials.json",
+       "ENABLE_TASKS": "true"
      }
    }
    ```
 
-   Or via CLI flag:
+3. **Re-authenticate** with the Tasks scope:
    ```bash
-   npx @cocal/google-calendar-mcp start --enable-tasks
+   ENABLE_TASKS=true npx @cocal/google-calendar-mcp auth
    ```
 
-3. **Re-authenticate** after enabling Tasks. The server will request the additional `tasks` scope:
-   ```bash
-   npx @cocal/google-calendar-mcp auth
-   ```
-
-### Example Usage
-
-```
-Create a task to "Review quarterly report" due next Friday
-```
-
-```
-Show me all my incomplete tasks
-```
-
-```
-Mark the "Send invoices" task as complete
-```
+See the [Google Tasks Guide](docs/tasks.md) for detailed setup, troubleshooting, and examples.
 
 ## Documentation
 
 - [Authentication Setup](docs/authentication.md) - Detailed Google Cloud setup
+- [Google Tasks Guide](docs/tasks.md) - Complete setup and troubleshooting for Tasks integration
 - [Advanced Usage](docs/advanced-usage.md) - Multi-account, batch operations
 - [Deployment Guide](docs/deployment.md) - HTTP transport, remote access
 - [Docker Guide](docs/docker.md) - Docker deployment with stdio and HTTP modes

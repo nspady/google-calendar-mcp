@@ -6,7 +6,7 @@ import open from 'open';
 import { loadCredentials } from './client.js';
 import { getAccountMode } from './utils.js';
 import { renderAuthSuccess, renderAuthError, renderAuthLanding, loadWebFile } from '../web/templates.js';
-import { getRequiredScopes } from './scopes.js';
+import { getRequiredScopes, validateScopes, getMissingScopesMessage } from './scopes.js';
 
 export interface StartForMcpToolResult {
   success: boolean;
@@ -154,8 +154,24 @@ export class AuthServer {
 
   private async startWithTimeout(openBrowser = true): Promise<boolean> {
     if (await this.tokenManager.validateTokens()) {
-      this.authCompletedSuccessfully = true;
-      return true;
+      // Token is valid, but check if it has the required scopes
+      const grantedScopes = await this.tokenManager.getGrantedScopes();
+      const requiredScopes = getRequiredScopes(this.enableTasks);
+
+      // If Tasks is enabled but we have no scope info, force re-auth to get Tasks scope
+      if (this.enableTasks && (!grantedScopes || grantedScopes.length === 0)) {
+        process.stderr.write(`\nTasks feature enabled but no scope information saved. Re-authentication required.\n\n`);
+      } else {
+        const { valid, missingScopes } = validateScopes(grantedScopes, requiredScopes);
+
+        if (valid) {
+          this.authCompletedSuccessfully = true;
+          return true;
+        }
+
+        // Token is valid but missing required scopes - need to re-authenticate
+        process.stderr.write(`\n${getMissingScopesMessage(missingScopes)}\n\n`);
+      }
     }
     
     // Try to start the server and get the port
