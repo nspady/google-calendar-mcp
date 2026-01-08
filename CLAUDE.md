@@ -224,7 +224,7 @@ Google Tasks integration is disabled by default. Enable with `ENABLE_TASKS=true`
 - `src/handlers/core/BaseTaskHandler.ts` - Base class for task handlers, extends `BaseToolHandler`
 - `src/tools/task-schemas.ts` - Zod schemas for task tools
 - `src/types/task-responses.ts` - Response type definitions
-- Task handlers: `ListTaskListsHandler`, `ListTasksHandler`, `GetTaskHandler`, `CreateTaskHandler`, `UpdateTaskHandler`, `CompleteTaskHandler`, `DeleteTaskHandler`
+- Task handlers: `ListTaskListsHandler`, `ListTasksHandler`, `GetTaskHandler`, `CreateTaskHandler`, `UpdateTaskHandler`, `DeleteTaskHandler`
 
 ### Adding Task Tools
 
@@ -248,7 +248,6 @@ Unit tests for task handlers are in `src/tests/unit/handlers/`:
 - `GetTaskHandler.test.ts`
 - `CreateTaskHandler.test.ts`
 - `UpdateTaskHandler.test.ts`
-- `CompleteTaskHandler.test.ts`
 - `DeleteTaskHandler.test.ts`
 
 Run with: `npm test -- src/tests/unit/handlers/*Task*.test.ts`

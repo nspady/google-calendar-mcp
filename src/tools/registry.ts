@@ -24,7 +24,6 @@ import { ListTasksHandler } from "../handlers/core/ListTasksHandler.js";
 import { GetTaskHandler } from "../handlers/core/GetTaskHandler.js";
 import { CreateTaskHandler } from "../handlers/core/CreateTaskHandler.js";
 import { UpdateTaskHandler } from "../handlers/core/UpdateTaskHandler.js";
-import { CompleteTaskHandler } from "../handlers/core/CompleteTaskHandler.js";
 import { DeleteTaskHandler } from "../handlers/core/DeleteTaskHandler.js";
 
 // Import task schemas
@@ -883,15 +882,9 @@ export class ToolRegistry {
     },
     {
       name: "update-task",
-      description: "Update an existing task with new title, notes, due date, or status.",
+      description: "Update an existing task. Use status: 'completed' to mark done, 'needsAction' to reopen.",
       schema: TaskSchemas['update-task'],
       handler: UpdateTaskHandler
-    },
-    {
-      name: "complete-task",
-      description: "Mark a task as completed.",
-      schema: TaskSchemas['complete-task'],
-      handler: CompleteTaskHandler
     },
     {
       name: "delete-task",

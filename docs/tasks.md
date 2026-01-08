@@ -84,8 +84,7 @@ Once enabled, these task management tools become available:
 | `list-tasks` | List tasks in a task list with filtering by status and due date |
 | `get-task` | Get details of a specific task |
 | `create-task` | Create a new task with title, notes, and due date |
-| `update-task` | Update task title, notes, due date, or status |
-| `complete-task` | Mark a task as completed |
+| `update-task` | Update task properties or mark as completed (`status: 'completed'`) |
 | `delete-task` | Delete a task |
 
 ## Example Usage
@@ -100,10 +99,11 @@ Create a task to "Review quarterly report" due next Friday
 Show me all my incomplete tasks
 ```
 
-**Complete a task:**
+**Complete a task (via update-task):**
 ```
 Mark the "Send invoices" task as complete
 ```
+Note: Use `update-task` with `status: 'completed'` to mark tasks done.
 
 **Organize tasks:**
 ```

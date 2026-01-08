@@ -33,12 +33,6 @@ const commands = {
     args: ['build/auth-server.js'],
     env: { GOOGLE_ACCOUNT_MODE: 'normal' }
   },
-  'auth:test': {
-    description: 'Authenticate test account',
-    cmd: 'node',
-    args: ['build/auth-server.js'],
-    env: { GOOGLE_ACCOUNT_MODE: 'test' }
-  },
   'auth:test-primary': {
     description: 'Authenticate test-primary account (for multi-account testing)',
     cmd: 'node',
@@ -60,11 +54,6 @@ const commands = {
     description: 'Clear normal account tokens',
     cmd: 'node',
     args: ['scripts/account-manager.js', 'clear', 'normal']
-  },
-  'account:clear:test': {
-    description: 'Clear test account tokens',
-    cmd: 'node',
-    args: ['scripts/account-manager.js', 'clear', 'test']
   },
 
   // Unit Testing

@@ -199,8 +199,7 @@ Enable Google Tasks integration with `ENABLE_TASKS=true`. See [Google Tasks Inte
 | `list-tasks` | List tasks in a task list with filtering |
 | `get-task` | Get details of a specific task |
 | `create-task` | Create a new task |
-| `update-task` | Update task title, notes, due date, or status |
-| `complete-task` | Mark a task as completed |
+| `update-task` | Update task or mark completed (`status: 'completed'`) |
 | `delete-task` | Delete a task |
 
 ## Google Tasks Integration *(Optional)*
@@ -276,7 +275,7 @@ npx @cocal/google-calendar-mcp start --enable-tools list-events,create-event,get
 
 **Available tool names:** `list-calendars`, `list-events`, `search-events`, `get-event`, `list-colors`, `create-event`, `update-event`, `delete-event`, `get-freebusy`, `get-current-time`, `respond-to-event`, `manage-accounts`
 
-**Task tools (when `ENABLE_TASKS=true`):** `list-task-lists`, `list-tasks`, `get-task`, `create-task`, `update-task`, `complete-task`, `delete-task`
+**Task tools (when `ENABLE_TASKS=true`):** `list-task-lists`, `list-tasks`, `get-task`, `create-task`, `update-task`, `delete-task`
 
 **Note:** The `manage-accounts` tool is always available regardless of filtering, as it's needed for authentication management.
 

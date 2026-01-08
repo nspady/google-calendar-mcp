@@ -64,17 +64,6 @@ export interface UpdateTaskResponse {
 }
 
 /**
- * Response for complete-task tool
- */
-export interface CompleteTaskResponse {
-  task: FormattedTask;
-  taskListId: string;
-  accountId: string;
-  message: string;
-  completedAt: string;
-}
-
-/**
  * Response for delete-task tool
  */
 export interface DeleteTaskResponse {

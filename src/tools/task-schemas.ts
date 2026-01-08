@@ -127,18 +127,6 @@ export const TaskSchemas = {
   }),
 
   /**
-   * Schema for complete-task tool
-   * Marks a task as completed. This is a convenience wrapper around update-task.
-   */
-  'complete-task': z.object({
-    account: singleAccountSchema,
-    taskListId: z.string()
-      .describe("Task list ID (use '@default' for the default task list)"),
-    taskId: z.string()
-      .describe("ID of the task to complete")
-  }),
-
-  /**
    * Schema for delete-task tool
    * Permanently deletes a task.
    */
@@ -162,8 +150,10 @@ export type ListTasksInput = TaskInputs['list-tasks'];
 export type GetTaskInput = TaskInputs['get-task'];
 export type CreateTaskInput = TaskInputs['create-task'];
 export type UpdateTaskInput = TaskInputs['update-task'];
-export type CompleteTaskInput = TaskInputs['complete-task'];
 export type DeleteTaskInput = TaskInputs['delete-task'];
+
+// Note: complete-task was intentionally removed as it's just syntactic sugar
+// for update-task with status: 'completed'. Use update-task instead.
 
 /**
  * List of all task tool names for validation.
