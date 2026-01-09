@@ -89,7 +89,7 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '18'
-        cache: 'npm'
+        # Don't cache npm - this job builds two different lockfiles (PR and base branch)
 
     - name: Install dependencies (PR branch)
       run: npm ci
