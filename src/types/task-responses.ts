@@ -43,13 +43,28 @@ export interface GetTaskResponse {
 }
 
 /**
+ * Response for create-task-list tool
+ */
+export interface CreateTaskListResponse {
+  taskList: FormattedTaskList;
+  accountId: string;
+  message: string;
+}
+
+/**
  * Response for create-task tool
  */
 export interface CreateTaskResponse {
-  task: FormattedTask;
+  task?: FormattedTask;
+  tasks?: FormattedTask[];
   taskListId: string;
   accountId: string;
   message: string;
+  recurringInfo?: {
+    frequency: string;
+    interval: number;
+    occurrencesCreated: number;
+  };
 }
 
 /**

@@ -81,9 +81,10 @@ Once enabled, these task management tools become available:
 | Tool | Description |
 |------|-------------|
 | `list-task-lists` | List all task lists for an account |
+| `create-task-list` | Create a new task list |
 | `list-tasks` | List tasks in a task list with filtering by status and due date |
 | `get-task` | Get details of a specific task |
-| `create-task` | Create a new task with title, notes, and due date |
+| `create-task` | Create a new task with title, notes, and due date. Supports recurring tasks. |
 | `update-task` | Update task properties or mark as completed (`status: 'completed'`) |
 | `delete-task` | Delete a task |
 
@@ -109,6 +110,52 @@ Note: Use `update-task` with `status: 'completed'` to mark tasks done.
 ```
 What tasks do I have due this week?
 ```
+
+**Create a task list:**
+```
+Create a new task list called "Project Alpha Tasks"
+```
+
+**Create recurring tasks:**
+```
+Create a daily task "Check emails" for the next 5 days
+Create a weekly task "Team meeting" every Monday for the next 4 weeks
+Create a monthly task "Submit report" on the 1st of each month for 6 months
+```
+
+## Important Limitations
+
+### Time-Specific Tasks Not Supported
+
+**Google Tasks API only supports date-level due dates, not specific times.** This is a fundamental limitation of the Google Tasks API itself, not this MCP server.
+
+- When you create a task with a specific time (e.g., `2024-01-15T14:00:00Z`), the time component is stored but **not used for scheduling or display**
+- Tasks always appear as all-day items in Google Calendar and Google Tasks
+- This limitation has been requested by users for years but remains unaddressed by Google
+
+**Workaround:** If you need tasks at specific times, consider:
+1. Adding the time to the task notes/description (e.g., "Due at 2:00 PM")
+2. Using calendar events instead of tasks for time-specific items
+
+### Recurring Tasks
+
+The Google Tasks API does not natively support recurring tasks. This MCP server implements recurring tasks by **creating multiple individual tasks** with sequential due dates.
+
+**Behavior:**
+- Each task in the series is independent (completing one doesn't affect others)
+- Tasks are numbered (e.g., "Task Title (#1/5)", "Task Title (#2/5)")
+- Maximum 365 occurrences per recurrence pattern
+
+**Supported Frequencies:**
+- Daily (e.g., every 1-999 days)
+- Weekly (e.g., every 1-999 weeks)
+- Monthly (e.g., every 1-999 months)
+- Yearly (e.g., every 1-999 years)
+
+**Recurrence Options:**
+- `count`: Number of occurrences to create (max 365)
+- `until`: End date in YYYY-MM-DD format
+- `interval`: Repeat every N days/weeks/months/years (default: 1)
 
 ## Troubleshooting
 
@@ -181,6 +228,8 @@ List tasks from my default task list
 Tasks support these properties:
 - **title**: Task title (required, max 1024 characters)
 - **notes**: Description/notes (max 8192 characters)
-- **due**: Due date in RFC 3339 format (e.g., `2024-01-15T00:00:00Z`)
+- **due**: Due date in RFC 3339 format (e.g., `2024-01-15T00:00:00Z` or date-only `2024-01-15`)
+  - ⚠️ **Note:** Google Tasks only uses the date portion; time component is ignored
 - **status**: `needsAction` (incomplete) or `completed`
 - **parent**: Parent task ID for subtasks
+- **recurrence**: Optional recurrence pattern for creating multiple tasks (daily, weekly, monthly, yearly)

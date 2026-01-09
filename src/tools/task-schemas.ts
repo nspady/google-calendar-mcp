@@ -72,8 +72,22 @@ export const TaskSchemas = {
   }),
 
   /**
+   * Schema for create-task-list tool
+   * Creates a new task list.
+   */
+  'create-task-list': z.object({
+    account: singleAccountSchema,
+    title: z.string()
+      .min(1)
+      .max(1024)
+      .describe("Title of the task list (required, max 1024 characters)")
+  }),
+
+  /**
    * Schema for create-task tool
    * Creates a new task in the specified task list.
+   * Note: Google Tasks API only supports date-level due dates, not specific times.
+   * The time component in the 'due' field will be stored but not used for scheduling.
    */
   'create-task': z.object({
     account: singleAccountSchema,
@@ -90,13 +104,33 @@ export const TaskSchemas = {
       .describe("Description/notes for the task (max 8192 characters)"),
     due: z.string()
       .optional()
-      .describe("Due date in RFC 3339 format (e.g., '2024-01-15T00:00:00Z' or date-only '2024-01-15')"),
+      .describe("Due date in RFC 3339 format (e.g., '2024-01-15T00:00:00Z' or date-only '2024-01-15'). Note: Google Tasks only uses the date portion; time is ignored."),
     parent: z.string()
       .optional()
       .describe("Parent task ID to create this as a subtask"),
     previous: z.string()
       .optional()
-      .describe("Previous sibling task ID for ordering")
+      .describe("Previous sibling task ID for ordering"),
+    recurrence: z.object({
+      frequency: z.enum(['daily', 'weekly', 'monthly', 'yearly'])
+        .describe("How often the task repeats"),
+      interval: z.number()
+        .int()
+        .min(1)
+        .max(999)
+        .default(1)
+        .describe("Repeat every N days/weeks/months/years (default: 1)"),
+      count: z.number()
+        .int()
+        .min(1)
+        .max(365)
+        .optional()
+        .describe("Number of occurrences to create (max 365)"),
+      until: z.string()
+        .optional()
+        .describe("End date in YYYY-MM-DD format")
+    }).optional()
+      .describe("Recurrence pattern for creating multiple tasks. Note: Google Tasks API doesn't natively support recurring tasks; this creates separate tasks for each occurrence.")
   }),
 
   /**
@@ -148,6 +182,7 @@ export type TaskInputs = {
 export type ListTaskListsInput = TaskInputs['list-task-lists'];
 export type ListTasksInput = TaskInputs['list-tasks'];
 export type GetTaskInput = TaskInputs['get-task'];
+export type CreateTaskListInput = TaskInputs['create-task-list'];
 export type CreateTaskInput = TaskInputs['create-task'];
 export type UpdateTaskInput = TaskInputs['update-task'];
 export type DeleteTaskInput = TaskInputs['delete-task'];

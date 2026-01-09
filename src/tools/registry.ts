@@ -22,6 +22,7 @@ import { RespondToEventHandler } from "../handlers/core/RespondToEventHandler.js
 import { ListTaskListsHandler } from "../handlers/core/ListTaskListsHandler.js";
 import { ListTasksHandler } from "../handlers/core/ListTasksHandler.js";
 import { GetTaskHandler } from "../handlers/core/GetTaskHandler.js";
+import { CreateTaskListHandler } from "../handlers/core/CreateTaskListHandler.js";
 import { CreateTaskHandler } from "../handlers/core/CreateTaskHandler.js";
 import { UpdateTaskHandler } from "../handlers/core/UpdateTaskHandler.js";
 import { DeleteTaskHandler } from "../handlers/core/DeleteTaskHandler.js";
@@ -863,6 +864,12 @@ export class ToolRegistry {
       handler: ListTaskListsHandler
     },
     {
+      name: "create-task-list",
+      description: "Create a new task list.",
+      schema: TaskSchemas['create-task-list'],
+      handler: CreateTaskListHandler
+    },
+    {
       name: "list-tasks",
       description: "List tasks in a task list with optional filtering by status and due date.",
       schema: TaskSchemas['list-tasks'],
@@ -876,7 +883,7 @@ export class ToolRegistry {
     },
     {
       name: "create-task",
-      description: "Create a new task in a task list.",
+      description: "Create a new task in a task list. Supports recurring tasks. Note: Google Tasks only supports date-level due dates (time is ignored).",
       schema: TaskSchemas['create-task'],
       handler: CreateTaskHandler
     },
