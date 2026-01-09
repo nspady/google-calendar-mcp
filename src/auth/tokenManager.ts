@@ -20,6 +20,7 @@ interface CachedCredentials extends Credentials {
   cached_email?: string;
   cached_calendars?: CachedCalendar[];
   calendars_cached_at?: number;
+  granted_scopes?: string[];  // OAuth scopes granted during authentication
 }
 
 // Interface for multi-account token storage
@@ -350,7 +351,7 @@ export class TokenManager {
     }
   }
 
-  async saveTokens(tokens: Credentials, email?: string): Promise<void> {
+  async saveTokens(tokens: Credentials, email?: string, scopes?: string[]): Promise<void> {
     try {
         // Wrap entire read-modify-write in the queue to prevent race conditions
         await this.enqueueTokenWrite(async () => {
@@ -360,6 +361,11 @@ export class TokenManager {
           // Cache the email if provided
           if (email) {
             cachedTokens.cached_email = email;
+          }
+
+          // Cache the granted scopes if provided
+          if (scopes && scopes.length > 0) {
+            cachedTokens.granted_scopes = scopes;
           }
 
           multiAccountTokens[this.accountMode] = cachedTokens;
@@ -416,6 +422,22 @@ export class TokenManager {
       return Object.keys(multiAccountTokens);
     } catch (error) {
       return [];
+    }
+  }
+
+  /**
+   * Get the granted OAuth scopes for a specific account
+   * @param accountId - Account ID to check (defaults to current account mode)
+   * @returns Array of granted scopes, or undefined if not tracked
+   */
+  async getGrantedScopes(accountId?: string): Promise<string[] | undefined> {
+    try {
+      const multiAccountTokens = await this.loadMultiAccountTokens();
+      const account = accountId || this.accountMode;
+      const tokens = multiAccountTokens[account];
+      return tokens?.granted_scopes;
+    } catch (error) {
+      return undefined;
     }
   }
 

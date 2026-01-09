@@ -6,6 +6,7 @@ import open from 'open';
 import { loadCredentials } from './client.js';
 import { getAccountMode } from './utils.js';
 import { renderAuthSuccess, renderAuthError, renderAuthLanding, loadWebFile } from '../web/templates.js';
+import { getRequiredScopes, validateScopes, getMissingScopesMessage } from './scopes.js';
 
 export interface StartForMcpToolResult {
   success: boolean;
@@ -24,11 +25,13 @@ export class AuthServer {
   public authCompletedSuccessfully = false; // Flag for standalone script
   private mcpToolTimeout: ReturnType<typeof setTimeout> | null = null; // Timeout for MCP tool auth flow
   private autoShutdownOnSuccess = false; // Whether to auto-shutdown after successful auth
+  private enableTasks = false; // Whether Google Tasks integration is enabled
 
-  constructor(oauth2Client: OAuth2Client) {
+  constructor(oauth2Client: OAuth2Client, enableTasks = false) {
     this.baseOAuth2Client = oauth2Client;
     this.tokenManager = new TokenManager(oauth2Client);
     this.portRange = { start: 3500, end: 3505 };
+    this.enableTasks = enableTasks;
   }
 
   private createServer(): http.Server {
@@ -44,7 +47,7 @@ export class AuthServer {
       } else if (url.pathname === '/') {
         // Root route - show auth link
         const clientForUrl = this.flowOAuth2Client || this.baseOAuth2Client;
-        const scopes = ['https://www.googleapis.com/auth/calendar'];
+        const scopes = getRequiredScopes(this.enableTasks);
         const authUrl = clientForUrl.generateAuthUrl({
           access_type: 'offline',
           scope: scopes,
@@ -83,7 +86,9 @@ export class AuthServer {
         
         try {
           const { tokens } = await this.flowOAuth2Client.getToken(code);
-          await this.tokenManager.saveTokens(tokens);
+          // Save tokens with the scopes that were requested during this auth flow
+          const requestedScopes = getRequiredScopes(this.enableTasks);
+          await this.tokenManager.saveTokens(tokens, undefined, requestedScopes);
           this.authCompletedSuccessfully = true;
 
           const tokenPath = this.tokenManager.getTokenPath();
@@ -149,8 +154,24 @@ export class AuthServer {
 
   private async startWithTimeout(openBrowser = true): Promise<boolean> {
     if (await this.tokenManager.validateTokens()) {
-      this.authCompletedSuccessfully = true;
-      return true;
+      // Token is valid, but check if it has the required scopes
+      const grantedScopes = await this.tokenManager.getGrantedScopes();
+      const requiredScopes = getRequiredScopes(this.enableTasks);
+
+      // If Tasks is enabled but we have no scope info, force re-auth to get Tasks scope
+      if (this.enableTasks && (!grantedScopes || grantedScopes.length === 0)) {
+        process.stderr.write(`\nTasks feature enabled but no scope information saved. Re-authentication required.\n\n`);
+      } else {
+        const { valid, missingScopes } = validateScopes(grantedScopes, requiredScopes);
+
+        if (valid) {
+          this.authCompletedSuccessfully = true;
+          return true;
+        }
+
+        // Token is valid but missing required scopes - need to re-authenticate
+        process.stderr.write(`\n${getMissingScopesMessage(missingScopes)}\n\n`);
+      }
     }
     
     // Try to start the server and get the port
@@ -180,7 +201,7 @@ export class AuthServer {
     // Generate Auth URL using the newly created flow client
     const authorizeUrl = this.flowOAuth2Client.generateAuthUrl({
       access_type: 'offline',
-      scope: ['https://www.googleapis.com/auth/calendar'],
+      scope: getRequiredScopes(this.enableTasks),
       prompt: 'consent'
     });
     
@@ -331,7 +352,7 @@ export class AuthServer {
     // Generate Auth URL
     const authUrl = this.flowOAuth2Client.generateAuthUrl({
       access_type: 'offline',
-      scope: ['https://www.googleapis.com/auth/calendar'],
+      scope: getRequiredScopes(this.enableTasks),
       prompt: 'consent'
     });
 

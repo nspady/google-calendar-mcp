@@ -5,7 +5,7 @@ import { BaseToolHandler } from "../handlers/core/BaseToolHandler.js";
 import { ALLOWED_EVENT_FIELDS } from "../utils/field-mask-builder.js";
 import { ServerConfig } from "../config/TransportConfig.js";
 
-// Import all handlers
+// Import all calendar handlers
 import { ListCalendarsHandler } from "../handlers/core/ListCalendarsHandler.js";
 import { ListEventsHandler } from "../handlers/core/ListEventsHandler.js";
 import { SearchEventsHandler } from "../handlers/core/SearchEventsHandler.js";
@@ -17,6 +17,18 @@ import { DeleteEventHandler } from "../handlers/core/DeleteEventHandler.js";
 import { FreeBusyEventHandler } from "../handlers/core/FreeBusyEventHandler.js";
 import { GetCurrentTimeHandler } from "../handlers/core/GetCurrentTimeHandler.js";
 import { RespondToEventHandler } from "../handlers/core/RespondToEventHandler.js";
+
+// Import task handlers (conditionally registered when enableTasks is true)
+import { ListTaskListsHandler } from "../handlers/core/ListTaskListsHandler.js";
+import { ListTasksHandler } from "../handlers/core/ListTasksHandler.js";
+import { GetTaskHandler } from "../handlers/core/GetTaskHandler.js";
+import { CreateTaskListHandler } from "../handlers/core/CreateTaskListHandler.js";
+import { CreateTaskHandler } from "../handlers/core/CreateTaskHandler.js";
+import { UpdateTaskHandler } from "../handlers/core/UpdateTaskHandler.js";
+import { DeleteTaskHandler } from "../handlers/core/DeleteTaskHandler.js";
+
+// Import task schemas
+import { TaskSchemas, TASK_TOOL_NAMES } from "./task-schemas.js";
 
 // Define shared schema fields for reuse
 // Note: Event datetime fields (start/end) are NOT shared to avoid $ref generation
@@ -678,7 +690,7 @@ export type GetCurrentTimeInput = ToolInputs['get-current-time'];
 export type RespondToEventInput = ToolInputs['respond-to-event'];
 
 interface ToolDefinition {
-  name: keyof typeof ToolSchemas;
+  name: keyof typeof ToolSchemas | keyof typeof TaskSchemas;
   description: string;
   schema: z.ZodType<any>;
   handler: new () => BaseToolHandler;
@@ -840,6 +852,55 @@ export class ToolRegistry {
     }
   ];
 
+  /**
+   * Task tools - only registered when enableTasks is true.
+   * These require additional OAuth scope: https://www.googleapis.com/auth/tasks
+   */
+  private static taskTools: ToolDefinition[] = [
+    {
+      name: "list-task-lists",
+      description: "List all task lists for the authenticated user.",
+      schema: TaskSchemas['list-task-lists'],
+      handler: ListTaskListsHandler
+    },
+    {
+      name: "create-task-list",
+      description: "Create a new task list.",
+      schema: TaskSchemas['create-task-list'],
+      handler: CreateTaskListHandler
+    },
+    {
+      name: "list-tasks",
+      description: "List tasks in a task list with optional filtering by status and due date.",
+      schema: TaskSchemas['list-tasks'],
+      handler: ListTasksHandler
+    },
+    {
+      name: "get-task",
+      description: "Get details of a specific task by ID.",
+      schema: TaskSchemas['get-task'],
+      handler: GetTaskHandler
+    },
+    {
+      name: "create-task",
+      description: "Create a new task in a task list. Supports recurring tasks. Note: Google Tasks only supports date-level due dates (time is ignored).",
+      schema: TaskSchemas['create-task'],
+      handler: CreateTaskHandler
+    },
+    {
+      name: "update-task",
+      description: "Update an existing task. Use status: 'completed' to mark done, 'needsAction' to reopen.",
+      schema: TaskSchemas['update-task'],
+      handler: UpdateTaskHandler
+    },
+    {
+      name: "delete-task",
+      description: "Permanently delete a task.",
+      schema: TaskSchemas['delete-task'],
+      handler: DeleteTaskHandler
+    }
+  ];
+
   static getToolsWithSchemas() {
     return this.tools.map(tool => {
       const jsonSchema = tool.customInputSchema
@@ -885,21 +946,28 @@ export class ToolRegistry {
 
   /**
    * Get all available tool names for validation
+   * @param enableTasks - Whether to include task tool names
    */
-  static getAvailableToolNames(): string[] {
-    return this.tools.map(t => t.name);
+  static getAvailableToolNames(enableTasks = false): string[] {
+    const names = this.tools.map(t => t.name);
+    if (enableTasks) {
+      names.push(...this.taskTools.map(t => t.name));
+    }
+    return names;
   }
 
   /**
    * Validate that all tool names in a list exist
+   * @param toolNames - Tool names to validate
+   * @param enableTasks - Whether task tools are enabled
    * @throws Error if any tool name is invalid
    */
-  static validateToolNames(toolNames: string[]): void {
-    const availableTools = new Set([...this.getAvailableToolNames(), 'manage-accounts']);
+  static validateToolNames(toolNames: string[], enableTasks = false): void {
+    const availableTools = new Set([...this.getAvailableToolNames(enableTasks), 'manage-accounts']);
     const invalidTools = toolNames.filter(name => !availableTools.has(name));
 
     if (invalidTools.length > 0) {
-      const available = [...this.getAvailableToolNames(), 'manage-accounts'].join(', ');
+      const available = [...this.getAvailableToolNames(enableTasks), 'manage-accounts'].join(', ');
       throw new Error(
         `Invalid tool name(s): ${invalidTools.join(', ')}. ` +
         `Available tools: ${available}`
@@ -915,28 +983,52 @@ export class ToolRegistry {
     ) => Promise<{ content: Array<{ type: "text"; text: string }> }>,
     config?: ServerConfig
   ) {
+    const enableTasks = config?.enableTasks ?? false;
+
+    // Log if Tasks feature is enabled
+    if (enableTasks) {
+      process.stderr.write(`Google Tasks integration enabled\n`);
+    }
+
     // Validate enabledTools if provided
     if (config?.enabledTools) {
       if (config.enabledTools.length === 0) {
         throw new Error('Enabled tools list is empty. Provide at least one tool name.');
       }
-      this.validateToolNames(config.enabledTools);
+      this.validateToolNames(config.enabledTools, enableTasks);
       const enabledSet = new Set(config.enabledTools);
       process.stderr.write(`Tool filtering enabled: ${config.enabledTools.join(', ')}\n`);
 
-      // Filter and register only enabled tools
+      // Filter and register only enabled calendar tools
       for (const tool of this.tools) {
         if (!enabledSet.has(tool.name)) {
           continue;
         }
         this.registerSingleTool(server, tool, executeWithHandler);
       }
+
+      // Filter and register only enabled task tools (if enableTasks is true)
+      if (enableTasks) {
+        for (const tool of this.taskTools) {
+          if (!enabledSet.has(tool.name)) {
+            continue;
+          }
+          this.registerSingleTool(server, tool, executeWithHandler);
+        }
+      }
       return;
     }
 
-    // No filtering - register all tools
+    // No filtering - register all calendar tools
     for (const tool of this.tools) {
       this.registerSingleTool(server, tool, executeWithHandler);
+    }
+
+    // Register all task tools if enableTasks is true
+    if (enableTasks) {
+      for (const tool of this.taskTools) {
+        this.registerSingleTool(server, tool, executeWithHandler);
+      }
     }
   }
 

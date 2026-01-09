@@ -12,6 +12,7 @@ A Model Context Protocol (MCP) server that provides Google Calendar integration 
 - **Free/Busy Queries**: Check availability across calendars
 - **Smart Scheduling**: Natural language understanding for dates and times
 - **Intelligent Import**: Add calendar events from images, PDFs, or web links
+- **Google Tasks Integration** *(optional)*: Manage tasks alongside calendar events
 
 ## Quick Start
 
@@ -188,9 +189,46 @@ Along with the normal capabilities you would expect for a calendar integration y
 | `list-colors` | List available event colors |
 | `manage-accounts` | Add, list, or remove connected Google accounts |
 
+### Google Tasks Tools *(Optional)*
+
+Enable Google Tasks integration with `ENABLE_TASKS=true`. See [Google Tasks Integration](#google-tasks-integration-optional) for setup.
+
+| Tool | Description |
+|------|-------------|
+| `list-task-lists` | List all task lists for an account |
+| `list-tasks` | List tasks in a task list with filtering |
+| `get-task` | Get details of a specific task |
+| `create-task` | Create a new task |
+| `update-task` | Update task or mark completed (`status: 'completed'`) |
+| `delete-task` | Delete a task |
+
+## Google Tasks Integration *(Optional)*
+
+Google Tasks integration is disabled by default to keep the OAuth scope minimal. Quick setup:
+
+1. **Enable the Tasks API** in [Google Cloud Console](https://console.cloud.google.com/apis/library/tasks.googleapis.com)
+
+2. **Add to your MCP configuration:**
+   ```json
+   {
+     "env": {
+       "GOOGLE_OAUTH_CREDENTIALS": "/path/to/credentials.json",
+       "ENABLE_TASKS": "true"
+     }
+   }
+   ```
+
+3. **Re-authenticate** with the Tasks scope:
+   ```bash
+   ENABLE_TASKS=true npx @cocal/google-calendar-mcp auth
+   ```
+
+See the [Google Tasks Guide](docs/tasks.md) for detailed setup, troubleshooting, and examples.
+
 ## Documentation
 
 - [Authentication Setup](docs/authentication.md) - Detailed Google Cloud setup
+- [Google Tasks Guide](docs/tasks.md) - Complete setup and troubleshooting for Tasks integration
 - [Advanced Usage](docs/advanced-usage.md) - Multi-account, batch operations
 - [Deployment Guide](docs/deployment.md) - HTTP transport, remote access
 - [Docker Guide](docs/docker.md) - Docker deployment with stdio and HTTP modes
@@ -205,6 +243,7 @@ Along with the normal capabilities you would expect for a calendar integration y
 - `GOOGLE_OAUTH_CREDENTIALS` - Path to OAuth credentials file
 - `GOOGLE_CALENDAR_MCP_TOKEN_PATH` - Custom token storage location (optional)
 - `ENABLED_TOOLS` - Comma-separated list of tools to enable (see Tool Filtering below)
+- `ENABLE_TASKS` - Set to `true` to enable Google Tasks integration (see [Google Tasks Integration](#google-tasks-integration-optional))
 
 ### Tool Filtering
 
@@ -235,6 +274,8 @@ npx @cocal/google-calendar-mcp start --enable-tools list-events,create-event,get
 ```
 
 **Available tool names:** `list-calendars`, `list-events`, `search-events`, `get-event`, `list-colors`, `create-event`, `update-event`, `delete-event`, `get-freebusy`, `get-current-time`, `respond-to-event`, `manage-accounts`
+
+**Task tools (when `ENABLE_TASKS=true`):** `list-task-lists`, `list-tasks`, `get-task`, `create-task`, `update-task`, `delete-task`
 
 **Note:** The `manage-accounts` tool is always available regardless of filtering, as it's needed for authentication management.
 

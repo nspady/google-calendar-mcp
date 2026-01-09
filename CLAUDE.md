@@ -214,6 +214,50 @@ MCP tools return errors as successful responses with error content, not as throw
   - `https://www.googleapis.com/auth/calendar.events`
   - `https://www.googleapis.com/auth/calendar`
 
+## Google Tasks API (Optional)
+
+Google Tasks integration is disabled by default. Enable with `ENABLE_TASKS=true` or `--enable-tasks`.
+
+### Key Files
+
+- `src/auth/scopes.ts` - Centralized scope configuration, conditionally adds Tasks scope
+- `src/handlers/core/BaseTaskHandler.ts` - Base class for task handlers, extends `BaseToolHandler`
+- `src/tools/task-schemas.ts` - Zod schemas for task tools
+- `src/types/task-responses.ts` - Response type definitions
+- Task handlers: `ListTaskListsHandler`, `ListTasksHandler`, `GetTaskHandler`, `CreateTaskHandler`, `UpdateTaskHandler`, `DeleteTaskHandler`
+
+### Adding Task Tools
+
+Task handlers follow the same pattern as calendar handlers but extend `BaseTaskHandler`:
+
+```typescript
+export class MyTaskHandler extends BaseTaskHandler<MyTaskInput> {
+  async runTool(args: MyTaskInput, accounts: Map<string, OAuth2Client>) {
+    const client = this.getClientForAccount(args.account, accounts);
+    const tasks = this.getTasks(client);  // Returns tasks_v1.Tasks client
+    // ...
+  }
+}
+```
+
+### Testing Tasks
+
+Unit tests for task handlers are in `src/tests/unit/handlers/`:
+- `ListTaskListsHandler.test.ts`
+- `ListTasksHandler.test.ts`
+- `GetTaskHandler.test.ts`
+- `CreateTaskHandler.test.ts`
+- `UpdateTaskHandler.test.ts`
+- `DeleteTaskHandler.test.ts`
+
+Run with: `npm test -- src/tests/unit/handlers/*Task*.test.ts`
+
+### Tasks API Reference
+
+- **Scope**: `https://www.googleapis.com/auth/tasks`
+- **Resources**: `tasklists` (list, get, insert, update, delete), `tasks` (list, get, insert, update, delete, move, clear)
+- **Default Task List**: Use `@default` for the user's default task list
+
 ## Deployment
 
 - **npx**: `npx @cocal/google-calendar-mcp` (requires `GOOGLE_OAUTH_CREDENTIALS` env var)
