@@ -102,16 +102,22 @@ jobs:
         npx tsx scripts/analyze-tool-descriptions.ts json > /tmp/pr-analysis.json
 
     - name: Install and build base branch
+      id: base-build
+      continue-on-error: true
       run: |
         cd base-branch
+        # Use separate npm cache to avoid conflicts with PR branch
+        export npm_config_cache=/tmp/base-npm-cache
         npm ci
         npm run build
 
     - name: Generate base branch analysis
       run: |
-        cd base-branch
-        # Check if the script exists in base branch
-        if [ -f "scripts/analyze-tool-descriptions.ts" ]; then
+        if [ "${{ steps.base-build.outcome }}" != "success" ]; then
+          echo "Base branch build failed, using empty baseline for comparison"
+          echo '{"summary":{"totalTools":0,"totalTokens":0,"duplicatePatterns":0,"potentialSavings":0},"tools":[],"duplicates":[],"buildFailed":true}' > /tmp/base-analysis.json
+        elif [ -f "base-branch/scripts/analyze-tool-descriptions.ts" ]; then
+          cd base-branch
           npx tsx scripts/analyze-tool-descriptions.ts json > /tmp/base-analysis.json
         else
           # Create a minimal baseline if script doesn't exist in base
@@ -175,6 +181,10 @@ jobs:
         let md = [];
         md.push('## :bar_chart: Tool Description Token Analysis');
         md.push('');
+        if (base.buildFailed) {
+          md.push('> :warning: **Note:** Base branch build failed (likely due to dependency version conflicts). Showing PR analysis only without comparison.');
+          md.push('');
+        }
         md.push('### Summary');
         md.push('');
         md.push('| Metric | Baseline | PR | Diff |');
