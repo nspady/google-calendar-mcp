@@ -1,3 +1,4 @@
+import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { tasks_v1, google } from "googleapis";
 import { BaseToolHandler } from "./BaseToolHandler.js";
@@ -8,6 +9,37 @@ import { getCredentialsProjectId } from "../../auth/utils.js";
  * Extends BaseToolHandler with Tasks-specific functionality.
  */
 export abstract class BaseTaskHandler<TArgs = any> extends BaseToolHandler<TArgs> {
+  /**
+   * Get the account ID to use for the response.
+   * Returns the specified account, or the single available account, or 'default'.
+   */
+  protected getAccountId(account: string | undefined, accounts: Map<string, OAuth2Client>): string {
+    return account || (accounts.size === 1 ? Array.from(accounts.keys())[0] : 'default');
+  }
+
+  /**
+   * Create a JSON response for MCP tools.
+   */
+  protected jsonResponse(result: unknown): CallToolResult {
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify(result, null, 2)
+      }]
+    };
+  }
+
+  /**
+   * Normalize due date to RFC 3339 format.
+   * Converts date-only format (YYYY-MM-DD) to full RFC 3339.
+   */
+  protected normalizeDueDate(due: string): string {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(due)) {
+      return `${due}T00:00:00.000Z`;
+    }
+    return due;
+  }
+
   /**
    * Get a Google Tasks API client instance.
    *

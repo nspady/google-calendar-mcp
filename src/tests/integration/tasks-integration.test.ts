@@ -30,6 +30,7 @@ describe('Google Tasks MCP - Direct Integration Tests', () => {
   let client: Client;
   let serverProcess: ChildProcess;
   let createdTaskIds: string[] = [];
+  let createdTaskListIds: string[] = [];
   const defaultTaskListId: string = '@default';
   // Use test-primary account which should have Tasks scope
   const TEST_ACCOUNT = process.env.TEST_ACCOUNT_ID || 'test-primary';
@@ -118,6 +119,20 @@ describe('Google Tasks MCP - Direct Integration Tests', () => {
       }
     }
 
+    // Clean up any created task lists (except default)
+    if (createdTaskListIds.length > 0) {
+      console.log(`📋 Cleaning up ${createdTaskListIds.length} task lists created during tests`);
+      for (const taskListId of createdTaskListIds) {
+        try {
+          // Note: Google Tasks API doesn't have a delete task list endpoint via MCP
+          // Task lists created during tests will remain but are harmless
+          console.log(`  (Task list ${taskListId} will persist - no delete API available)`);
+        } catch (error) {
+          console.warn(`Failed to clean up task list ${taskListId}: ${error}`);
+        }
+      }
+    }
+
     // Close client connection
     if (client) {
       await client.close();
@@ -193,6 +208,47 @@ describe('Google Tasks MCP - Direct Integration Tests', () => {
         throw error;
       }
     });
+
+    it('should create a new task list', async () => {
+      const startTime = startTimer('create-task-list');
+      const uniqueTitle = `Integration Test List - ${Date.now()}`;
+
+      try {
+        const result = await client.callTool({
+          name: 'create-task-list',
+          arguments: {
+            account: TEST_ACCOUNT,
+            title: uniqueTitle
+          }
+        });
+
+        endTimer('create-task-list', startTime, true);
+
+        expect(result.content).toBeDefined();
+        const response = JSON.parse((result.content as any)[0].text);
+        expect(response.taskList).toBeDefined();
+        expect(response.taskList.id).toBeDefined();
+        expect(response.taskList.title).toBe(uniqueTitle);
+        expect(response.accountId).toBeDefined();
+        expect(response.message).toContain('created successfully');
+
+        // Track for reference (can't delete via API, but good to know it was created)
+        createdTaskListIds.push(response.taskList.id);
+
+        // Verify the new list appears in list-task-lists
+        const listResult = await client.callTool({
+          name: 'list-task-lists',
+          arguments: { account: TEST_ACCOUNT }
+        });
+        const listResponse = JSON.parse((listResult.content as any)[0].text);
+        const foundList = listResponse.taskLists.find((tl: any) => tl.id === response.taskList.id);
+        expect(foundList).toBeDefined();
+        expect(foundList.title).toBe(uniqueTitle);
+      } catch (error) {
+        endTimer('create-task-list', startTime, false, String(error));
+        throw error;
+      }
+    });
   });
 
   describe('Task CRUD Operations', () => {
@@ -258,6 +314,66 @@ describe('Google Tasks MCP - Direct Integration Tests', () => {
         createdTaskIds.push(response.task.id);
       } catch (error) {
         endTimer('create-task-full', startTime, false, String(error));
+        throw error;
+      }
+    });
+
+    it('should create recurring tasks', async () => {
+      const startTime = startTimer('create-task-recurring');
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 1); // Start tomorrow
+      const dueDateStr = dueDate.toISOString().split('T')[0];
+
+      try {
+        const result = await client.callTool({
+          name: 'create-task',
+          arguments: {
+            account: TEST_ACCOUNT,
+            title: 'Integration Test Task - Recurring',
+            notes: 'This task recurs daily for 3 days',
+            due: dueDateStr,
+            recurrence: {
+              frequency: 'daily',
+              interval: 1,
+              count: 3
+            }
+          }
+        });
+
+        endTimer('create-task-recurring', startTime, true);
+
+        expect(result.content).toBeDefined();
+        const response = JSON.parse((result.content as any)[0].text);
+
+        // Should return multiple tasks
+        expect(response.tasks).toBeDefined();
+        expect(Array.isArray(response.tasks)).toBe(true);
+        expect(response.tasks.length).toBe(3);
+
+        // Verify recurring info
+        expect(response.recurringInfo).toBeDefined();
+        expect(response.recurringInfo.frequency).toBe('daily');
+        expect(response.recurringInfo.interval).toBe(1);
+        expect(response.recurringInfo.occurrencesCreated).toBe(3);
+
+        // Verify task titles include occurrence numbers
+        expect(response.tasks[0].title).toContain('#1/3');
+        expect(response.tasks[1].title).toContain('#2/3');
+        expect(response.tasks[2].title).toContain('#3/3');
+
+        // Verify each task has correct structure
+        for (const task of response.tasks) {
+          expect(task.id).toBeDefined();
+          expect(task.status).toBe('needsAction');
+          expect(task.due).toBeDefined();
+          // Track for cleanup
+          createdTaskIds.push(task.id);
+        }
+
+        // Verify message mentions all created tasks
+        expect(response.message).toContain('Created 3 recurring tasks');
+      } catch (error) {
+        endTimer('create-task-recurring', startTime, false, String(error));
         throw error;
       }
     });

@@ -14,20 +14,10 @@ export class GetTaskHandler extends BaseTaskHandler<GetTaskInput> {
     accounts: Map<string, OAuth2Client>
   ): Promise<CallToolResult> {
     try {
-      // Get the client for the specified account or the only available account
       const client = this.getClientForAccountOrFirst(args.account, accounts);
-
-      // Get the account ID that was used
-      const accountId = args.account ||
-        (accounts.size === 1 ? Array.from(accounts.keys())[0] : 'default');
-
-      // Get Tasks API client
       const tasks = this.getTasks(client);
-
-      // Get the task list ID
       const taskListId = this.getTaskListId(args.taskListId);
 
-      // Get the task
       const response = await tasks.tasks.get({
         tasklist: taskListId,
         task: args.taskId
@@ -37,21 +27,11 @@ export class GetTaskHandler extends BaseTaskHandler<GetTaskInput> {
         throw new Error(`Task not found: ${args.taskId}`);
       }
 
-      // Format the response
-      const formattedTask = this.formatTask(response.data);
-
-      const result: GetTaskResponse = {
-        task: formattedTask,
+      return this.jsonResponse({
+        task: this.formatTask(response.data),
         taskListId,
-        accountId
-      };
-
-      return {
-        content: [{
-          type: "text",
-          text: JSON.stringify(result, null, 2)
-        }]
-      };
+        accountId: this.getAccountId(args.account, accounts)
+      } satisfies GetTaskResponse);
     } catch (error) {
       return this.handleGoogleApiError(error);
     }

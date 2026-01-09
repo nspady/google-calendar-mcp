@@ -14,44 +14,22 @@ export class ListTasksHandler extends BaseTaskHandler<ListTasksInput> {
     accounts: Map<string, OAuth2Client>
   ): Promise<CallToolResult> {
     try {
-      // Get the client for the specified account or the only available account
       const client = this.getClientForAccountOrFirst(args.account, accounts);
-
-      // Get the account ID that was used
-      const accountId = args.account ||
-        (accounts.size === 1 ? Array.from(accounts.keys())[0] : 'default');
-
-      // Get Tasks API client
       const tasks = this.getTasks(client);
-
-      // Get the task list ID (defaults to @default)
       const taskListId = this.getTaskListId(args.taskListId);
 
-      // Build query parameters
-      const queryParams: any = {
+      const response = await tasks.tasks.list({
         tasklist: taskListId,
         maxResults: args.maxResults || 100,
         showCompleted: args.showCompleted ?? true,
-        showHidden: args.showHidden ?? false
-      };
+        showHidden: args.showHidden ?? false,
+        ...(args.dueMin && { dueMin: args.dueMin }),
+        ...(args.dueMax && { dueMax: args.dueMax })
+      });
 
-      // Add date filters if provided
-      if (args.dueMin) {
-        queryParams.dueMin = args.dueMin;
-      }
-      if (args.dueMax) {
-        queryParams.dueMax = args.dueMax;
-      }
+      const formattedTasks = (response.data.items || []).map(t => this.formatTask(t));
 
-      // List tasks
-      const response = await tasks.tasks.list(queryParams);
-
-      const taskItems = response.data.items || [];
-
-      // Format the response
-      const formattedTasks = taskItems.map(t => this.formatTask(t));
-
-      // Get task list info for the title
+      // Get task list title
       let taskListTitle: string | undefined;
       try {
         const listInfo = await tasks.tasklists.get({ tasklist: taskListId });
@@ -60,26 +38,19 @@ export class ListTasksHandler extends BaseTaskHandler<ListTasksInput> {
         // Ignore errors getting task list title
       }
 
-      const result: ListTasksResponse = {
+      return this.jsonResponse({
         tasks: formattedTasks,
         totalCount: formattedTasks.length,
         taskListId,
         taskListTitle,
-        accountId,
+        accountId: this.getAccountId(args.account, accounts),
         filters: {
           showCompleted: args.showCompleted ?? true,
           showHidden: args.showHidden ?? false,
           dueMin: args.dueMin,
           dueMax: args.dueMax
         }
-      };
-
-      return {
-        content: [{
-          type: "text",
-          text: JSON.stringify(result, null, 2)
-        }]
-      };
+      } satisfies ListTasksResponse);
     } catch (error) {
       return this.handleGoogleApiError(error);
     }

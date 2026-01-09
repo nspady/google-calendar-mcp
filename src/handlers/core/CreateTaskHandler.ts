@@ -15,40 +15,23 @@ export class CreateTaskHandler extends BaseTaskHandler<CreateTaskInput> {
     accounts: Map<string, OAuth2Client>
   ): Promise<CallToolResult> {
     try {
-      // Get the client for the specified account or the only available account
       const client = this.getClientForAccount(args.account, accounts);
-
-      // Get the account ID that was used
-      const accountId = args.account ||
-        (accounts.size === 1 ? Array.from(accounts.keys())[0] : 'default');
-
-      // Get Tasks API client
       const tasks = this.getTasks(client);
-
-      // Get the task list ID (defaults to @default)
       const taskListId = this.getTaskListId(args.taskListId);
+      const accountId = this.getAccountId(args.account, accounts);
 
-      // Check if this is a recurring task
       if (args.recurrence) {
         return await this.createRecurringTasks(tasks, taskListId, accountId, args);
       }
 
-      // Single task creation (non-recurring)
-      const formattedTask = await this.createSingleTask(tasks, taskListId, args);
+      const task = await this.createSingleTask(tasks, taskListId, args);
 
-      const result: CreateTaskResponse = {
-        task: formattedTask,
+      return this.jsonResponse({
+        task,
         taskListId,
         accountId,
         message: `Task "${args.title}" created successfully`
-      };
-
-      return {
-        content: [{
-          type: "text",
-          text: JSON.stringify(result, null, 2)
-        }]
-      };
+      } satisfies CreateTaskResponse);
     } catch (error) {
       return this.handleGoogleApiError(error);
     }
@@ -62,41 +45,14 @@ export class CreateTaskHandler extends BaseTaskHandler<CreateTaskInput> {
     taskListId: string,
     args: CreateTaskInput
   ) {
-    // Build the task request body
-    const taskBody: any = {
-      title: args.title
-    };
+    const taskBody: any = { title: args.title };
+    if (args.notes) taskBody.notes = args.notes;
+    if (args.due) taskBody.due = this.normalizeDueDate(args.due);
 
-    if (args.notes) {
-      taskBody.notes = args.notes;
-    }
-
-    if (args.due) {
-      // Google Tasks API expects RFC 3339 format for due date
-      // If only a date is provided (YYYY-MM-DD), convert to RFC 3339
-      if (/^\d{4}-\d{2}-\d{2}$/.test(args.due)) {
-        taskBody.due = `${args.due}T00:00:00.000Z`;
-      } else {
-        taskBody.due = args.due;
-      }
-    }
-
-    // Build query parameters for positioning
-    const queryParams: any = {
-      tasklist: taskListId
-    };
-
-    if (args.parent) {
-      queryParams.parent = args.parent;
-    }
-
-    if (args.previous) {
-      queryParams.previous = args.previous;
-    }
-
-    // Create the task
     const response = await tasks.tasks.insert({
-      ...queryParams,
+      tasklist: taskListId,
+      ...(args.parent && { parent: args.parent }),
+      ...(args.previous && { previous: args.previous }),
       requestBody: taskBody
     });
 
@@ -119,8 +75,6 @@ export class CreateTaskHandler extends BaseTaskHandler<CreateTaskInput> {
     if (!args.recurrence) {
       throw new Error('Recurrence pattern not provided');
     }
-
-    // Parse base due date
     if (!args.due) {
       throw new Error('Due date is required for recurring tasks');
     }
@@ -128,28 +82,22 @@ export class CreateTaskHandler extends BaseTaskHandler<CreateTaskInput> {
     const baseDueDate = this.parseDueDate(args.due);
     const dueDates = this.calculateRecurringDueDates(baseDueDate, args.recurrence);
 
-    // Create tasks for each occurrence
     const createdTasks = [];
-    let occurrenceNum = 1;
-
-    for (const dueDate of dueDates) {
+    for (let i = 0; i < dueDates.length; i++) {
       const taskTitle = dueDates.length > 1
-        ? `${args.title} (#${occurrenceNum}/${dueDates.length})`
+        ? `${args.title} (#${i + 1}/${dueDates.length})`
         : args.title;
 
-      const taskArgs = {
+      const task = await this.createSingleTask(tasks, taskListId, {
         ...args,
         title: taskTitle,
-        due: this.formatDueDate(dueDate),
-        recurrence: undefined // Remove recurrence to use createSingleTask
-      };
-
-      const formattedTask = await this.createSingleTask(tasks, taskListId, taskArgs);
-      createdTasks.push(formattedTask);
-      occurrenceNum++;
+        due: dueDates[i].toISOString(),
+        recurrence: undefined
+      });
+      createdTasks.push(task);
     }
 
-    const result: CreateTaskResponse = {
+    return this.jsonResponse({
       tasks: createdTasks,
       taskListId,
       accountId,
@@ -159,32 +107,17 @@ export class CreateTaskHandler extends BaseTaskHandler<CreateTaskInput> {
         interval: args.recurrence.interval || 1,
         occurrencesCreated: createdTasks.length
       }
-    };
-
-    return {
-      content: [{
-        type: "text",
-        text: JSON.stringify(result, null, 2)
-      }]
-    };
+    } satisfies CreateTaskResponse);
   }
 
   /**
    * Parse due date string to Date object.
    */
   private parseDueDate(dueStr: string): Date {
-    // Handle date-only format (YYYY-MM-DD)
     if (/^\d{4}-\d{2}-\d{2}$/.test(dueStr)) {
       return new Date(dueStr + 'T00:00:00.000Z');
     }
     return new Date(dueStr);
-  }
-
-  /**
-   * Format Date object back to RFC 3339 string.
-   */
-  private formatDueDate(date: Date): string {
-    return date.toISOString();
   }
 
   /**

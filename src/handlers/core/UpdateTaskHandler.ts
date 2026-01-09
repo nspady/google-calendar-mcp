@@ -14,20 +14,11 @@ export class UpdateTaskHandler extends BaseTaskHandler<UpdateTaskInput> {
     accounts: Map<string, OAuth2Client>
   ): Promise<CallToolResult> {
     try {
-      // Get the client for the specified account or the only available account
       const client = this.getClientForAccount(args.account, accounts);
-
-      // Get the account ID that was used
-      const accountId = args.account ||
-        (accounts.size === 1 ? Array.from(accounts.keys())[0] : 'default');
-
-      // Get Tasks API client
       const tasks = this.getTasks(client);
-
-      // Get the task list ID
       const taskListId = this.getTaskListId(args.taskListId);
 
-      // First, get the existing task to merge with updates
+      // Get existing task to merge with updates
       const existingTask = await tasks.tasks.get({
         tasklist: taskListId,
         task: args.taskId
@@ -37,10 +28,7 @@ export class UpdateTaskHandler extends BaseTaskHandler<UpdateTaskInput> {
         throw new Error(`Task not found: ${args.taskId}`);
       }
 
-      // Track which fields are being updated
       const updatedFields: string[] = [];
-
-      // Build the update request body, starting with existing task
       const taskBody: any = {
         id: existingTask.data.id,
         title: existingTask.data.title,
@@ -49,42 +37,24 @@ export class UpdateTaskHandler extends BaseTaskHandler<UpdateTaskInput> {
         due: existingTask.data.due
       };
 
-      // Apply updates
       if (args.title !== undefined) {
         taskBody.title = args.title;
         updatedFields.push('title');
       }
-
       if (args.notes !== undefined) {
         taskBody.notes = args.notes;
         updatedFields.push('notes');
       }
-
       if (args.due !== undefined) {
-        // Google Tasks API expects RFC 3339 format for due date
-        // If only a date is provided (YYYY-MM-DD), convert to RFC 3339
-        if (/^\d{4}-\d{2}-\d{2}$/.test(args.due)) {
-          taskBody.due = `${args.due}T00:00:00.000Z`;
-        } else {
-          taskBody.due = args.due;
-        }
+        taskBody.due = this.normalizeDueDate(args.due);
         updatedFields.push('due');
       }
-
       if (args.status !== undefined) {
         taskBody.status = args.status;
+        taskBody.completed = args.status === 'completed' ? new Date().toISOString() : null;
         updatedFields.push('status');
-
-        // If marking as completed, set completed timestamp
-        if (args.status === 'completed') {
-          taskBody.completed = new Date().toISOString();
-        } else {
-          // If uncompleting, clear the completed timestamp
-          taskBody.completed = null;
-        }
       }
 
-      // Update the task
       const response = await tasks.tasks.update({
         tasklist: taskListId,
         task: args.taskId,
@@ -95,23 +65,13 @@ export class UpdateTaskHandler extends BaseTaskHandler<UpdateTaskInput> {
         throw new Error('Failed to update task - no data returned');
       }
 
-      // Format the response
-      const formattedTask = this.formatTask(response.data);
-
-      const result: UpdateTaskResponse = {
-        task: formattedTask,
+      return this.jsonResponse({
+        task: this.formatTask(response.data),
         taskListId,
-        accountId,
+        accountId: this.getAccountId(args.account, accounts),
         message: `Task updated successfully`,
         updatedFields
-      };
-
-      return {
-        content: [{
-          type: "text",
-          text: JSON.stringify(result, null, 2)
-        }]
-      };
+      } satisfies UpdateTaskResponse);
     } catch (error) {
       return this.handleGoogleApiError(error);
     }
