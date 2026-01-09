@@ -6,6 +6,7 @@ import { calendar_v3, google } from "googleapis";
 import { getCredentialsProjectId } from "../../auth/utils.js";
 import { CalendarRegistry } from "../../services/CalendarRegistry.js";
 import { validateAccountId } from "../../auth/paths.js";
+import { convertToRFC3339 } from "../../utils/datetime.js";
 
 
 export abstract class BaseToolHandler<TArgs = any> {
@@ -482,6 +483,40 @@ Original error: ${errorMessage}`
     }
 
     /**
+     * Combined setup for calendar operations that need both OAuth2Client and Calendar API.
+     * Returns the client, calendar instance, resolved calendar ID, and account ID in one call.
+     * Use this when you need immediate access to the calendar API in your handler.
+     *
+     * @param accountId Optional account ID from args
+     * @param calendarNameOrId Calendar name or ID
+     * @param accounts Map of available accounts
+     * @param operation 'read' or 'write' operation type
+     * @returns Object with client, calendar, accountId, and resolved calendarId
+     */
+    protected async setupOperation(
+        accountId: string | undefined,
+        calendarNameOrId: string,
+        accounts: Map<string, OAuth2Client>,
+        operation: 'read' | 'write'
+    ): Promise<{
+        client: OAuth2Client;
+        calendar: calendar_v3.Calendar;
+        accountId: string;
+        calendarId: string;
+    }> {
+        const { client, accountId: selectedAccountId, calendarId: resolvedCalendarId } =
+            await this.getClientWithAutoSelection(accountId, calendarNameOrId, accounts, operation);
+        const calendar = this.getCalendar(client);
+
+        return {
+            client,
+            calendar,
+            accountId: selectedAccountId,
+            calendarId: resolvedCalendarId
+        };
+    }
+
+    /**
      * Gets calendar details including default timezone
      * @param client OAuth2Client
      * @param calendarId Calendar ID to fetch details for
@@ -514,6 +549,32 @@ Original error: ${errorMessage}`
             // If we can't get calendar details, fall back to UTC
             return 'UTC';
         }
+    }
+
+    /**
+     * Normalizes time range parameters to RFC3339 format for Google Calendar API.
+     * Determines timezone with precedence: explicit timeZone > calendar's default > UTC.
+     *
+     * @param client OAuth2Client
+     * @param calendarId Calendar ID (used to get default timezone if needed)
+     * @param timeMin Optional start of time range
+     * @param timeMax Optional end of time range
+     * @param timeZone Optional explicit timezone override
+     * @returns Normalized time range with resolved timezone
+     */
+    protected async normalizeTimeRange(
+        client: OAuth2Client,
+        calendarId: string,
+        timeMin?: string,
+        timeMax?: string,
+        timeZone?: string
+    ): Promise<{ timeMin?: string; timeMax?: string; timezone: string }> {
+        const timezone = timeZone || await this.getCalendarTimezone(client, calendarId);
+        return {
+            timeMin: timeMin ? convertToRFC3339(timeMin, timezone) : undefined,
+            timeMax: timeMax ? convertToRFC3339(timeMax, timezone) : undefined,
+            timezone
+        };
     }
 
     /**

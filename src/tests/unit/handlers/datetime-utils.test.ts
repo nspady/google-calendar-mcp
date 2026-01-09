@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hasTimezoneInDatetime, convertToRFC3339, createTimeObject } from '../../../handlers/utils/datetime.js';
+import { hasTimezoneInDatetime, convertToRFC3339, createTimeObject } from '../../../utils/datetime.js';
 
 describe('Datetime Utilities', () => {
   describe('hasTimezoneInDatetime', () => {

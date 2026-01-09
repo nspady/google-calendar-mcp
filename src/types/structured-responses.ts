@@ -1,6 +1,15 @@
 import { calendar_v3 } from 'googleapis';
 
 /**
+ * Extended event type to include calendar ID and account ID for tracking source.
+ * Used by handlers that need to track which calendar/account an event came from.
+ */
+export interface ExtendedEvent extends calendar_v3.Schema$Event {
+  calendarId: string;
+  accountId?: string;
+}
+
+/**
  * Represents a date/time value in Google Calendar API format
  */
 export interface DateTime {

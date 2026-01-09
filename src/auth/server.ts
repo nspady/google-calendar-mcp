@@ -31,6 +31,18 @@ export class AuthServer {
     this.portRange = { start: 3500, end: 3505 };
   }
 
+  /**
+   * Creates the flow-specific OAuth2Client with the correct redirect URI.
+   */
+  private async createFlowOAuth2Client(port: number): Promise<OAuth2Client> {
+    const { client_id, client_secret } = await loadCredentials();
+    return new OAuth2Client(
+      client_id,
+      client_secret,
+      `http://localhost:${port}/oauth2callback`
+    );
+  }
+
   private createServer(): http.Server {
     const server = http.createServer(async (req, res) => {
       const url = new URL(req.url || '/', `http://${req.headers.host}`);
@@ -164,12 +176,7 @@ export class AuthServer {
 
     // Successfully started server on `port`. Now create the flow-specific OAuth client.
     try {
-      const { client_id, client_secret } = await loadCredentials();
-      this.flowOAuth2Client = new OAuth2Client(
-        client_id,
-        client_secret,
-        `http://localhost:${port}/oauth2callback`
-      );
+      this.flowOAuth2Client = await this.createFlowOAuth2Client(port);
     } catch (error) {
         // Could not load credentials, cannot proceed with auth flow
         this.authCompletedSuccessfully = false;
@@ -314,12 +321,7 @@ export class AuthServer {
 
     // Create the flow-specific OAuth client
     try {
-      const { client_id, client_secret } = await loadCredentials();
-      this.flowOAuth2Client = new OAuth2Client(
-        client_id,
-        client_secret,
-        `http://localhost:${port}/oauth2callback`
-      );
+      this.flowOAuth2Client = await this.createFlowOAuth2Client(port);
     } catch (error) {
       await this.stop();
       return {

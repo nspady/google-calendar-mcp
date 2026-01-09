@@ -6,6 +6,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { calendar_v3 } from 'googleapis';
 // Import the types and schemas we're testing
 import { ToolSchemas } from '../../../tools/registry.js';
+import { ExtendedEvent } from '../../../types/structured-responses.js';
 
 // Get the schema for validation testing
 const ListEventsArgumentsSchema = ToolSchemas['list-events'];
@@ -24,10 +25,6 @@ class MockBatchRequestHandler {
 // Mock dependencies
 vi.mock('google-auth-library');
 vi.mock('googleapis');
-
-interface ExtendedEvent extends calendar_v3.Schema$Event {
-  calendarId?: string;
-}
 
 describe('Batch List Events Functionality', () => {
   let mockOAuth2Client: OAuth2Client;

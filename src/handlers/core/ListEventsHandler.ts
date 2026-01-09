@@ -3,16 +3,9 @@ import { OAuth2Client } from "google-auth-library";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
 import { BatchRequestHandler } from "./BatchRequestHandler.js";
-import { convertToRFC3339 } from "../utils/datetime.js";
 import { buildListFieldMask } from "../../utils/field-mask-builder.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
-import { ListEventsResponse, StructuredEvent, convertGoogleEventToStructured } from "../../types/structured-responses.js";
-
-// Extended event type to include calendar ID and account ID for tracking source
-interface ExtendedEvent extends calendar_v3.Schema$Event {
-  calendarId: string;
-  accountId?: string;
-}
+import { ListEventsResponse, StructuredEvent, convertGoogleEventToStructured, ExtendedEvent } from "../../types/structured-responses.js";
 
 interface ListEventsArgs {
   calendarId: string | string[];
@@ -177,19 +170,11 @@ export class ListEventsHandler extends BaseToolHandler {
     ): Promise<ExtendedEvent[]> {
         try {
             const calendar = this.getCalendar(client);
-            
-            // Determine timezone with correct precedence:
-            // 1. Explicit timeZone parameter (highest priority)  
-            // 2. Calendar's default timezone (fallback)
-            // Note: convertToRFC3339 will still respect timezone in datetime string as ultimate override
-            let timeMin = options.timeMin;
-            let timeMax = options.timeMax;
-            
-            if (timeMin || timeMax) {
-                const timezone = options.timeZone || await this.getCalendarTimezone(client, calendarId);
-                timeMin = timeMin ? convertToRFC3339(timeMin, timezone) : undefined;
-                timeMax = timeMax ? convertToRFC3339(timeMax, timezone) : undefined;
-            }
+
+            // Normalize time range to RFC3339 format using calendar's timezone as fallback
+            const { timeMin, timeMax } = await this.normalizeTimeRange(
+                client, calendarId, options.timeMin, options.timeMax, options.timeZone
+            );
             
             const fieldMask = buildListFieldMask(options.fields);
             
@@ -238,19 +223,11 @@ export class ListEventsHandler extends BaseToolHandler {
     }
 
     private async buildEventsPath(client: OAuth2Client, calendarId: string, options: { timeMin?: string; timeMax?: string; timeZone?: string; fields?: string[]; privateExtendedProperty?: string[]; sharedExtendedProperty?: string[] }): Promise<string> {
-        // Determine timezone with correct precedence:
-        // 1. Explicit timeZone parameter (highest priority)
-        // 2. Calendar's default timezone (fallback)
-        // Note: convertToRFC3339 will still respect timezone in datetime string as ultimate override
-        let timeMin = options.timeMin;
-        let timeMax = options.timeMax;
-        
-        if (timeMin || timeMax) {
-            const timezone = options.timeZone || await this.getCalendarTimezone(client, calendarId);
-            timeMin = timeMin ? convertToRFC3339(timeMin, timezone) : undefined;
-            timeMax = timeMax ? convertToRFC3339(timeMax, timezone) : undefined;
-        }
-        
+        // Normalize time range to RFC3339 format using calendar's timezone as fallback
+        const { timeMin, timeMax } = await this.normalizeTimeRange(
+            client, calendarId, options.timeMin, options.timeMax, options.timeZone
+        );
+
         const fieldMask = buildListFieldMask(options.fields);
         
         const params = new URLSearchParams({
