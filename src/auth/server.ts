@@ -43,6 +43,17 @@ export class AuthServer {
     );
   }
 
+  /**
+   * Generates an OAuth authorization URL with standard settings.
+   */
+  private generateOAuthUrl(client: OAuth2Client): string {
+    return client.generateAuthUrl({
+      access_type: 'offline',
+      scope: ['https://www.googleapis.com/auth/calendar'],
+      prompt: 'consent'
+    });
+  }
+
   private createServer(): http.Server {
     const server = http.createServer(async (req, res) => {
       const url = new URL(req.url || '/', `http://${req.headers.host}`);
@@ -56,13 +67,7 @@ export class AuthServer {
       } else if (url.pathname === '/') {
         // Root route - show auth link
         const clientForUrl = this.flowOAuth2Client || this.baseOAuth2Client;
-        const scopes = ['https://www.googleapis.com/auth/calendar'];
-        const authUrl = clientForUrl.generateAuthUrl({
-          access_type: 'offline',
-          scope: scopes,
-          prompt: 'consent'
-        });
-
+        const authUrl = this.generateOAuthUrl(clientForUrl);
         const accountMode = getAccountMode();
 
         const landingHtml = await renderAuthLanding({
@@ -185,11 +190,7 @@ export class AuthServer {
     }
 
     // Generate Auth URL using the newly created flow client
-    const authorizeUrl = this.flowOAuth2Client.generateAuthUrl({
-      access_type: 'offline',
-      scope: ['https://www.googleapis.com/auth/calendar'],
-      prompt: 'consent'
-    });
+    const authorizeUrl = this.generateOAuthUrl(this.flowOAuth2Client);
     
     // Always show the URL in console for easy access
     process.stderr.write(`\n🔗 Authentication URL: ${authorizeUrl}\n\n`);
@@ -331,11 +332,7 @@ export class AuthServer {
     }
 
     // Generate Auth URL
-    const authUrl = this.flowOAuth2Client.generateAuthUrl({
-      access_type: 'offline',
-      scope: ['https://www.googleapis.com/auth/calendar'],
-      prompt: 'consent'
-    });
+    const authUrl = this.generateOAuthUrl(this.flowOAuth2Client);
 
     // Enable auto-shutdown on success
     this.autoShutdownOnSuccess = true;
