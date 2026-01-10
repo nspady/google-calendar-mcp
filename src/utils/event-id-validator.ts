@@ -3,6 +3,24 @@
  */
 
 /**
+ * Converts w-z characters to valid base32hex (a-d).
+ * Google Calendar event IDs use base32hex encoding: only a-v and 0-9.
+ */
+function toBase32Hex(char: string): string {
+  if (char >= 'w' && char <= 'z') {
+    return String.fromCharCode(char.charCodeAt(0) - 22); // w->a, x->b, y->c, z->d
+  }
+  return '';
+}
+
+/**
+ * Converts a string to valid base32hex by mapping w-z to a-d.
+ */
+function convertToBase32Hex(str: string): string {
+  return str.replace(/[w-z]/g, toBase32Hex);
+}
+
+/**
  * Validates a custom event ID according to Google Calendar requirements
  * @param eventId The event ID to validate
  * @returns true if valid, false otherwise
@@ -58,15 +76,8 @@ export function sanitizeEventId(input: string): string {
   // Replace invalid characters:
   // - Keep digits 0-9 as is
   // - Map letters w-z to a-d (shift back)
-  // - Map other characters to valid base32hex characters
-  sanitized = sanitized.replace(/[^a-v0-9]/g, (char) => {
-    // Map w-z to a-d
-    if (char >= 'w' && char <= 'z') {
-      return String.fromCharCode(char.charCodeAt(0) - 22); // w->a, x->b, y->c, z->d
-    }
-    // Map any other character to a default valid character
-    return '';
-  });
+  // - Remove other invalid characters
+  sanitized = sanitized.replace(/[^a-v0-9]/g, toBase32Hex);
   
   // Remove any empty spaces from the mapping
   sanitized = sanitized.replace(/\s+/g, '');
@@ -74,10 +85,8 @@ export function sanitizeEventId(input: string): string {
   // Ensure minimum length
   if (sanitized.length < 5) {
     // Generate a base32hex timestamp
-    const timestamp = Date.now().toString(32).replace(/[w-z]/g, (c) => 
-      String.fromCharCode(c.charCodeAt(0) - 22)
-    );
-    
+    const timestamp = convertToBase32Hex(Date.now().toString(32));
+
     if (sanitized.length === 0) {
       sanitized = `event${timestamp}`.substring(0, 26); // Match Google's 26-char format
     } else {
@@ -95,11 +104,7 @@ export function sanitizeEventId(input: string): string {
   
   // If still too short after all operations, generate a default
   if (sanitized.length < 5) {
-    // Generate a valid base32hex ID
-    const now = Date.now();
-    const base32hex = now.toString(32).replace(/[w-z]/g, (c) => 
-      String.fromCharCode(c.charCodeAt(0) - 22)
-    );
+    const base32hex = convertToBase32Hex(Date.now().toString(32));
     sanitized = `ev${base32hex}`.substring(0, 26);
   }
   
