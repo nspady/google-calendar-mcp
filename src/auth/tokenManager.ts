@@ -78,6 +78,15 @@ export class TokenManager {
     }
   }
 
+  private isFileNotFoundError(error: unknown): boolean {
+    return error instanceof Error && 'code' in error && (error as any).code === 'ENOENT';
+  }
+
+  private async writeTokenFile(tokens: MultiAccountTokens): Promise<void> {
+    await this.ensureTokenDirectoryExists();
+    await fs.writeFile(this.tokenPath, JSON.stringify(tokens, null, 2), { mode: 0o600 });
+  }
+
   private async loadMultiAccountTokens(): Promise<MultiAccountTokens> {
     try {
       const fileContent = await fs.readFile(this.tokenPath, "utf-8");
@@ -96,8 +105,7 @@ export class TokenManager {
       // Already in multi-account format
       return parsed as MultiAccountTokens;
     } catch (error: unknown) {
-      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-        // File doesn't exist, return empty structure
+      if (this.isFileNotFoundError(error)) {
         return {};
       }
       throw error;
@@ -113,7 +121,7 @@ export class TokenManager {
       const fileContent = await fs.readFile(this.tokenPath, "utf-8");
       return JSON.parse(fileContent) as MultiAccountTokens;
     } catch (error: unknown) {
-      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      if (this.isFileNotFoundError(error)) {
         return {};
       }
       throw error;
@@ -122,10 +130,7 @@ export class TokenManager {
 
   private async saveMultiAccountTokens(multiAccountTokens: MultiAccountTokens): Promise<void> {
     return this.enqueueTokenWrite(async () => {
-      await this.ensureTokenDirectoryExists();
-      await fs.writeFile(this.tokenPath, JSON.stringify(multiAccountTokens, null, 2), {
-        mode: 0o600,
-      });
+      await this.writeTokenFile(multiAccountTokens);
     });
   }
 
@@ -167,10 +172,7 @@ export class TokenManager {
           };
 
           multiAccountTokens[accountId] = updatedTokens;
-          await this.ensureTokenDirectoryExists();
-          await fs.writeFile(this.tokenPath, JSON.stringify(multiAccountTokens, null, 2), {
-            mode: 0o600,
-          });
+          await this.writeTokenFile(multiAccountTokens);
         });
 
         if (process.env.NODE_ENV !== 'test') {
@@ -204,13 +206,8 @@ export class TokenManager {
         return false;
       }
 
-      // Ensure new token directory exists
-      await this.ensureTokenDirectoryExists();
-      
-      // Copy to new location
-      await fs.writeFile(this.tokenPath, JSON.stringify(legacyTokens, null, 2), {
-        mode: 0o600,
-      });
+      // Copy to new location (ensures directory exists)
+      await this.writeTokenFile(legacyTokens);
       
       process.stderr.write(`Migrated tokens from legacy location: ${legacyPath} to: ${this.tokenPath}\n`);
       
@@ -363,11 +360,7 @@ export class TokenManager {
           }
 
           multiAccountTokens[this.accountMode] = cachedTokens;
-
-          await this.ensureTokenDirectoryExists();
-          await fs.writeFile(this.tokenPath, JSON.stringify(multiAccountTokens, null, 2), {
-            mode: 0o600,
-          });
+          await this.writeTokenFile(multiAccountTokens);
         });
         this.oauth2Client.setCredentials(tokens);
         process.stderr.write(`Tokens saved successfully for ${this.accountMode} account to: ${this.tokenPath}\n`);
@@ -391,15 +384,12 @@ export class TokenManager {
           await fs.unlink(this.tokenPath);
           process.stderr.write(`All tokens cleared, file deleted\n`);
         } else {
-          await this.ensureTokenDirectoryExists();
-          await fs.writeFile(this.tokenPath, JSON.stringify(multiAccountTokens, null, 2), {
-            mode: 0o600,
-          });
+          await this.writeTokenFile(multiAccountTokens);
           process.stderr.write(`Tokens cleared for ${this.accountMode} account\n`);
         }
       });
     } catch (error: unknown) {
-      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      if (this.isFileNotFoundError(error)) {
         // File already gone, which is fine
         process.stderr.write("Token file already deleted\n");
       } else {
@@ -441,10 +431,7 @@ export class TokenManager {
         await fs.unlink(this.tokenPath);
         process.stderr.write(`All tokens cleared, file deleted\n`);
       } else {
-        await this.ensureTokenDirectoryExists();
-        await fs.writeFile(this.tokenPath, JSON.stringify(multiAccountTokens, null, 2), {
-          mode: 0o600,
-        });
+        await this.writeTokenFile(multiAccountTokens);
         process.stderr.write(`Account "${normalizedId}" removed successfully\n`);
       }
 
@@ -674,10 +661,7 @@ export class TokenManager {
             }
           }
 
-          await this.ensureTokenDirectoryExists();
-          await fs.writeFile(this.tokenPath, JSON.stringify(latestTokens, null, 2), {
-            mode: 0o600,
-          });
+          await this.writeTokenFile(latestTokens);
         });
       }
 
