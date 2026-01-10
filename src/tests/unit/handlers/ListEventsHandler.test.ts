@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ListEventsHandler } from '../../../handlers/core/ListEventsHandler.js';
 import { OAuth2Client } from 'google-auth-library';
 import { google } from 'googleapis';
-import { convertToRFC3339 } from '../../../handlers/utils/datetime.js';
+import { convertToRFC3339 } from '../../../utils/datetime.js';
 
 // Mock googleapis globally
 vi.mock('googleapis', () => ({

@@ -16,11 +16,21 @@ vi.mock('googleapis', () => ({
 }));
 
 // Mock datetime utils
-vi.mock('../../../handlers/utils/datetime.js', () => ({
-  convertToRFC3339: vi.fn((datetime, timezone) => {
+vi.mock('../../../utils/datetime.js', () => ({
+  hasTimezoneInDatetime: vi.fn((datetime: string) =>
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(datetime)
+  ),
+  convertToRFC3339: vi.fn((datetime: string, timezone: string) => {
     if (!datetime) return undefined;
-    return `${datetime}Z`; // Simplified for testing
-  })
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(datetime)) {
+      return datetime;
+    }
+    return `${datetime}Z`;
+  }),
+  createTimeObject: vi.fn((datetime: string, timezone: string) => ({
+    dateTime: datetime,
+    timeZone: timezone
+  }))
 }));
 
 // Mock field mask builder

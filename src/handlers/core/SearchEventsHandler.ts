@@ -1,18 +1,11 @@
-import { CallToolResult, McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { SearchEventsInput } from "../../tools/registry.js";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
-import { convertToRFC3339 } from "../utils/datetime.js";
 import { buildListFieldMask } from "../../utils/field-mask-builder.js";
-import { createStructuredResponse, convertEventsToStructured } from "../../utils/response-builder.js";
-import { SearchEventsResponse, StructuredEvent, convertGoogleEventToStructured } from "../../types/structured-responses.js";
-
-// Extended event type to include calendar ID and account ID for tracking source
-interface ExtendedEvent extends calendar_v3.Schema$Event {
-    calendarId: string;
-    accountId?: string;
-}
+import { createStructuredResponse } from "../../utils/response-builder.js";
+import { SearchEventsResponse, StructuredEvent, convertGoogleEventToStructured, ExtendedEvent } from "../../types/structured-responses.js";
 
 // Internal args type for searchEvents with single calendarId (after normalization)
 interface SearchEventsArgs {
@@ -53,17 +46,11 @@ export class SearchEventsHandler extends BaseToolHandler {
 
             // If no calendars could be resolved, throw error
             if (accountCalendarMap.size === 0) {
-                const allCalendars = await this.calendarRegistry.getUnifiedCalendars(selectedAccounts);
-                const calendarList = allCalendars.map(c => `"${c.displayName}" (${c.calendarId})`).join(', ');
-                throw new McpError(
-                    ErrorCode.InvalidRequest,
-                    `None of the requested calendars could be found: ${calendarNamesOrIds.map(c => `"${c}"`).join(', ')}. ` +
-                    `Available calendars: ${calendarList || 'none'}. Use 'list-calendars' to see all available calendars.`
-                );
+                await this.throwNoCalendarsFoundError(calendarNamesOrIds, selectedAccounts);
             }
         } else {
             // Single account + single calendar: use existing auto-selection for simplicity
-            const { client, accountId, calendarId } = await this.getClientWithAutoSelection(
+            const { accountId, calendarId } = await this.getClientWithAutoSelection(
                 args.account,
                 calendarNamesOrIds[0],  // Use normalized single-element array
                 accounts,
@@ -108,11 +95,7 @@ export class SearchEventsHandler extends BaseToolHandler {
         );
 
         // Sort events chronologically
-        allEvents.sort((a, b) => {
-            const aTime = a.start?.dateTime || a.start?.date || '';
-            const bTime = b.start?.dateTime || b.start?.date || '';
-            return aTime.localeCompare(bTime);
-        });
+        this.sortEventsByStartTime(allEvents);
 
         // Convert to structured format
         const structuredEvents: StructuredEvent[] = allEvents.map(event =>
@@ -131,14 +114,16 @@ export class SearchEventsHandler extends BaseToolHandler {
         };
 
         if (validArgs.timeMin || validArgs.timeMax) {
-            // Use first calendar's timezone as reference (map is guaranteed non-empty at this point)
+            // Use first calendar's timezone as reference for response display
             const firstAccountId = accountCalendarMap.keys().next().value as string;
             const firstCalendarId = accountCalendarMap.get(firstAccountId)?.[0] || 'primary';
             const client = selectedAccounts.get(firstAccountId)!;
-            const timezone = validArgs.timeZone || await this.getCalendarTimezone(client, firstCalendarId);
+            const { timeMin, timeMax } = await this.normalizeTimeRange(
+                client, firstCalendarId, validArgs.timeMin, validArgs.timeMax, validArgs.timeZone
+            );
             response.timeRange = {
-                start: validArgs.timeMin ? convertToRFC3339(validArgs.timeMin, timezone) : '',
-                end: validArgs.timeMax ? convertToRFC3339(validArgs.timeMax, timezone) : ''
+                start: timeMin || '',
+                end: timeMax || ''
             };
         }
 
@@ -151,16 +136,11 @@ export class SearchEventsHandler extends BaseToolHandler {
     ): Promise<calendar_v3.Schema$Event[]> {
         try {
             const calendar = this.getCalendar(client);
-            
-            // Determine timezone with correct precedence:
-            // 1. Explicit timeZone parameter (highest priority)
-            // 2. Calendar's default timezone (fallback)
-            const timezone = args.timeZone || await this.getCalendarTimezone(client, args.calendarId);
-            
-            // Convert time boundaries to RFC3339 format for Google Calendar API
-            // Note: convertToRFC3339 will still respect timezone in datetime string as highest priority
-            const timeMin = convertToRFC3339(args.timeMin, timezone);
-            const timeMax = convertToRFC3339(args.timeMax, timezone);
+
+            // Normalize time range to RFC3339 format using calendar's timezone as fallback
+            const { timeMin, timeMax } = await this.normalizeTimeRange(
+                client, args.calendarId, args.timeMin, args.timeMax, args.timeZone
+            );
             
             const fieldMask = buildListFieldMask(args.fields);
             

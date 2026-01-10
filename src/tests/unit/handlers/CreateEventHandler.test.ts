@@ -29,9 +29,18 @@ vi.mock('../../../utils/event-id-validator.js', () => ({
 
 // Mock datetime utilities
 vi.mock('../../../utils/datetime.js', () => ({
-  createTimeObject: vi.fn((datetime: string, timezone: string) => ({ 
+  hasTimezoneInDatetime: vi.fn((datetime: string) =>
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(datetime)
+  ),
+  convertToRFC3339: vi.fn((datetime: string, timezone: string) => {
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(datetime)) {
+      return datetime;
+    }
+    return `${datetime}Z`;
+  }),
+  createTimeObject: vi.fn((datetime: string, timezone: string) => ({
     dateTime: datetime,
-    timeZone: timezone 
+    timeZone: timezone
   }))
 }));
 

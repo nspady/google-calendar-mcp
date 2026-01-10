@@ -7,10 +7,9 @@ import {
   ConflictDetectionOptions
 } from "./types.js";
 import { EventSimilarityChecker } from "./EventSimilarityChecker.js";
-import { ConflictAnalyzer } from "./ConflictAnalyzer.js";
 import { CONFLICT_DETECTION_CONFIG } from "./config.js";
-import { getEventUrl } from "../../handlers/utils.js";
-import { convertToRFC3339, hasTimezoneInDatetime } from "../../handlers/utils/datetime.js";
+import { getEventUrl } from "../../utils/event-url.js";
+import { convertToRFC3339, hasTimezoneInDatetime } from "../../utils/datetime.js";
 
 /**
  * Service for detecting event conflicts and duplicates.
@@ -24,11 +23,9 @@ import { convertToRFC3339, hasTimezoneInDatetime } from "../../handlers/utils/da
  */
 export class ConflictDetectionService {
   private similarityChecker: EventSimilarityChecker;
-  private conflictAnalyzer: ConflictAnalyzer;
-  
+
   constructor() {
     this.similarityChecker = new EventSimilarityChecker();
-    this.conflictAnalyzer = new ConflictAnalyzer();
   }
 
   /**
@@ -238,23 +235,19 @@ export class ConflictDetectionService {
 
   /**
    * Find conflicting events based on time overlap
+   * Note: _includeDeclinedEvents is reserved for future declined event detection
    */
   private findConflicts(
     newEvent: calendar_v3.Schema$Event,
     existingEvents: calendar_v3.Schema$Event[],
     calendarId: string,
-    includeDeclinedEvents: boolean
+    _includeDeclinedEvents: boolean
   ): InternalConflictInfo[] {
     const conflicts: InternalConflictInfo[] = [];
-    const overlappingEvents = this.conflictAnalyzer.findOverlappingEvents(existingEvents, newEvent);
+    const overlappingEvents = this.similarityChecker.findOverlappingEvents(existingEvents, newEvent);
 
     for (const conflictingEvent of overlappingEvents) {
-      // Skip declined events if configured
-      if (!includeDeclinedEvents && this.isEventDeclined(conflictingEvent)) {
-        continue;
-      }
-
-      const overlap = this.conflictAnalyzer.analyzeOverlap(newEvent, conflictingEvent);
+      const overlap = this.similarityChecker.analyzeOverlap(newEvent, conflictingEvent);
       
       if (overlap.hasOverlap) {
         conflicts.push({
@@ -279,15 +272,6 @@ export class ConflictDetectionService {
     }
 
     return conflicts;
-  }
-
-  /**
-   * Check if the current user has declined an event
-   */
-  private isEventDeclined(_event: calendar_v3.Schema$Event): boolean {
-    // For now, we'll skip this check since we don't have easy access to the user's email
-    // This could be enhanced later by passing the user email through the service
-    return false;
   }
 
   /**
@@ -321,7 +305,7 @@ export class ConflictDetectionService {
       for (const [calendarId, calendarInfo] of Object.entries(freeBusyResponse.data.calendars || {})) {
         if (calendarInfo.busy && calendarInfo.busy.length > 0) {
           for (const busySlot of calendarInfo.busy) {
-            if (this.conflictAnalyzer.checkBusyConflict(eventToCheck, busySlot)) {
+            if (this.similarityChecker.checkBusyConflict(eventToCheck, busySlot)) {
               conflicts.push({
                 type: 'overlap',
                 calendar: calendarId,

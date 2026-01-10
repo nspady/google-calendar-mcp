@@ -5,7 +5,7 @@ import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
 import { RecurringEventHelpers, RecurringEventError, RECURRING_EVENT_ERRORS } from './RecurringEventHelpers.js';
 import { ConflictDetectionService } from "../../services/conflict-detection/index.js";
-import { createTimeObject } from "../utils/datetime.js";
+import { createTimeObject } from "../../utils/datetime.js";
 import { 
     createStructuredResponse, 
     convertConflictsToStructured,
@@ -27,16 +27,9 @@ export class UpdateEventHandler extends BaseToolHandler {
     async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
         const validArgs = args as UpdateEventInput;
 
-        // Get OAuth2Client with automatic account selection for write operations
-        // Also resolves calendar name to ID if a name was provided
-        const { client: oauth2Client, accountId: selectedAccountId, calendarId: resolvedCalendarId } = await this.getClientWithAutoSelection(
-            args.account,
-            validArgs.calendarId,
-            accounts,
-            'write'
-        );
-
-        const calendar = this.getCalendar(oauth2Client);
+        // Setup write operation: get client, calendar API, and resolve calendar name to ID
+        const { client: oauth2Client, calendar, accountId: selectedAccountId, calendarId: resolvedCalendarId } =
+            await this.setupOperation(args.account, validArgs.calendarId, accounts, 'write');
 
         // Fetch existing event if needed for conflict checking or attendees merge
         const needsExistingEvent =

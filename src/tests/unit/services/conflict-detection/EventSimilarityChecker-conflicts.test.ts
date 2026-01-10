@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { ConflictAnalyzer } from '../../../../services/conflict-detection/ConflictAnalyzer.js';
+import { EventSimilarityChecker } from '../../../../services/conflict-detection/EventSimilarityChecker.js';
 import { calendar_v3 } from 'googleapis';
 
-describe('ConflictAnalyzer', () => {
-  const analyzer = new ConflictAnalyzer();
+describe('EventSimilarityChecker - Conflict Analysis', () => {
+  const checker = new EventSimilarityChecker();
 
   describe('analyzeOverlap', () => {
     it('should detect full overlap', () => {
@@ -18,7 +18,7 @@ describe('ConflictAnalyzer', () => {
         end: { dateTime: '2024-01-01T11:00:00Z' }
       };
 
-      const result = analyzer.analyzeOverlap(event1, event2);
+      const result = checker.analyzeOverlap(event1, event2);
       expect(result.hasOverlap).toBe(true);
       expect(result.percentage).toBe(100);
       expect(result.duration).toBe('1 hour');
@@ -36,7 +36,7 @@ describe('ConflictAnalyzer', () => {
         end: { dateTime: '2024-01-01T11:30:00Z' }
       };
 
-      const result = analyzer.analyzeOverlap(event1, event2);
+      const result = checker.analyzeOverlap(event1, event2);
       expect(result.hasOverlap).toBe(true);
       expect(result.percentage).toBe(50);
       expect(result.duration).toBe('30 minutes');
@@ -54,7 +54,7 @@ describe('ConflictAnalyzer', () => {
         end: { dateTime: '2024-01-01T12:00:00Z' }
       };
 
-      const result = analyzer.analyzeOverlap(event1, event2);
+      const result = checker.analyzeOverlap(event1, event2);
       expect(result.hasOverlap).toBe(false);
     });
 
@@ -70,7 +70,7 @@ describe('ConflictAnalyzer', () => {
         end: { dateTime: '2024-01-01T16:00:00Z' }
       };
 
-      const result = analyzer.analyzeOverlap(event1, event2);
+      const result = checker.analyzeOverlap(event1, event2);
       expect(result.hasOverlap).toBe(true);
     });
 
@@ -86,7 +86,7 @@ describe('ConflictAnalyzer', () => {
         end: { dateTime: '2024-01-04T12:00:00Z' }
       };
 
-      const result = analyzer.analyzeOverlap(event1, event2);
+      const result = checker.analyzeOverlap(event1, event2);
       expect(result.hasOverlap).toBe(true);
       expect(result.duration).toContain('day');
     });
@@ -147,7 +147,7 @@ describe('ConflictAnalyzer', () => {
         }
       ];
 
-      const overlapping = analyzer.findOverlappingEvents(events, targetEvent);
+      const overlapping = checker.findOverlappingEvents(events, targetEvent);
       expect(overlapping).toHaveLength(3);
       expect(overlapping.map(e => e.id)).toEqual(['2', '3', '4']);
     });
@@ -159,7 +159,7 @@ describe('ConflictAnalyzer', () => {
         end: { dateTime: '2024-01-01T12:00:00Z' }
       };
 
-      const overlapping = analyzer.findOverlappingEvents([], targetEvent);
+      const overlapping = checker.findOverlappingEvents([], targetEvent);
       expect(overlapping).toHaveLength(0);
     });
 
@@ -183,7 +183,7 @@ describe('ConflictAnalyzer', () => {
         }
       ];
 
-      const overlapping = analyzer.findOverlappingEvents(events, targetEvent);
+      const overlapping = checker.findOverlappingEvents(events, targetEvent);
       expect(overlapping).toHaveLength(1);
       expect(overlapping[0].id).toBe('2');
     });

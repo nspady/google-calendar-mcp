@@ -56,6 +56,41 @@ export class HttpTransportHandler {
     this.tokenManager = tokenManager;
   }
 
+  /**
+   * Creates an OAuth2Client configured for the given account.
+   * Consolidates credential loading and redirect URI construction.
+   */
+  private async createOAuth2Client(accountId: string, host: string, port: number): Promise<import('google-auth-library').OAuth2Client> {
+    const { OAuth2Client } = await import('google-auth-library');
+    const { loadCredentials } = await import('../auth/client.js');
+    const { client_id, client_secret } = await loadCredentials();
+    return new OAuth2Client(
+      client_id,
+      client_secret,
+      `http://${host}:${port}/oauth2callback?account=${accountId}`
+    );
+  }
+
+  /**
+   * Generates an OAuth authorization URL with standard settings.
+   */
+  private generateOAuthUrl(client: import('google-auth-library').OAuth2Client): string {
+    return client.generateAuthUrl({
+      access_type: 'offline',
+      scope: ['https://www.googleapis.com/auth/calendar'],
+      prompt: 'consent'
+    });
+  }
+
+  /**
+   * Validates an account ID format.
+   * Throws an error if the format is invalid.
+   */
+  private async validateAccountId(accountId: string): Promise<void> {
+    const { validateAccountId } = await import('../auth/paths.js') as any;
+    validateAccountId(accountId);
+  }
+
   private parseRequestBody(req: http.IncomingMessage): Promise<any> {
     return new Promise((resolve, reject) => {
       let body = '';
@@ -207,9 +242,8 @@ export class HttpTransportHandler {
           }
 
           // Validate account ID format
-          const { validateAccountId } = await import('../auth/paths.js') as any;
           try {
-            validateAccountId(accountId);
+            await this.validateAccountId(accountId);
           } catch (error) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
@@ -220,22 +254,8 @@ export class HttpTransportHandler {
           }
 
           // Generate OAuth URL for this account
-          // Use configured host/port instead of req.headers.host to prevent host header injection
-          const { OAuth2Client } = await import('google-auth-library');
-          const { loadCredentials } = await import('../auth/client.js');
-
-          const { client_id, client_secret } = await loadCredentials();
-          const oauth2Client = new OAuth2Client(
-            client_id,
-            client_secret,
-            `http://${host}:${port}/oauth2callback?account=${accountId}`
-          );
-
-          const authUrl = oauth2Client.generateAuthUrl({
-            access_type: 'offline',
-            scope: ['https://www.googleapis.com/auth/calendar'],
-            prompt: 'consent'
-          });
+          const oauth2Client = await this.createOAuth2Client(accountId, host, port);
+          const authUrl = this.generateOAuthUrl(oauth2Client);
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
@@ -273,17 +293,7 @@ export class HttpTransportHandler {
           }
 
           // Exchange code for tokens
-          // Use configured host/port for redirect URI to match what was used in auth URL
-          const { OAuth2Client } = await import('google-auth-library');
-          const { loadCredentials } = await import('../auth/client.js');
-
-          const { client_id, client_secret } = await loadCredentials();
-          const oauth2Client = new OAuth2Client(
-            client_id,
-            client_secret,
-            `http://${host}:${port}/oauth2callback?account=${accountId}`
-          );
-
+          const oauth2Client = await this.createOAuth2Client(accountId, host, port);
           const { tokens } = await oauth2Client.getToken(code);
 
           // Get user email before saving tokens
@@ -342,14 +352,16 @@ export class HttpTransportHandler {
 
         try {
           // Validate account ID format
-          const { validateAccountId } = await import('../auth/paths.js') as any;
-          validateAccountId(accountId);
+          await this.validateAccountId(accountId);
 
           // Switch to account and clear tokens
           const originalMode = this.tokenManager.getAccountMode();
-          this.tokenManager.setAccountMode(accountId);
-          await this.tokenManager.clearTokens();
-          this.tokenManager.setAccountMode(originalMode);
+          try {
+            this.tokenManager.setAccountMode(accountId);
+            await this.tokenManager.clearTokens();
+          } finally {
+            this.tokenManager.setAccountMode(originalMode);
+          }
 
           // Invalidate calendar registry cache since accounts changed
           CalendarRegistry.getInstance().clearCache();
@@ -376,26 +388,11 @@ export class HttpTransportHandler {
 
         try {
           // Validate account ID format
-          const { validateAccountId } = await import('../auth/paths.js') as any;
-          validateAccountId(accountId);
+          await this.validateAccountId(accountId);
 
           // Generate OAuth URL for re-authentication
-          // Use configured host/port instead of req.headers.host to prevent host header injection
-          const { OAuth2Client } = await import('google-auth-library');
-          const { loadCredentials } = await import('../auth/client.js');
-
-          const { client_id, client_secret } = await loadCredentials();
-          const oauth2Client = new OAuth2Client(
-            client_id,
-            client_secret,
-            `http://${host}:${port}/oauth2callback?account=${accountId}`
-          );
-
-          const authUrl = oauth2Client.generateAuthUrl({
-            access_type: 'offline',
-            scope: ['https://www.googleapis.com/auth/calendar'],
-            prompt: 'consent'
-          });
+          const oauth2Client = await this.createOAuth2Client(accountId, host, port);
+          const authUrl = this.generateOAuthUrl(oauth2Client);
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({

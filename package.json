@@ -61,7 +61,7 @@
     "@anthropic-ai/sdk": "^0.52.0",
     "@types/node": "^20.10.4",
     "@vitest/coverage-v8": "^3.1.1",
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.27.2",
     "js-tiktoken": "^1.0.21",
     "openai": "^4.104.0",
     "typescript": "^5.3.3",

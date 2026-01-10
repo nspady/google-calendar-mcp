@@ -128,37 +128,7 @@ export class GetCurrentTimeHandler extends BaseToolHandler {
     }
     
     private getTimezoneOffsetMinutes(timeZone: string): number {
-        // Use the timezone offset from a date's time representation in different zones
-        const date = new Date();
-
-
-        // Get local time for the target timezone
-        const targetTimeString = new Intl.DateTimeFormat('sv-SE', {
-            timeZone: timeZone,
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        }).format(date);
-
-        // Get UTC time string
-        const utcTimeString = new Intl.DateTimeFormat('sv-SE', {
-            timeZone: 'UTC',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        }).format(date);
-
-        // Parse both times and calculate difference
-        const targetTime = new Date(targetTimeString.replace(' ', 'T') + 'Z').getTime();
-        const utcTimeParsed = new Date(utcTimeString.replace(' ', 'T') + 'Z').getTime();
-
-        return (targetTime - utcTimeParsed) / (1000 * 60);
+        return this.getTimezoneOffsetForDate(new Date(), timeZone);
     }
 
     private isDaylightSavingTime(date: Date, timeZone: string): boolean {

@@ -7,7 +7,7 @@ import { FreeBusyResponse, BusySlot } from '../../types/structured-responses.js'
 import { createStructuredResponse } from '../../utils/response-builder.js';
 import { McpError } from '@modelcontextprotocol/sdk/types.js';
 import { ErrorCode } from '@modelcontextprotocol/sdk/types.js';
-import { convertToRFC3339 } from '../utils/datetime.js';
+import { convertToRFC3339 } from '../../utils/datetime.js';
 
 interface FreeBusyCalendarResult {
   busy: BusySlot[];

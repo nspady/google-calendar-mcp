@@ -79,32 +79,39 @@ export function validateFields(fields: string[]): AllowedEventField[] {
 }
 
 /**
+ * Prepares and validates fields, combining with defaults if needed.
+ * Returns undefined if no fields should be requested.
+ */
+function prepareFields(
+  requestedFields?: string[],
+  includeDefaults: boolean = true
+): AllowedEventField[] | undefined {
+  if (!requestedFields || requestedFields.length === 0) {
+    return undefined;
+  }
+
+  const validFields = validateFields(requestedFields);
+
+  return includeDefaults
+    ? [...new Set([...DEFAULT_EVENT_FIELDS, ...validFields])]
+    : validFields;
+}
+
+/**
  * Builds a Google Calendar API field mask for partial response
  * @param requestedFields Optional array of additional fields to include
  * @param includeDefaults Whether to include default fields (default: true)
  * @returns Field mask string for Google Calendar API
  */
 export function buildEventFieldMask(
-  requestedFields?: string[], 
+  requestedFields?: string[],
   includeDefaults: boolean = true
 ): string | undefined {
-  // If no custom fields requested and we should include defaults, return undefined
-  // to let Google API return its default field set
-  if (!requestedFields || requestedFields.length === 0) {
-    return undefined;
-  }
-  
-  // Validate requested fields
-  const validFields = validateFields(requestedFields);
-  
-  // Combine with defaults if needed
-  const allFields = includeDefaults 
-    ? [...new Set([...DEFAULT_EVENT_FIELDS, ...validFields])]
-    : validFields;
-  
-  // Build the field mask for events.list
-  // Format: items(field1,field2,field3)
-  return `items(${allFields.join(',')})`;
+  const fields = prepareFields(requestedFields, includeDefaults);
+  if (!fields) return undefined;
+
+  // Build the field mask for events.list: items(field1,field2,field3)
+  return `items(${fields.join(',')})`;
 }
 
 /**
@@ -114,21 +121,11 @@ export function buildSingleEventFieldMask(
   requestedFields?: string[],
   includeDefaults: boolean = true
 ): string | undefined {
-  // If no custom fields requested, return undefined for default response
-  if (!requestedFields || requestedFields.length === 0) {
-    return undefined;
-  }
-  
-  // Validate requested fields
-  const validFields = validateFields(requestedFields);
-  
-  // Combine with defaults if needed
-  const allFields = includeDefaults 
-    ? [...new Set([...DEFAULT_EVENT_FIELDS, ...validFields])]
-    : validFields;
-  
+  const fields = prepareFields(requestedFields, includeDefaults);
+  if (!fields) return undefined;
+
   // For single event, just return comma-separated fields
-  return allFields.join(',');
+  return fields.join(',');
 }
 
 /**

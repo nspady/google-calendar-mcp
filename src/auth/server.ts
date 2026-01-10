@@ -31,6 +31,29 @@ export class AuthServer {
     this.portRange = { start: 3500, end: 3505 };
   }
 
+  /**
+   * Creates the flow-specific OAuth2Client with the correct redirect URI.
+   */
+  private async createFlowOAuth2Client(port: number): Promise<OAuth2Client> {
+    const { client_id, client_secret } = await loadCredentials();
+    return new OAuth2Client(
+      client_id,
+      client_secret,
+      `http://localhost:${port}/oauth2callback`
+    );
+  }
+
+  /**
+   * Generates an OAuth authorization URL with standard settings.
+   */
+  private generateOAuthUrl(client: OAuth2Client): string {
+    return client.generateAuthUrl({
+      access_type: 'offline',
+      scope: ['https://www.googleapis.com/auth/calendar'],
+      prompt: 'consent'
+    });
+  }
+
   private createServer(): http.Server {
     const server = http.createServer(async (req, res) => {
       const url = new URL(req.url || '/', `http://${req.headers.host}`);
@@ -44,13 +67,7 @@ export class AuthServer {
       } else if (url.pathname === '/') {
         // Root route - show auth link
         const clientForUrl = this.flowOAuth2Client || this.baseOAuth2Client;
-        const scopes = ['https://www.googleapis.com/auth/calendar'];
-        const authUrl = clientForUrl.generateAuthUrl({
-          access_type: 'offline',
-          scope: scopes,
-          prompt: 'consent'
-        });
-
+        const authUrl = this.generateOAuthUrl(clientForUrl);
         const accountMode = getAccountMode();
 
         const landingHtml = await renderAuthLanding({
@@ -164,12 +181,7 @@ export class AuthServer {
 
     // Successfully started server on `port`. Now create the flow-specific OAuth client.
     try {
-      const { client_id, client_secret } = await loadCredentials();
-      this.flowOAuth2Client = new OAuth2Client(
-        client_id,
-        client_secret,
-        `http://localhost:${port}/oauth2callback`
-      );
+      this.flowOAuth2Client = await this.createFlowOAuth2Client(port);
     } catch (error) {
         // Could not load credentials, cannot proceed with auth flow
         this.authCompletedSuccessfully = false;
@@ -178,11 +190,7 @@ export class AuthServer {
     }
 
     // Generate Auth URL using the newly created flow client
-    const authorizeUrl = this.flowOAuth2Client.generateAuthUrl({
-      access_type: 'offline',
-      scope: ['https://www.googleapis.com/auth/calendar'],
-      prompt: 'consent'
-    });
+    const authorizeUrl = this.generateOAuthUrl(this.flowOAuth2Client);
     
     // Always show the URL in console for easy access
     process.stderr.write(`\n🔗 Authentication URL: ${authorizeUrl}\n\n`);
@@ -314,12 +322,7 @@ export class AuthServer {
 
     // Create the flow-specific OAuth client
     try {
-      const { client_id, client_secret } = await loadCredentials();
-      this.flowOAuth2Client = new OAuth2Client(
-        client_id,
-        client_secret,
-        `http://localhost:${port}/oauth2callback`
-      );
+      this.flowOAuth2Client = await this.createFlowOAuth2Client(port);
     } catch (error) {
       await this.stop();
       return {
@@ -329,11 +332,7 @@ export class AuthServer {
     }
 
     // Generate Auth URL
-    const authUrl = this.flowOAuth2Client.generateAuthUrl({
-      access_type: 'offline',
-      scope: ['https://www.googleapis.com/auth/calendar'],
-      prompt: 'consent'
-    });
+    const authUrl = this.generateOAuthUrl(this.flowOAuth2Client);
 
     // Enable auto-shutdown on success
     this.autoShutdownOnSuccess = true;

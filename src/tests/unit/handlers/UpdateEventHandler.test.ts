@@ -22,7 +22,7 @@ vi.mock('googleapis', () => ({
 }));
 
 // Import createTimeObject for proper datetime handling in mocks
-import { createTimeObject } from '../../../handlers/utils/datetime.js';
+import { createTimeObject } from '../../../utils/datetime.js';
 
 // Mock RecurringEventHelpers
 vi.mock('../../../handlers/core/RecurringEventHelpers.js', () => ({

@@ -21,17 +21,11 @@ export class RespondToEventHandler extends BaseToolHandler {
     async runTool(args: RespondToEventInput, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
         const validArgs = args;
 
-        // Get OAuth2Client with automatic account selection for write operations
-        // Also resolves calendar name to ID if a name was provided
-        const { client: oauth2Client, accountId: selectedAccountId, calendarId: resolvedCalendarId } = await this.getClientWithAutoSelection(
-            args.account,
-            validArgs.calendarId,
-            accounts,
-            'write'
-        );
+        // Setup write operation: get client, calendar API, and resolve calendar name to ID
+        const { calendar, accountId: selectedAccountId, calendarId: resolvedCalendarId } =
+            await this.setupOperation(args.account, validArgs.calendarId, accounts, 'write');
 
         try {
-            const calendar = this.getCalendar(oauth2Client);
             const helpers = new RecurringEventHelpers(calendar);
 
             // 1. Determine the target event ID (may be instance-specific for recurring events)
