@@ -349,9 +349,12 @@ export class HttpTransportHandler {
 
           // Switch to account and clear tokens
           const originalMode = this.tokenManager.getAccountMode();
-          this.tokenManager.setAccountMode(accountId);
-          await this.tokenManager.clearTokens();
-          this.tokenManager.setAccountMode(originalMode);
+          try {
+            this.tokenManager.setAccountMode(accountId);
+            await this.tokenManager.clearTokens();
+          } finally {
+            this.tokenManager.setAccountMode(originalMode);
+          }
 
           // Invalidate calendar registry cache since accounts changed
           CalendarRegistry.getInstance().clearCache();

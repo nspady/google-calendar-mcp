@@ -7,7 +7,6 @@ import {
   ConflictDetectionOptions
 } from "./types.js";
 import { EventSimilarityChecker } from "./EventSimilarityChecker.js";
-import { ConflictAnalyzer } from "./ConflictAnalyzer.js";
 import { CONFLICT_DETECTION_CONFIG } from "./config.js";
 import { getEventUrl } from "../../utils/event-url.js";
 import { convertToRFC3339, hasTimezoneInDatetime } from "../../utils/datetime.js";
@@ -24,11 +23,9 @@ import { convertToRFC3339, hasTimezoneInDatetime } from "../../utils/datetime.js
  */
 export class ConflictDetectionService {
   private similarityChecker: EventSimilarityChecker;
-  private conflictAnalyzer: ConflictAnalyzer;
-  
+
   constructor() {
     this.similarityChecker = new EventSimilarityChecker();
-    this.conflictAnalyzer = new ConflictAnalyzer();
   }
 
   /**
@@ -246,7 +243,7 @@ export class ConflictDetectionService {
     includeDeclinedEvents: boolean
   ): InternalConflictInfo[] {
     const conflicts: InternalConflictInfo[] = [];
-    const overlappingEvents = this.conflictAnalyzer.findOverlappingEvents(existingEvents, newEvent);
+    const overlappingEvents = this.similarityChecker.findOverlappingEvents(existingEvents, newEvent);
 
     for (const conflictingEvent of overlappingEvents) {
       // Skip declined events if configured
@@ -254,7 +251,7 @@ export class ConflictDetectionService {
         continue;
       }
 
-      const overlap = this.conflictAnalyzer.analyzeOverlap(newEvent, conflictingEvent);
+      const overlap = this.similarityChecker.analyzeOverlap(newEvent, conflictingEvent);
       
       if (overlap.hasOverlap) {
         conflicts.push({
@@ -321,7 +318,7 @@ export class ConflictDetectionService {
       for (const [calendarId, calendarInfo] of Object.entries(freeBusyResponse.data.calendars || {})) {
         if (calendarInfo.busy && calendarInfo.busy.length > 0) {
           for (const busySlot of calendarInfo.busy) {
-            if (this.conflictAnalyzer.checkBusyConflict(eventToCheck, busySlot)) {
+            if (this.similarityChecker.checkBusyConflict(eventToCheck, busySlot)) {
               conflicts.push({
                 type: 'overlap',
                 calendar: calendarId,
