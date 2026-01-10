@@ -235,22 +235,18 @@ export class ConflictDetectionService {
 
   /**
    * Find conflicting events based on time overlap
+   * Note: _includeDeclinedEvents is reserved for future declined event detection
    */
   private findConflicts(
     newEvent: calendar_v3.Schema$Event,
     existingEvents: calendar_v3.Schema$Event[],
     calendarId: string,
-    includeDeclinedEvents: boolean
+    _includeDeclinedEvents: boolean
   ): InternalConflictInfo[] {
     const conflicts: InternalConflictInfo[] = [];
     const overlappingEvents = this.similarityChecker.findOverlappingEvents(existingEvents, newEvent);
 
     for (const conflictingEvent of overlappingEvents) {
-      // Skip declined events if configured
-      if (!includeDeclinedEvents && this.isEventDeclined(conflictingEvent)) {
-        continue;
-      }
-
       const overlap = this.similarityChecker.analyzeOverlap(newEvent, conflictingEvent);
       
       if (overlap.hasOverlap) {
@@ -276,15 +272,6 @@ export class ConflictDetectionService {
     }
 
     return conflicts;
-  }
-
-  /**
-   * Check if the current user has declined an event
-   */
-  private isEventDeclined(_event: calendar_v3.Schema$Event): boolean {
-    // For now, we'll skip this check since we don't have easy access to the user's email
-    // This could be enhanced later by passing the user email through the service
-    return false;
   }
 
   /**
