@@ -108,11 +108,7 @@ export class ListEventsHandler extends BaseToolHandler {
         const allQueriedCalendarIds = [...new Set(eventsPerAccount.flatMap(result => result.calendarIds))];
 
         // Sort events chronologically
-        allEvents.sort((a, b) => {
-            const aTime = a.start?.dateTime || a.start?.date || '';
-            const bTime = b.start?.dateTime || b.start?.date || '';
-            return aTime.localeCompare(bTime);
-        });
+        this.sortEventsByStartTime(allEvents);
 
         // Convert extended events to structured format
         const structuredEvents: StructuredEvent[] = allEvents.map(event =>
@@ -273,22 +269,4 @@ export class ListEventsHandler extends BaseToolHandler {
         
         return { events, errors };
     }
-
-    private sortEventsByStartTime(events: ExtendedEvent[]): ExtendedEvent[] {
-        return events.sort((a, b) => {
-            const aStart = a.start?.dateTime || a.start?.date || "";
-            const bStart = b.start?.dateTime || b.start?.date || "";
-            return aStart.localeCompare(bStart);
-        });
-    }
-
-    private groupEventsByCalendar(events: ExtendedEvent[]): Record<string, ExtendedEvent[]> {
-        return events.reduce((acc, event) => {
-            const calId = event.calendarId;
-            if (!acc[calId]) acc[calId] = [];
-            acc[calId].push(event);
-            return acc;
-        }, {} as Record<string, ExtendedEvent[]>);
-    }
-
 }

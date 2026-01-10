@@ -662,6 +662,19 @@ Original error: ${errorMessage}`
     }
 
     /**
+     * Sorts events by start time (chronological order).
+     * Works with both regular events and extended events.
+     * Mutates the array in place and returns it for chaining.
+     */
+    protected sortEventsByStartTime<T extends calendar_v3.Schema$Event>(events: T[]): T[] {
+        return events.sort((a, b) => {
+            const aStart = a.start?.dateTime || a.start?.date || '';
+            const bStart = b.start?.dateTime || b.start?.date || '';
+            return aStart.localeCompare(bStart);
+        });
+    }
+
+    /**
      * Resolves multiple calendar names/IDs to calendar IDs in batch.
      * Fetches calendar list once for efficiency when resolving multiple calendars.
      * Optimized to skip API call if all inputs are already IDs.

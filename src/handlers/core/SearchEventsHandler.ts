@@ -101,11 +101,7 @@ export class SearchEventsHandler extends BaseToolHandler {
         );
 
         // Sort events chronologically
-        allEvents.sort((a, b) => {
-            const aTime = a.start?.dateTime || a.start?.date || '';
-            const bTime = b.start?.dateTime || b.start?.date || '';
-            return aTime.localeCompare(bTime);
-        });
+        this.sortEventsByStartTime(allEvents);
 
         // Convert to structured format
         const structuredEvents: StructuredEvent[] = allEvents.map(event =>
