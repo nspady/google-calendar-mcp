@@ -72,6 +72,17 @@ export class HttpTransportHandler {
   }
 
   /**
+   * Generates an OAuth authorization URL with standard settings.
+   */
+  private generateOAuthUrl(client: import('google-auth-library').OAuth2Client): string {
+    return client.generateAuthUrl({
+      access_type: 'offline',
+      scope: ['https://www.googleapis.com/auth/calendar'],
+      prompt: 'consent'
+    });
+  }
+
+  /**
    * Validates an account ID format.
    * Throws an error if the format is invalid.
    */
@@ -244,11 +255,7 @@ export class HttpTransportHandler {
 
           // Generate OAuth URL for this account
           const oauth2Client = await this.createOAuth2Client(accountId, host, port);
-          const authUrl = oauth2Client.generateAuthUrl({
-            access_type: 'offline',
-            scope: ['https://www.googleapis.com/auth/calendar'],
-            prompt: 'consent'
-          });
+          const authUrl = this.generateOAuthUrl(oauth2Client);
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
@@ -385,11 +392,7 @@ export class HttpTransportHandler {
 
           // Generate OAuth URL for re-authentication
           const oauth2Client = await this.createOAuth2Client(accountId, host, port);
-          const authUrl = oauth2Client.generateAuthUrl({
-            access_type: 'offline',
-            scope: ['https://www.googleapis.com/auth/calendar'],
-            prompt: 'consent'
-          });
+          const authUrl = this.generateOAuthUrl(oauth2Client);
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
