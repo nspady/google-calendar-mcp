@@ -675,6 +675,23 @@ Original error: ${errorMessage}`
     }
 
     /**
+     * Throws an error when no calendars could be resolved from multi-account resolution.
+     * Provides a helpful error message listing available calendars.
+     */
+    protected async throwNoCalendarsFoundError(
+        requestedCalendars: string[],
+        selectedAccounts: Map<string, OAuth2Client>
+    ): Promise<never> {
+        const allCalendars = await this.calendarRegistry.getUnifiedCalendars(selectedAccounts);
+        const calendarList = allCalendars.map(c => `"${c.displayName}" (${c.calendarId})`).join(', ');
+        throw new McpError(
+            ErrorCode.InvalidRequest,
+            `None of the requested calendars could be found: ${requestedCalendars.map(c => `"${c}"`).join(', ')}. ` +
+            `Available calendars: ${calendarList || 'none'}. Use 'list-calendars' to see all available calendars.`
+        );
+    }
+
+    /**
      * Resolves multiple calendar names/IDs to calendar IDs in batch.
      * Fetches calendar list once for efficiency when resolving multiple calendars.
      * Optimized to skip API call if all inputs are already IDs.
