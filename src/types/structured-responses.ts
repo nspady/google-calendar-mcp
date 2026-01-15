@@ -126,6 +126,10 @@ export interface StructuredEvent {
   location?: string;
   start: DateTime;
   end: DateTime;
+  /** Day of week for the start date/time (e.g., "Monday", "Tuesday") */
+  startDayOfWeek?: string;
+  /** Day of week for the end date/time (e.g., "Monday", "Tuesday") */
+  endDayOfWeek?: string;
   status?: string;
   htmlLink?: string;
   created?: string;
@@ -441,6 +445,31 @@ export interface RemoveAccountResponse {
 }
 
 /**
+ * Derives the day of week from a date/time string.
+ * Uses Intl.DateTimeFormat for reliable timezone-aware day-of-week calculation.
+ * This prevents LLM hallucination of date-to-day mappings.
+ *
+ * @param dateTimeOrDate - ISO 8601 dateTime string or YYYY-MM-DD date string
+ * @param timeZone - Optional timezone for the calculation (defaults to UTC)
+ * @returns Day of week name (e.g., "Monday", "Tuesday") or undefined if parsing fails
+ */
+function getDayOfWeek(dateTimeOrDate: string | undefined | null, timeZone?: string | null): string | undefined {
+  if (!dateTimeOrDate) return undefined;
+
+  try {
+    const date = new Date(dateTimeOrDate);
+    if (isNaN(date.getTime())) return undefined;
+
+    return new Intl.DateTimeFormat('en-US', {
+      weekday: 'long',
+      timeZone: timeZone || 'UTC'
+    }).format(date);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Converts a Google Calendar API event to our structured format
  * @param event - The Google Calendar API event object
  * @param calendarId - Optional calendar ID to include in the response
@@ -467,6 +496,14 @@ export function convertGoogleEventToStructured(
       date: event.end?.date ?? undefined,
       timeZone: event.end?.timeZone ?? undefined,
     },
+    startDayOfWeek: getDayOfWeek(
+      event.start?.dateTime || event.start?.date,
+      event.start?.timeZone
+    ),
+    endDayOfWeek: getDayOfWeek(
+      event.end?.dateTime || event.end?.date,
+      event.end?.timeZone
+    ),
     status: event.status ?? undefined,
     htmlLink: event.htmlLink ?? undefined,
     created: event.created ?? undefined,
