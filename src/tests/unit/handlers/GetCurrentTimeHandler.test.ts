@@ -117,6 +117,7 @@ describe('GetCurrentTimeHandler', () => {
       expect(response).toHaveProperty('timezone');
       expect(response).toHaveProperty('offset');
       expect(response).toHaveProperty('isDST');
+      expect(response).toHaveProperty('dayOfWeek');
       expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}([+-]\d{2}:\d{2}|Z)$/);
       expect(response.timezone).toBe('America/Los_Angeles');
       expect(response.isDST).toBeTypeOf('boolean');
@@ -132,10 +133,68 @@ describe('GetCurrentTimeHandler', () => {
       expect(response).toHaveProperty('timezone');
       expect(response).toHaveProperty('offset');
       expect(response).toHaveProperty('isDST');
+      expect(response).toHaveProperty('dayOfWeek');
       expect(response.currentTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}([+-]\d{2}:\d{2}|Z)$/);
       expect(response.timezone).toBe('UTC');
       expect(response.offset).toBe('Z');
       expect(response.isDST).toBe(false);
+    });
+
+    it('should return valid day of week name', async () => {
+      const handler = new GetCurrentTimeHandler();
+      const result = await handler.runTool({ timeZone: 'UTC' }, mockAccounts);
+      const response = JSON.parse(result.content[0].text as string);
+
+      const validDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      expect(validDays).toContain(response.dayOfWeek);
+    });
+
+    it('should return dayOfWeek consistent with currentTime in response', async () => {
+      const handler = new GetCurrentTimeHandler();
+      const result = await handler.runTool({ timeZone: 'America/New_York' }, mockAccounts);
+      const response = JSON.parse(result.content[0].text as string);
+
+      // Parse the date from currentTime and verify dayOfWeek matches
+      const dateFromResponse = new Date(response.currentTime);
+      const expectedDay = new Intl.DateTimeFormat('en-US', {
+        weekday: 'long',
+        timeZone: response.timezone
+      }).format(dateFromResponse);
+
+      expect(response.dayOfWeek).toBe(expectedDay);
+    });
+
+    it('should return dayOfWeek in the specified timezone', async () => {
+      const handler = new GetCurrentTimeHandler();
+
+      // Get results for two different timezones
+      const utcResult = await handler.runTool({ timeZone: 'UTC' }, mockAccounts);
+      const tokyoResult = await handler.runTool({ timeZone: 'Asia/Tokyo' }, mockAccounts);
+
+      const utcResponse = JSON.parse(utcResult.content[0].text as string);
+      const tokyoResponse = JSON.parse(tokyoResult.content[0].text as string);
+
+      // Both should return valid days
+      const validDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      expect(validDays).toContain(utcResponse.dayOfWeek);
+      expect(validDays).toContain(tokyoResponse.dayOfWeek);
+
+      // Verify each dayOfWeek is consistent with its own currentTime
+      const utcDate = new Date(utcResponse.currentTime);
+      const tokyoDate = new Date(tokyoResponse.currentTime);
+
+      const expectedUtcDay = new Intl.DateTimeFormat('en-US', {
+        weekday: 'long',
+        timeZone: 'UTC'
+      }).format(utcDate);
+
+      const expectedTokyoDay = new Intl.DateTimeFormat('en-US', {
+        weekday: 'long',
+        timeZone: 'Asia/Tokyo'
+      }).format(tokyoDate);
+
+      expect(utcResponse.dayOfWeek).toBe(expectedUtcDay);
+      expect(tokyoResponse.dayOfWeek).toBe(expectedTokyoDay);
     });
 
     it('should format RFC3339 timestamps correctly', async () => {

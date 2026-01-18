@@ -391,6 +391,8 @@ export interface GetCurrentTimeResponse {
   timezone: string;
   offset: string;
   isDST?: boolean;
+  /** Day of week for the current time (e.g., "Monday", "Tuesday") */
+  dayOfWeek: string;
 }
 
 /**
