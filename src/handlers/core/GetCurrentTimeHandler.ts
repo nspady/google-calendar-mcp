@@ -42,10 +42,14 @@ export class GetCurrentTimeHandler extends BaseToolHandler {
         }
 
         const response: GetCurrentTimeResponse = {
-            currentTime: this.formatISOInZone(now, timezone),   // <-- NEW
+            currentTime: this.formatISOInZone(now, timezone),
             timezone: timezone,
             offset: this.getTimezoneOffset(now, timezone),
-            isDST: this.isDaylightSavingTime(now, timezone)
+            isDST: this.isDaylightSavingTime(now, timezone),
+            dayOfWeek: new Intl.DateTimeFormat('en-US', {
+                weekday: 'long',
+                timeZone: timezone
+            }).format(now)
         };
 
         return createStructuredResponse(response);
