@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.4.0](https://github.com/nspady/google-calendar-mcp/compare/v2.3.1...v2.4.0) (2026-01-18)
+
+
+### Features
+
+* add dayOfWeek to get-current-time response ([#159](https://github.com/nspady/google-calendar-mcp/issues/159)) ([cf588b8](https://github.com/nspady/google-calendar-mcp/commit/cf588b8f77cf3754a84e2d2d98e5d1c7999c15a6))
+* add startDayOfWeek and endDayOfWeek to StructuredEvent ([#157](https://github.com/nspady/google-calendar-mcp/issues/157)) ([49342fc](https://github.com/nspady/google-calendar-mcp/commit/49342fccc5f01423b942d7af0663fa39e2f9fa3e))
+* add tool description token analysis for PRs ([ee56e8c](https://github.com/nspady/google-calendar-mcp/commit/ee56e8cbcc198f1de70fc2a0782ddbfab06af916))
+
 ## [2.3.1](https://github.com/nspady/google-calendar-mcp/compare/v2.3.0...v2.3.1) (2026-01-07)
 
 
