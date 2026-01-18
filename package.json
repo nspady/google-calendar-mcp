@@ -39,6 +39,7 @@
     "account": "node scripts/account-manager.js",
     "dev": "node scripts/dev.js",
     "lint": "tsc --noEmit -p tsconfig.lint.json",
+    "check:imports": "node scripts/check-imports.js",
     "test": "vitest run src/tests/unit",
     "test:watch": "vitest src/tests/unit",
     "test:integration": "vitest run src/tests/integration",
