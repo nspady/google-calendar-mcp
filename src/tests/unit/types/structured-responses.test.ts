@@ -335,6 +335,58 @@ describe('structured-responses', () => {
         expect(result.startDayOfWeek).toBe('Thursday');
         expect(result.endDayOfWeek).toBe('Friday');
       });
+
+      it('should handle dateTime with offset but WITHOUT timeZone field', () => {
+        // Edge case: Google API sometimes returns dateTime with offset but no timeZone field.
+        // When timeZone is absent, we should extract the local date from the ISO string
+        // to determine the correct day-of-week, NOT convert to UTC.
+        //
+        // This event is at 11 PM Pacific on Monday (Jan 19).
+        // If we incorrectly default to UTC, this becomes 7 AM UTC on Tuesday (Jan 20).
+        const event: calendar_v3.Schema$Event = {
+          id: 'test-event-offset-no-tz',
+          summary: 'Late Night Event Without Timezone Field',
+          start: {
+            dateTime: '2026-01-19T23:00:00-08:00'
+            // Note: NO timeZone field - this is the edge case
+          },
+          end: {
+            dateTime: '2026-01-20T00:30:00-08:00'
+            // Note: NO timeZone field
+          }
+        };
+
+        const result = convertGoogleEventToStructured(event);
+
+        // The local date in the ISO string is 2026-01-19, which is Monday
+        // This should NOT be Tuesday (which would happen if we defaulted to UTC)
+        expect(result.startDayOfWeek).toBe('Monday');
+        // End time crosses midnight, local date is 2026-01-20, which is Tuesday
+        expect(result.endDayOfWeek).toBe('Tuesday');
+      });
+
+      it('should handle dateTime with positive offset but WITHOUT timeZone field', () => {
+        // Similar edge case but with positive offset (e.g., India +05:30)
+        // Event at 11:30 PM IST on Monday (Jan 19)
+        const event: calendar_v3.Schema$Event = {
+          id: 'test-event-positive-offset-no-tz',
+          summary: 'Late Night India Event Without Timezone Field',
+          start: {
+            dateTime: '2026-01-19T23:30:00+05:30'
+            // Note: NO timeZone field
+          },
+          end: {
+            dateTime: '2026-01-20T00:30:00+05:30'
+            // Note: NO timeZone field
+          }
+        };
+
+        const result = convertGoogleEventToStructured(event);
+
+        // The local date in the ISO string is 2026-01-19, which is Monday
+        expect(result.startDayOfWeek).toBe('Monday');
+        expect(result.endDayOfWeek).toBe('Tuesday');
+      });
     });
   });
 });

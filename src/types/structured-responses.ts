@@ -449,6 +449,10 @@ export interface RemoveAccountResponse {
  * Uses Intl.DateTimeFormat for reliable timezone-aware day-of-week calculation.
  * This prevents LLM hallucination of date-to-day mappings.
  *
+ * Handles edge case where timeZone field is absent but dateTime contains an offset:
+ * When dateTime is like "2026-01-19T23:00:00-08:00" without explicit timeZone,
+ * we extract the local date directly from the ISO string to get the correct day.
+ *
  * @param dateTimeOrDate - ISO 8601 dateTime string or YYYY-MM-DD date string
  * @param timeZone - Optional timezone for the calculation (defaults to UTC)
  * @returns Day of week name (e.g., "Monday", "Tuesday") or undefined if parsing fails
@@ -457,6 +461,24 @@ function getDayOfWeek(dateTimeOrDate: string | undefined | null, timeZone?: stri
   if (!dateTimeOrDate) return undefined;
 
   try {
+    // If no explicit timezone but the dateTime has an offset (e.g., -08:00, +05:30),
+    // extract the local date directly from the ISO string to derive correct day-of-week.
+    // This handles the edge case where Google returns dateTime with offset but no timeZone field.
+    if (!timeZone && /[+-]\d{2}:\d{2}$/.test(dateTimeOrDate)) {
+      const dateMatch = dateTimeOrDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (dateMatch) {
+        const [, year, month, day] = dateMatch;
+        // Create a date at noon UTC for the extracted date to avoid any DST edge cases
+        const localDate = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0));
+        if (!isNaN(localDate.getTime())) {
+          return new Intl.DateTimeFormat('en-US', {
+            weekday: 'long',
+            timeZone: 'UTC'
+          }).format(localDate);
+        }
+      }
+    }
+
     const date = new Date(dateTimeOrDate);
     if (isNaN(date.getTime())) return undefined;
 
