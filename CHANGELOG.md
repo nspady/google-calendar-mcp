@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.1](https://github.com/nspady/google-calendar-mcp/compare/v2.4.0...v2.4.1) (2026-01-18)
+
+
+### Bug Fixes
+
+* add gaxios as direct dependency ([00a0755](https://github.com/nspady/google-calendar-mcp/commit/00a0755fd29cf4070a4534917d36c2860da695fa))
+
 ## [2.4.0](https://github.com/nspady/google-calendar-mcp/compare/v2.3.1...v2.4.0) (2026-01-18)
 
 
