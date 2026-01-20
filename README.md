@@ -199,6 +199,12 @@ Along with the normal capabilities you would expect for a calendar integration y
 - [Testing](docs/testing.md) - Unit and integration testing guide
 - [Multi-Account Updates](docs/multi-account-updates.md) - Current status and roadmap for multi-account support
 
+## Sponsorship
+
+If Google Calendar MCP has been useful to you and you're so inclined, I'd greatly appreciate it if you'd consider [sponsoring my open source work](https://github.com/sponsors/nspady).
+
+Thanks! – Nate
+
 ## Configuration
 
 **Environment Variables:**
