@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.2](https://github.com/nspady/google-calendar-mcp/compare/v2.4.1...v2.4.2) (2026-01-27)
+
+
+### Bug Fixes
+
+* detect recurring event instances via recurringEventId ([#164](https://github.com/nspady/google-calendar-mcp/issues/164)) ([a26140c](https://github.com/nspady/google-calendar-mcp/commit/a26140ce19b93d08dbbada70e768bd9ba8fa9463))
+
 ## [2.4.1](https://github.com/nspady/google-calendar-mcp/compare/v2.4.0...v2.4.1) (2026-01-18)
 
 
