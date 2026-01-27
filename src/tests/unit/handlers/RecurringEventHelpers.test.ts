@@ -64,6 +64,21 @@ describe('RecurringEventHelpers', () => {
       expect(result).toBe('single');
     });
 
+    it('should detect recurring event instances via recurringEventId', async () => {
+      const mockEvent = {
+        data: {
+          id: 'event123_20260127T180000Z',
+          summary: 'Weekly Meeting',
+          recurringEventId: 'event123'
+          // no recurrence array - instances don't carry it
+        }
+      };
+      mockCalendar.events.get.mockResolvedValue(mockEvent);
+
+      const result = await helpers.detectEventType('event123_20260127T180000Z', 'primary');
+      expect(result).toBe('recurring');
+    });
+
     it('should handle API errors', async () => {
       mockCalendar.events.get.mockRejectedValue(new Error('Event not found'));
 

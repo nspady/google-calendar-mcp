@@ -25,7 +25,10 @@ export class RecurringEventHelpers {
     });
 
     const event = response.data;
-    return event.recurrence && event.recurrence.length > 0 ? 'recurring' : 'single';
+    // Check both recurrence array (parent events) and recurringEventId (instances)
+    if (event.recurrence && event.recurrence.length > 0) return 'recurring';
+    if (event.recurringEventId) return 'recurring';
+    return 'single';
   }
 
   /**
