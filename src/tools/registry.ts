@@ -36,6 +36,35 @@ const isValidIsoDateTime = (val: string): boolean =>
 const isValidIsoDateOrDateTime = (val: string): boolean =>
   ISO_DATE_ONLY.test(val) || isValidIsoDateTime(val);
 
+// Time input validation: accepts ISO 8601 string or JSON-encoded object with per-field timezone
+// JSON object format enables different timezones for start/end (e.g., flights departing/arriving in different timezones)
+// Examples:
+//   String: "2025-01-01T10:00:00" or "2025-01-01"
+//   JSON object: '{"dateTime": "2025-01-01T10:00:00", "timeZone": "America/Los_Angeles"}'
+const isValidTimeInput = (val: string): boolean => {
+  // Try parsing as JSON object first (trim to handle leading/trailing whitespace)
+  const trimmed = val.trim();
+  if (trimmed.startsWith('{')) {
+    try {
+      const obj = JSON.parse(trimmed);
+      if (obj.date !== undefined && obj.dateTime !== undefined) {
+        return false; // Can't have both
+      }
+      if (obj.date !== undefined) {
+        return ISO_DATE_ONLY.test(obj.date);
+      }
+      if (obj.dateTime !== undefined) {
+        return isValidIsoDateTime(obj.dateTime);
+      }
+      return false; // Must have one or the other
+    } catch {
+      return false; // Invalid JSON
+    }
+  }
+  // Otherwise validate as ISO 8601 string (use trimmed value for consistency)
+  return isValidIsoDateOrDateTime(trimmed);
+};
+
 // ============================================================================
 // SHARED ENUMS
 // ============================================================================
@@ -288,11 +317,19 @@ export const ToolSchemas = {
     summary: z.string().describe("Title of the event"),
     description: z.string().optional().describe("Description/notes for the event"),
     start: z.string()
-      .refine(isValidIsoDateOrDateTime, "Must be ISO 8601 format: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events")
-      .describe("Event start time: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events. Also accepts Google Calendar API object format: {date: '2025-01-01'} or {dateTime: '2025-01-01T10:00:00', timeZone: 'America/Los_Angeles'}"),
+      .refine(isValidTimeInput, "Must be ISO 8601 format ('2025-01-01T10:00:00' or '2025-01-01') or JSON object ('{\"dateTime\": \"...\", \"timeZone\": \"...\"}')")
+      .describe(
+        "Event start time. String format: '2025-01-01T10:00:00' (timed) or '2025-01-01' (all-day). " +
+        "For per-field timezone, use JSON: '{\"dateTime\": \"2025-01-01T10:00:00\", \"timeZone\": \"America/Los_Angeles\"}'. " +
+        "Per-field timezone is useful for events spanning multiple timezones (e.g., flights)."
+      ),
     end: z.string()
-      .refine(isValidIsoDateOrDateTime, "Must be ISO 8601 format: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events")
-      .describe("Event end time: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events (exclusive). Also accepts Google Calendar API object format: {date: '2025-01-02'} or {dateTime: '2025-01-01T11:00:00', timeZone: 'America/Los_Angeles'}"),
+      .refine(isValidTimeInput, "Must be ISO 8601 format ('2025-01-01T11:00:00' or '2025-01-02') or JSON object ('{\"dateTime\": \"...\", \"timeZone\": \"...\"}')")
+      .describe(
+        "Event end time. String format: '2025-01-01T11:00:00' (timed) or '2025-01-02' (all-day, exclusive). " +
+        "For per-field timezone, use JSON: '{\"dateTime\": \"2025-01-01T11:00:00\", \"timeZone\": \"America/New_York\"}'. " +
+        "Per-field timezone is useful for events spanning multiple timezones (e.g., flights)."
+      ),
     timeZone: z.string().optional().describe(
       "Timezone as IANA Time Zone Database name (e.g., America/Los_Angeles). Takes priority over calendar's default timezone. Only used for timezone-naive datetime strings."
     ),
@@ -399,7 +436,20 @@ export const ToolSchemas = {
     (data) => {
       // Validate that focusTime and outOfOffice events use dateTime (not all-day date format)
       if (data.eventType === 'focusTime' || data.eventType === 'outOfOffice') {
-        if (ISO_DATE_ONLY.test(data.start) || ISO_DATE_ONLY.test(data.end)) {
+        // Helper to check if a time value is all-day format
+        const isAllDay = (val: string): boolean => {
+          const trimmed = val.trim();
+          if (trimmed.startsWith('{')) {
+            try {
+              const obj = JSON.parse(trimmed);
+              return obj.date !== undefined;
+            } catch {
+              return false;
+            }
+          }
+          return ISO_DATE_ONLY.test(trimmed);
+        };
+        if (isAllDay(data.start) || isAllDay(data.end)) {
           return false;
         }
       }
@@ -418,12 +468,18 @@ export const ToolSchemas = {
     summary: z.string().optional().describe("Updated title of the event"),
     description: z.string().optional().describe("Updated description/notes"),
     start: z.string()
-      .refine(isValidIsoDateOrDateTime, "Must be ISO 8601 format: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events")
-      .describe("Updated start time: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events. Also accepts Google Calendar API object format: {date: '2025-01-01'} or {dateTime: '2025-01-01T10:00:00', timeZone: 'America/Los_Angeles'}")
+      .refine(isValidTimeInput, "Must be ISO 8601 format ('2025-01-01T10:00:00' or '2025-01-01') or JSON object ('{\"dateTime\": \"...\", \"timeZone\": \"...\"}')")
+      .describe(
+        "Updated start time. String format: '2025-01-01T10:00:00' (timed) or '2025-01-01' (all-day). " +
+        "For per-field timezone, use JSON: '{\"dateTime\": \"2025-01-01T10:00:00\", \"timeZone\": \"America/Los_Angeles\"}'."
+      )
       .optional(),
     end: z.string()
-      .refine(isValidIsoDateOrDateTime, "Must be ISO 8601 format: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events")
-      .describe("Updated end time: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events (exclusive). Also accepts Google Calendar API object format: {date: '2025-01-02'} or {dateTime: '2025-01-01T11:00:00', timeZone: 'America/Los_Angeles'}")
+      .refine(isValidTimeInput, "Must be ISO 8601 format ('2025-01-01T11:00:00' or '2025-01-02') or JSON object ('{\"dateTime\": \"...\", \"timeZone\": \"...\"}')")
+      .describe(
+        "Updated end time. String format: '2025-01-01T11:00:00' (timed) or '2025-01-02' (all-day, exclusive). " +
+        "For per-field timezone, use JSON: '{\"dateTime\": \"2025-01-01T11:00:00\", \"timeZone\": \"America/New_York\"}'."
+      )
       .optional(),
     timeZone: z.string().optional().describe("Updated timezone as IANA Time Zone Database name. If not provided, uses the calendar's default timezone."),
     location: z.string().optional().describe("Updated location"),

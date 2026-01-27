@@ -92,20 +92,76 @@ function convertLocalTimeToUTC(year: number, month: number, day: number, hour: n
 }
 
 /**
+ * Parsed time object structure
+ */
+interface ParsedTimeObject {
+    dateTime?: string;
+    date?: string;
+    timeZone?: string;
+}
+
+/**
  * Creates a time object for Google Calendar API, handling both timezone-aware and timezone-naive datetime strings
  * Also handles all-day events by using 'date' field instead of 'dateTime'
- * @param datetime ISO 8601 datetime string (with or without timezone)
- * @param fallbackTimezone Timezone to use if datetime is timezone-naive (IANA format)
+ *
+ * Supports two input formats:
+ * 1. String: ISO 8601 datetime or date (e.g., '2025-01-01T10:00:00' or '2025-01-01')
+ * 2. JSON-encoded object: Per-field timezone support
+ *    - '{"dateTime": "2025-01-01T10:00:00", "timeZone": "America/Los_Angeles"}'
+ *    - '{"date": "2025-01-01"}'
+ *
+ * The JSON object format enables different timezones for start and end times,
+ * useful for events spanning multiple timezones (e.g., flights).
+ *
+ * @param input ISO 8601 datetime/date string OR JSON-encoded object with dateTime/date and optional timeZone
+ * @param fallbackTimezone Timezone to use if input is timezone-naive (IANA format)
  * @returns Google Calendar API time object
  */
-export function createTimeObject(datetime: string, fallbackTimezone: string): { dateTime?: string; date?: string; timeZone?: string } {
+export function createTimeObject(input: string, fallbackTimezone: string): { dateTime?: string; date?: string; timeZone?: string } {
+    // Check if input is a JSON-encoded object (trim to handle leading whitespace)
+    const trimmedInput = input.trim();
+    if (trimmedInput.startsWith('{')) {
+        try {
+            const obj: ParsedTimeObject = JSON.parse(trimmedInput);
+
+            if (obj.date) {
+                // All-day event via JSON object format
+                return { date: obj.date };
+            }
+            if (obj.dateTime) {
+                // Timed event via JSON object format
+                if (hasTimezoneInDatetime(obj.dateTime)) {
+                    // Datetime already has timezone embedded - use as-is
+                    return { dateTime: obj.dateTime };
+                } else if (obj.timeZone) {
+                    // Per-field timezone provided - use it (this is the key feature!)
+                    return { dateTime: obj.dateTime, timeZone: obj.timeZone };
+                } else {
+                    // No timezone info - use fallback
+                    return { dateTime: obj.dateTime, timeZone: fallbackTimezone };
+                }
+            }
+            // Shouldn't reach here if schema validation works, but fallback just in case
+            throw new Error('Invalid time object: must have either dateTime or date');
+        } catch (e) {
+            if (e instanceof SyntaxError) {
+                throw new Error(`Invalid JSON in time input: ${trimmedInput}`);
+            }
+            throw e;
+        }
+    }
+
+    // Handle plain string format (original behavior)
+    // Use trimmed input for consistency
+    const datetime = trimmedInput;
+
     // Check if this is a date-only string (all-day event)
     // Date-only format: YYYY-MM-DD (no time component)
     if (!/T/.test(datetime)) {
         // This is a date-only string, use the 'date' field for all-day event
         return { date: datetime };
     }
-    
+
     // This is a datetime string with time component
     if (hasTimezoneInDatetime(datetime)) {
         // Timezone included in datetime - use as-is, no separate timeZone property needed
