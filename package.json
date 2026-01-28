@@ -51,6 +51,7 @@
   },
   "dependencies": {
     "@google-cloud/local-auth": "^3.0.1",
+    "@modelcontextprotocol/ext-apps": "^1.0.1",
     "@modelcontextprotocol/sdk": "^1.12.1",
     "gaxios": "^6.7.1",
     "google-auth-library": "^9.15.0",
@@ -67,6 +68,8 @@
     "js-tiktoken": "^1.0.21",
     "openai": "^4.104.0",
     "typescript": "^5.3.3",
+    "vite": "^7.3.1",
+    "vite-plugin-singlefile": "^2.3.0",
     "vitest": "^3.1.1"
   }
 }
