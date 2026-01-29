@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Day View</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div id="app">
+    <div class="day-view-header">
+      <h2 id="date-heading">Loading...</h2>
+      <a id="day-link" href="#" target="_blank" class="open-calendar-btn">Open in Calendar</a>
+    </div>
+    <div id="all-day-section" class="all-day-section" style="display: none;">
+      <div class="all-day-label">All day</div>
+      <div id="all-day-events" class="all-day-events"></div>
+    </div>
+    <div id="time-grid" class="time-grid">
+      <!-- Time slots and events rendered here -->
+    </div>
+  </div>
+  <script type="module" src="./day-view.ts"></script>
+</body>
+</html>
