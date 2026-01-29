@@ -8,6 +8,7 @@ import {
 } from "../types/structured-responses.js";
 import { calendar_v3 } from "googleapis";
 import { DAY_VIEW_RESOURCE_URI } from "../ui/register-ui-resources.js";
+import { RESOURCE_URI_META_KEY } from "@modelcontextprotocol/ext-apps/server";
 
 /**
  * Creates a structured JSON response for MCP tools
@@ -30,11 +31,10 @@ export function createStructuredResponse<T>(
   };
 
   // Add UI metadata if requested and data includes dayContext
+  // Uses the official MCP Apps meta key format: "ui/resourceUri"
   if (options?.includeUI && data && typeof data === 'object' && 'dayContext' in data && (data as any).dayContext) {
     (result as any)._meta = {
-      ui: {
-        resourceUri: DAY_VIEW_RESOURCE_URI
-      }
+      [RESOURCE_URI_META_KEY]: DAY_VIEW_RESOURCE_URI
     };
   }
 

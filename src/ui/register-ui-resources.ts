@@ -1,4 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { registerAppResource, RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
 import { promises as fs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -6,7 +7,6 @@ import { dirname, join } from 'node:path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export const DAY_VIEW_RESOURCE_URI = 'ui://calendar/day-view.html';
-const RESOURCE_MIME_TYPE = 'text/html;profile=mcp-app';
 
 /**
  * Load the day view HTML file from the build directory.
@@ -37,8 +37,9 @@ async function loadDayViewHtml(): Promise<string> {
  * Registers MCP Apps UI resources with the server
  */
 export async function registerUIResources(server: McpServer): Promise<void> {
-  // Register the day view resource
-  server.resource(
+  // Register the day view resource using MCP Apps helper
+  registerAppResource(
+    server,
     DAY_VIEW_RESOURCE_URI,
     DAY_VIEW_RESOURCE_URI,
     { mimeType: RESOURCE_MIME_TYPE },

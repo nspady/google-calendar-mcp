@@ -256,8 +256,8 @@ describe('CreateEventHandler - Day Context Integration', () => {
       }, mockAccounts);
 
       expect((result as any)._meta).toBeDefined();
-      expect((result as any)._meta.ui).toBeDefined();
-      expect((result as any)._meta.ui.resourceUri).toBe('ui://calendar/day-view.html');
+      // MCP Apps uses "ui/resourceUri" as the meta key
+      expect((result as any)._meta['ui/resourceUri']).toBe('ui://calendar/day-view.html');
     });
   });
 
