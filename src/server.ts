@@ -21,6 +21,9 @@ import { HttpTransportHandler, HttpTransportConfig } from './transports/http.js'
 // Import config
 import { ServerConfig } from './config/TransportConfig.js';
 
+// Import UI resource registration
+import { registerUIResources } from './ui/register-ui-resources.js';
+
 export class GoogleCalendarMcpServer {
   private server: McpServer;
   private oauth2Client!: OAuth2Client;
@@ -52,7 +55,10 @@ export class GoogleCalendarMcpServer {
     // 4. Set up Modern Tool Definitions
     this.registerTools();
 
-    // 5. Set up Graceful Shutdown
+    // 5. Register MCP Apps UI resources
+    await registerUIResources(this.server);
+
+    // 6. Set up Graceful Shutdown
     this.setupGracefulShutdown();
   }
 
