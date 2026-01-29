@@ -280,6 +280,8 @@ export interface UpdateEventResponse {
   event: StructuredEvent;
   conflicts?: ConflictInfo[];
   warnings?: string[];
+  /** Day context for MCP Apps UI visualization */
+  dayContext?: import('./day-context.js').DayContext;
 }
 
 /**

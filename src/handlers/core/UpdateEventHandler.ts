@@ -5,23 +5,26 @@ import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
 import { RecurringEventHelpers, RecurringEventError, RECURRING_EVENT_ERRORS } from './RecurringEventHelpers.js';
 import { ConflictDetectionService } from "../../services/conflict-detection/index.js";
+import { DayContextService } from "../../services/day-context/index.js";
 import { createTimeObject } from "../../utils/datetime.js";
-import { 
-    createStructuredResponse, 
+import {
+    createStructuredResponse,
     convertConflictsToStructured,
     createWarningsArray
 } from "../../utils/response-builder.js";
-import { 
+import {
     UpdateEventResponse,
-    convertGoogleEventToStructured 
+    convertGoogleEventToStructured
 } from "../../types/structured-responses.js";
 
 export class UpdateEventHandler extends BaseToolHandler {
     private conflictDetectionService: ConflictDetectionService;
+    private dayContextService: DayContextService;
 
     constructor() {
         super();
         this.conflictDetectionService = new ConflictDetectionService();
+        this.dayContextService = new DayContextService();
     }
 
     async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
@@ -89,13 +92,46 @@ export class UpdateEventHandler extends BaseToolHandler {
         }
 
         // Update the event with resolved calendar ID and merged attendees
-        const event = await this.updateEventWithScope(oauth2Client, argsWithMergedAttendees);
+        const updatedEvent = await this.updateEventWithScope(oauth2Client, argsWithMergedAttendees);
+
+        // Convert updated event to structured format
+        const structuredEvent = convertGoogleEventToStructured(updatedEvent, resolvedCalendarId, selectedAccountId);
+
+        // Fetch surrounding events for day view
+        let dayContext = undefined;
+        try {
+            const timezone = validArgs.timeZone || await this.getCalendarTimezone(oauth2Client, resolvedCalendarId);
+            const eventDate = updatedEvent.start?.dateTime || updatedEvent.start?.date || '';
+            const dateOnly = eventDate.split('T')[0];
+            const dayStart = dateOnly + 'T00:00:00';
+            const dayEnd = dateOnly + 'T23:59:59';
+
+            const dayEventsResponse = await calendar.events.list({
+                calendarId: resolvedCalendarId,
+                timeMin: dayStart,
+                timeMax: dayEnd,
+                singleEvents: true,
+                orderBy: 'startTime',
+            });
+
+            const dayEvents = (dayEventsResponse.data.items || [])
+                .filter(e => e.id !== updatedEvent.id)
+                .map(e => convertGoogleEventToStructured(e, resolvedCalendarId, selectedAccountId));
+
+            dayContext = this.dayContextService.buildDayContext(
+                structuredEvent,
+                dayEvents,
+                timezone
+            );
+        } catch {
+            // Day context is optional - don't fail if we can't fetch it
+        }
 
         // Create structured response
         const response: UpdateEventResponse = {
-            event: convertGoogleEventToStructured(event, resolvedCalendarId, selectedAccountId)
+            event: structuredEvent
         };
-        
+
         // Add conflict information if present
         if (conflicts && conflicts.hasConflicts) {
             const structuredConflicts = convertConflictsToStructured(conflicts);
@@ -104,7 +140,12 @@ export class UpdateEventHandler extends BaseToolHandler {
             }
             response.warnings = createWarningsArray(conflicts);
         }
-        
+
+        // Add day context if available
+        if (dayContext) {
+            response.dayContext = dayContext;
+        }
+
         return createStructuredResponse(response);
     }
 
