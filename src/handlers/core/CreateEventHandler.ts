@@ -9,13 +9,16 @@ import { ConflictDetectionService } from "../../services/conflict-detection/inde
 import { CONFLICT_DETECTION_CONFIG } from "../../services/conflict-detection/config.js";
 import { createStructuredResponse, convertConflictsToStructured, createWarningsArray } from "../../utils/response-builder.js";
 import { CreateEventResponse, convertGoogleEventToStructured } from "../../types/structured-responses.js";
+import { DayContextService } from "../../services/day-context/index.js";
 
 export class CreateEventHandler extends BaseToolHandler {
     private conflictDetectionService: ConflictDetectionService;
-    
+    private dayContextService: DayContextService;
+
     constructor() {
         super();
         this.conflictDetectionService = new ConflictDetectionService();
+        this.dayContextService = new DayContextService();
     }
     
     async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
@@ -83,13 +86,47 @@ export class CreateEventHandler extends BaseToolHandler {
         const argsWithResolvedCalendar = { ...validArgs, calendarId: resolvedCalendarId };
         const event = await this.createEvent(oauth2Client, argsWithResolvedCalendar);
 
+        // Convert created event to structured format
+        const structuredEvent = convertGoogleEventToStructured(event, resolvedCalendarId, selectedAccountId);
+
+        // Fetch surrounding events for day view
+        let dayContext = undefined;
+        try {
+            const calendar = this.getCalendar(oauth2Client);
+            const eventDate = event.start?.dateTime || event.start?.date || '';
+            const dateOnly = eventDate.split('T')[0];
+            const dayStart = dateOnly + 'T00:00:00';
+            const dayEnd = dateOnly + 'T23:59:59';
+
+            const dayEventsResponse = await calendar.events.list({
+                calendarId: resolvedCalendarId,
+                timeMin: dayStart,
+                timeMax: dayEnd,
+                singleEvents: true,
+                orderBy: 'startTime',
+            });
+
+            const dayEvents = (dayEventsResponse.data.items || [])
+                .filter(e => e.id !== event.id)
+                .map(e => convertGoogleEventToStructured(e, resolvedCalendarId, selectedAccountId));
+
+            dayContext = this.dayContextService.buildDayContext(
+                structuredEvent,
+                dayEvents,
+                timezone
+            );
+        } catch {
+            // Day context is optional - don't fail if we can't fetch it
+        }
+
         // Generate structured response with conflict warnings
         const structuredConflicts = convertConflictsToStructured(conflicts);
         const response: CreateEventResponse = {
-            event: convertGoogleEventToStructured(event, resolvedCalendarId, selectedAccountId),
+            event: structuredEvent,
             conflicts: structuredConflicts.conflicts,
             duplicates: structuredConflicts.duplicates,
-            warnings: createWarningsArray(conflicts)
+            warnings: createWarningsArray(conflicts),
+            dayContext,
         };
 
         return createStructuredResponse(response);

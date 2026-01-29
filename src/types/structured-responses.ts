@@ -269,6 +269,8 @@ export interface CreateEventResponse {
   conflicts?: ConflictInfo[];
   duplicates?: DuplicateInfo[];
   warnings?: string[];
+  /** Day context for MCP Apps UI visualization */
+  dayContext?: import('./day-context.js').DayContext;
 }
 
 /**
