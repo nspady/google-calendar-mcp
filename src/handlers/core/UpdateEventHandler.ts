@@ -146,7 +146,7 @@ export class UpdateEventHandler extends BaseToolHandler {
             response.dayContext = dayContext;
         }
 
-        return createStructuredResponse(response);
+        return createStructuredResponse(response, { includeUI: true });
     }
 
     private async updateEventWithScope(

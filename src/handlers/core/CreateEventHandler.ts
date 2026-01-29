@@ -129,7 +129,7 @@ export class CreateEventHandler extends BaseToolHandler {
             dayContext,
         };
 
-        return createStructuredResponse(response);
+        return createStructuredResponse(response, { includeUI: true });
     }
 
     private async createEvent(
