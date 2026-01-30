@@ -7,38 +7,26 @@ import {
   StructuredEvent
 } from "../types/structured-responses.js";
 import { calendar_v3 } from "googleapis";
-import { DAY_VIEW_RESOURCE_URI } from "../ui/register-ui-resources.js";
-import { RESOURCE_URI_META_KEY } from "@modelcontextprotocol/ext-apps/server";
 
 /**
- * Creates a structured JSON response for MCP tools
- * Optionally includes UI metadata for MCP Apps visualization
+ * Creates a structured JSON response for MCP tools.
  *
  * Note: We use compact JSON (no pretty-printing) because MCP clients
  * are expected to parse and display the JSON themselves. Pretty-printing
  * with escaped newlines (\n) creates poor display in clients that show
  * the raw text.
+ *
+ * For MCP Apps UI rendering, the _meta.ui.resourceUri is set in the tool
+ * definition (via registerAppTool), not in the response. The host reads
+ * the UI metadata from the tool definition when listing tools.
  */
-export function createStructuredResponse<T>(
-  data: T,
-  options?: { includeUI?: boolean }
-): CallToolResult {
-  const result: CallToolResult = {
+export function createStructuredResponse<T>(data: T): CallToolResult {
+  return {
     content: [{
       type: "text",
       text: JSON.stringify(data)
     }]
   };
-
-  // Add UI metadata if requested and data includes dayContext
-  // Uses the official MCP Apps meta key format: "ui/resourceUri"
-  if (options?.includeUI && data && typeof data === 'object' && 'dayContext' in data && (data as any).dayContext) {
-    (result as any)._meta = {
-      [RESOURCE_URI_META_KEY]: DAY_VIEW_RESOURCE_URI
-    };
-  }
-
-  return result;
 }
 
 /**

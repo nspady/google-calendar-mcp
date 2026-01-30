@@ -38,6 +38,9 @@ const allDaySection = document.getElementById('all-day-section') as HTMLDivEleme
 const allDayEvents = document.getElementById('all-day-events') as HTMLDivElement;
 const timeGrid = document.getElementById('time-grid') as HTMLDivElement;
 
+// Global app instance for opening links (sandboxed iframe requires app.openLink)
+let appInstance: App | null = null;
+
 /**
  * Format hour for display (e.g., "9 AM", "12 PM", "5 PM")
  */
@@ -117,45 +120,68 @@ function calculateEventPosition(
 }
 
 /**
+ * Open a link using the MCP Apps API (required in sandboxed iframe)
+ */
+function openLink(url: string): void {
+  if (appInstance) {
+    appInstance.openLink(url);
+  } else {
+    // Fallback for testing outside iframe
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+}
+
+/**
  * Create an event element (safe DOM methods, no innerHTML)
+ * Uses click handlers with app.openLink() for sandboxed iframe compatibility
  */
 function createEventElement(
   event: DayViewEvent,
   isFocused: boolean,
   isAllDay: boolean = false
-): HTMLAnchorElement {
-  const link = document.createElement('a');
-  link.href = event.htmlLink;
-  link.target = '_blank';
-  link.rel = 'noopener noreferrer';
+): HTMLDivElement {
+  const element = document.createElement('div');
+  element.style.cursor = 'pointer';
+  element.setAttribute('role', 'button');
+  element.setAttribute('tabindex', '0');
+  element.title = `Click to open in Google Calendar`;
+
+  // Handle click to open in Google Calendar
+  element.addEventListener('click', () => openLink(event.htmlLink));
+  element.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      openLink(event.htmlLink);
+    }
+  });
 
   const colorClass = getEventColorClass(event.colorId);
 
   if (isAllDay) {
-    link.className = `all-day-event ${colorClass} ${isFocused ? 'focused' : ''}`.trim();
-    link.textContent = event.summary;
+    element.className = `all-day-event ${colorClass} ${isFocused ? 'focused' : ''}`.trim();
+    element.textContent = event.summary;
   } else {
-    link.className = `event-block ${colorClass} ${isFocused ? 'focused' : ''}`.trim();
+    element.className = `event-block ${colorClass} ${isFocused ? 'focused' : ''}`.trim();
 
     const titleDiv = document.createElement('div');
     titleDiv.className = 'event-title';
     titleDiv.textContent = event.summary;
-    link.appendChild(titleDiv);
+    element.appendChild(titleDiv);
 
     const timeDiv = document.createElement('div');
     timeDiv.className = 'event-time';
     timeDiv.textContent = `${formatTime(event.start)} - ${formatTime(event.end)}`;
-    link.appendChild(timeDiv);
+    element.appendChild(timeDiv);
 
     if (event.location) {
       const locationDiv = document.createElement('div');
       locationDiv.className = 'event-location';
       locationDiv.textContent = event.location;
-      link.appendChild(locationDiv);
+      element.appendChild(locationDiv);
     }
   }
 
-  return link;
+  return element;
 }
 
 /**
@@ -249,7 +275,13 @@ function renderTimeGrid(context: DayContext): void {
 function renderDayView(context: DayContext): void {
   // Update header
   dateHeading.textContent = formatDateHeading(context.date);
-  dayLink.href = context.dayLink;
+
+  // Set up "Open in Calendar" button with click handler (sandboxed iframe)
+  dayLink.href = '#';
+  dayLink.onclick = (e) => {
+    e.preventDefault();
+    openLink(context.dayLink);
+  };
 
   // Render all-day events
   renderAllDayEvents(context.events, context.focusEventId);
@@ -318,6 +350,9 @@ async function init(): Promise<void> {
     { name: 'DayView', version: '1.0.0' },
     {} // No special capabilities needed
   );
+
+  // Store app instance globally for openLink calls
+  appInstance = app;
 
   // Handle tool results
   app.ontoolresult = (params) => {

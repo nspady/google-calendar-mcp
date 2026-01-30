@@ -1,9 +1,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { registerAppTool } from "@modelcontextprotocol/ext-apps/server";
 import { BaseToolHandler } from "../handlers/core/BaseToolHandler.js";
 import { ALLOWED_EVENT_FIELDS } from "../utils/field-mask-builder.js";
 import { ServerConfig } from "../config/TransportConfig.js";
+import { DAY_VIEW_RESOURCE_URI } from "../ui/register-ui-resources.js";
 
 // Import all handlers
 import { ListCalendarsHandler } from "../handlers/core/ListCalendarsHandler.js";
@@ -614,6 +616,21 @@ export type GetFreeBusyInput = ToolInputs['get-freebusy'];
 export type GetCurrentTimeInput = ToolInputs['get-current-time'];
 export type RespondToEventInput = ToolInputs['respond-to-event'];
 
+/**
+ * Tool annotations that help clients understand tool behavior.
+ * These are hints, not security guarantees.
+ */
+interface ToolAnnotations {
+  /** Tool does not modify its environment */
+  readOnlyHint?: boolean;
+  /** Tool may perform destructive updates (delete, overwrite) */
+  destructiveHint?: boolean;
+  /** Repeated calls with same args have no additional effect */
+  idempotentHint?: boolean;
+  /** Tool interacts with external entities (APIs, services) */
+  openWorldHint?: boolean;
+}
+
 interface ToolDefinition {
   name: keyof typeof ToolSchemas;
   description: string;
@@ -621,6 +638,10 @@ interface ToolDefinition {
   handler: new () => BaseToolHandler;
   handlerFunction?: (args: any) => Promise<any>;
   customInputSchema?: any; // Custom schema shape for MCP registration (overrides extractSchemaShape)
+  /** Tool annotations per MCP spec */
+  annotations?: ToolAnnotations;
+  /** Whether this tool has an associated UI (MCP Apps) */
+  hasUI?: boolean;
 }
 
 
@@ -652,7 +673,8 @@ export class ToolRegistry {
       name: "list-calendars",
       description: "List all available calendars",
       schema: ToolSchemas['list-calendars'],
-      handler: ListCalendarsHandler
+      handler: ListCalendarsHandler,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
     },
     {
       name: "list-events",
@@ -719,61 +741,73 @@ export class ToolRegistry {
           privateExtendedProperty: args.privateExtendedProperty,
           sharedExtendedProperty: args.sharedExtendedProperty
         };
-      }
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
     },
     {
       name: "search-events",
       description: "Search for events in a calendar by text query.",
       schema: ToolSchemas['search-events'],
-      handler: SearchEventsHandler
+      handler: SearchEventsHandler,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
     },
     {
       name: "get-event",
       description: "Get details of a specific event by ID.",
       schema: ToolSchemas['get-event'],
-      handler: GetEventHandler
+      handler: GetEventHandler,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
     },
     {
       name: "list-colors",
       description: "List available color IDs and their meanings for calendar events",
       schema: ToolSchemas['list-colors'],
-      handler: ListColorsHandler
+      handler: ListColorsHandler,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
     },
     {
       name: "create-event",
       description: "Create a new calendar event.",
       schema: ToolSchemas['create-event'],
-      handler: CreateEventHandler
+      handler: CreateEventHandler,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+      hasUI: true
     },
     {
       name: "update-event",
       description: "Update an existing calendar event with recurring event modification scope support.",
       schema: ToolSchemas['update-event'],
-      handler: UpdateEventHandler
+      handler: UpdateEventHandler,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      hasUI: true
     },
     {
       name: "delete-event",
       description: "Delete a calendar event.",
       schema: ToolSchemas['delete-event'],
-      handler: DeleteEventHandler
+      handler: DeleteEventHandler,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true }
     },
     {
       name: "get-freebusy",
       description: "Query free/busy information for calendars. Note: Time range is limited to a maximum of 3 months between timeMin and timeMax.",
       schema: ToolSchemas['get-freebusy'],
-      handler: FreeBusyEventHandler
+      handler: FreeBusyEventHandler,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
     },
     {
       name: "get-current-time",
       description: "Get the current date and time. Call this FIRST before creating, updating, or searching for events to ensure you have accurate date context for scheduling.",
       schema: ToolSchemas['get-current-time'],
-      handler: GetCurrentTimeHandler
+      handler: GetCurrentTimeHandler,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
     },
     {
       name: "respond-to-event",
       description: "Respond to a calendar event invitation with Accept, Decline, Maybe (Tentative), or No Response.",
       schema: ToolSchemas['respond-to-event'],
-      handler: RespondToEventHandler
+      handler: RespondToEventHandler,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true }
     }
   ];
 
@@ -885,28 +919,50 @@ export class ToolRegistry {
       args: any
     ) => Promise<{ content: Array<{ type: "text"; text: string }> }>
   ) {
-    // Use the existing registerTool method which handles schema conversion properly
-    server.registerTool(
+    const inputSchema = tool.customInputSchema || this.extractSchemaShape(tool.schema);
+
+    // Build the handler function (same for both UI and non-UI tools)
+    const handlerFn = async (args: any) => {
+      // Preprocess: Normalize datetime fields (convert object format to string format)
+      // This allows accepting both formats while keeping schemas simple
+      const normalizedArgs = this.normalizeDateTimeFields(tool.name, args);
+
+      // Validate input using our Zod schema
+      const validatedArgs = tool.schema.parse(normalizedArgs);
+
+      // Apply any custom handler function preprocessing
+      const processedArgs = tool.handlerFunction ? await tool.handlerFunction(validatedArgs) : validatedArgs;
+
+      // Create handler instance and execute
+      const handler = new tool.handler();
+      return executeWithHandler(handler, processedArgs);
+    };
+
+    // For tools with UI, use registerAppTool from ext-apps
+    // This adds _meta.ui.resourceUri to the tool definition, which the host uses to render UI
+    if (tool.hasUI) {
+      registerAppTool(
+        server,
         tool.name,
         {
           description: tool.description,
-          inputSchema: tool.customInputSchema || this.extractSchemaShape(tool.schema)
+          inputSchema,
+          annotations: tool.annotations,
+          _meta: { ui: { resourceUri: DAY_VIEW_RESOURCE_URI } }
         },
-        async (args: any) => {
-          // Preprocess: Normalize datetime fields (convert object format to string format)
-          // This allows accepting both formats while keeping schemas simple
-          const normalizedArgs = this.normalizeDateTimeFields(tool.name, args);
-
-          // Validate input using our Zod schema
-          const validatedArgs = tool.schema.parse(normalizedArgs);
-
-          // Apply any custom handler function preprocessing
-          const processedArgs = tool.handlerFunction ? await tool.handlerFunction(validatedArgs) : validatedArgs;
-
-          // Create handler instance and execute
-          const handler = new tool.handler();
-          return executeWithHandler(handler, processedArgs);
-        }
+        handlerFn
       );
+    } else {
+      // For regular tools, use the standard registerTool
+      server.registerTool(
+        tool.name,
+        {
+          description: tool.description,
+          inputSchema,
+          annotations: tool.annotations
+        },
+        handlerFn
+      );
+    }
   }
 }

@@ -6,7 +6,7 @@ import { calendar_v3 } from 'googleapis';
 import { RecurringEventHelpers, RecurringEventError, RECURRING_EVENT_ERRORS } from './RecurringEventHelpers.js';
 import { ConflictDetectionService } from "../../services/conflict-detection/index.js";
 import { DayContextService } from "../../services/day-context/index.js";
-import { createTimeObject } from "../../utils/datetime.js";
+import { createTimeObject, convertToRFC3339 } from "../../utils/datetime.js";
 import {
     createStructuredResponse,
     convertConflictsToStructured,
@@ -103,8 +103,9 @@ export class UpdateEventHandler extends BaseToolHandler {
             const timezone = validArgs.timeZone || await this.getCalendarTimezone(oauth2Client, resolvedCalendarId);
             const eventDate = updatedEvent.start?.dateTime || updatedEvent.start?.date || '';
             const dateOnly = eventDate.split('T')[0];
-            const dayStart = dateOnly + 'T00:00:00';
-            const dayEnd = dateOnly + 'T23:59:59';
+            // Convert to RFC3339 format for Google Calendar API
+            const dayStart = convertToRFC3339(dateOnly + 'T00:00:00', timezone);
+            const dayEnd = convertToRFC3339(dateOnly + 'T23:59:59', timezone);
 
             const dayEventsResponse = await calendar.events.list({
                 calendarId: resolvedCalendarId,
@@ -146,7 +147,7 @@ export class UpdateEventHandler extends BaseToolHandler {
             response.dayContext = dayContext;
         }
 
-        return createStructuredResponse(response, { includeUI: true });
+        return createStructuredResponse(response);
     }
 
     private async updateEventWithScope(

@@ -3,7 +3,7 @@ import { OAuth2Client } from "google-auth-library";
 import { CreateEventInput } from "../../tools/registry.js";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
-import { createTimeObject } from "../../utils/datetime.js";
+import { createTimeObject, convertToRFC3339 } from "../../utils/datetime.js";
 import { validateEventId } from "../../utils/event-id-validator.js";
 import { ConflictDetectionService } from "../../services/conflict-detection/index.js";
 import { CONFLICT_DETECTION_CONFIG } from "../../services/conflict-detection/config.js";
@@ -95,8 +95,9 @@ export class CreateEventHandler extends BaseToolHandler {
             const calendar = this.getCalendar(oauth2Client);
             const eventDate = event.start?.dateTime || event.start?.date || '';
             const dateOnly = eventDate.split('T')[0];
-            const dayStart = dateOnly + 'T00:00:00';
-            const dayEnd = dateOnly + 'T23:59:59';
+            // Convert to RFC3339 format for Google Calendar API
+            const dayStart = convertToRFC3339(dateOnly + 'T00:00:00', timezone);
+            const dayEnd = convertToRFC3339(dateOnly + 'T23:59:59', timezone);
 
             const dayEventsResponse = await calendar.events.list({
                 calendarId: resolvedCalendarId,
@@ -129,7 +130,7 @@ export class CreateEventHandler extends BaseToolHandler {
             dayContext,
         };
 
-        return createStructuredResponse(response, { includeUI: true });
+        return createStructuredResponse(response);
     }
 
     private async createEvent(

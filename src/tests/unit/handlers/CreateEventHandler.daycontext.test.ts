@@ -29,10 +29,11 @@ vi.mock('../../../utils/datetime.js', () => ({
   hasTimezoneInDatetime: vi.fn((datetime: string) =>
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(datetime)
   ),
-  convertToRFC3339: vi.fn((datetime: string) => {
+  convertToRFC3339: vi.fn((datetime: string, _timezone: string) => {
     if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(datetime)) {
       return datetime;
     }
+    // Mock: add Z suffix to timezone-naive datetimes
     return `${datetime}Z`;
   }),
   createTimeObject: vi.fn((datetime: string, timezone: string) => ({
@@ -235,31 +236,8 @@ describe('CreateEventHandler - Day Context Integration', () => {
     });
   });
 
-  describe('UI Metadata', () => {
-    it('should include _meta.ui in response when dayContext exists', async () => {
-      const createdEvent = {
-        id: 'new-event-123',
-        summary: 'Test Meeting',
-        start: { dateTime: '2026-01-27T14:00:00' },
-        end: { dateTime: '2026-01-27T15:00:00' },
-        htmlLink: 'https://calendar.google.com/event?eid=123'
-      };
-
-      mockCalendar.events.insert.mockResolvedValue({ data: createdEvent });
-      mockCalendar.events.list.mockResolvedValue({ data: { items: [] } });
-
-      const result = await handler.runTool({
-        calendarId: 'primary',
-        summary: 'Test Meeting',
-        start: '2026-01-27T14:00:00',
-        end: '2026-01-27T15:00:00'
-      }, mockAccounts);
-
-      expect((result as any)._meta).toBeDefined();
-      // MCP Apps uses "ui/resourceUri" as the meta key
-      expect((result as any)._meta['ui/resourceUri']).toBe('ui://calendar/day-view.html');
-    });
-  });
+  // Note: UI metadata (_meta.ui.resourceUri) is now in the tool definition via registerAppTool,
+  // not in individual responses. The host reads UI metadata when listing tools.
 
   describe('Day Context Resilience', () => {
     it('should succeed even if day context fetch fails', async () => {
@@ -289,30 +267,6 @@ describe('CreateEventHandler - Day Context Integration', () => {
 
       // Day context should be undefined since fetch failed
       expect(response.dayContext).toBeUndefined();
-    });
-
-    it('should not include _meta.ui when dayContext is undefined', async () => {
-      const createdEvent = {
-        id: 'new-event-123',
-        summary: 'Test Meeting',
-        start: { dateTime: '2026-01-27T14:00:00' },
-        end: { dateTime: '2026-01-27T15:00:00' },
-        htmlLink: 'https://calendar.google.com/event?eid=123'
-      };
-
-      mockCalendar.events.insert.mockResolvedValue({ data: createdEvent });
-      // Simulate failure when fetching day events
-      mockCalendar.events.list.mockRejectedValue(new Error('API Error'));
-
-      const result = await handler.runTool({
-        calendarId: 'primary',
-        summary: 'Test Meeting',
-        start: '2026-01-27T14:00:00',
-        end: '2026-01-27T15:00:00'
-      }, mockAccounts);
-
-      // _meta should not be present when dayContext is undefined
-      expect((result as any)._meta).toBeUndefined();
     });
   });
 
