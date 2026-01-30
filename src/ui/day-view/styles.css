@@ -273,6 +273,53 @@ body {
   font-size: 14px;
 }
 
+/* Compact/Expanded view toggle */
+.expand-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  transition: color 0.2s;
+}
+
+.expand-toggle:hover {
+  color: var(--accent-color);
+}
+
+.expand-toggle svg {
+  margin-left: 4px;
+  transition: transform 0.2s;
+}
+
+.expand-toggle.expanded svg {
+  transform: rotate(180deg);
+}
+
+/* Compact mode - limit height */
+.time-grid.compact {
+  max-height: 200px;
+  overflow: hidden;
+  position: relative;
+}
+
+.time-grid.compact::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: linear-gradient(to bottom, transparent, var(--bg-primary));
+  pointer-events: none;
+}
+
 /* Responsive styles */
 @media (max-width: 600px) {
   #app {

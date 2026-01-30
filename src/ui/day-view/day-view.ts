@@ -37,9 +37,14 @@ const dayLink = document.getElementById('day-link') as HTMLAnchorElement;
 const allDaySection = document.getElementById('all-day-section') as HTMLDivElement;
 const allDayEvents = document.getElementById('all-day-events') as HTMLDivElement;
 const timeGrid = document.getElementById('time-grid') as HTMLDivElement;
+const expandToggle = document.getElementById('expand-toggle') as HTMLButtonElement;
+const toggleText = document.getElementById('toggle-text') as HTMLSpanElement;
 
 // Global app instance for opening links (sandboxed iframe requires app.openLink)
 let appInstance: App | null = null;
+
+// Compact/expanded state
+let isExpanded = false;
 
 /**
  * Format hour for display (e.g., "9 AM", "12 PM", "5 PM")
@@ -121,13 +126,43 @@ function calculateEventPosition(
 
 /**
  * Open a link using the MCP Apps API (required in sandboxed iframe)
+ * The API expects an object with url property, not a raw string
  */
 function openLink(url: string): void {
   if (appInstance) {
-    appInstance.openLink(url);
+    // MCP Apps openLink expects { url: string }, not a raw string
+    appInstance.openLink({ url }).catch((err) => {
+      console.error('Failed to open link:', err);
+    });
   } else {
     // Fallback for testing outside iframe
     window.open(url, '_blank', 'noopener,noreferrer');
+  }
+}
+
+/**
+ * Toggle between compact and expanded view
+ */
+function toggleExpanded(): void {
+  isExpanded = !isExpanded;
+
+  if (isExpanded) {
+    timeGrid.classList.remove('compact');
+    expandToggle.classList.add('expanded');
+    toggleText.textContent = 'Show less';
+  } else {
+    timeGrid.classList.add('compact');
+    expandToggle.classList.remove('expanded');
+    toggleText.textContent = 'Show more';
+  }
+
+  // Notify host of size change
+  if (appInstance) {
+    // Let auto-resize handle it, or explicitly send size
+    const height = document.documentElement.scrollHeight;
+    appInstance.sendSizeChanged({ height }).catch(() => {
+      // Ignore errors - host may not support this
+    });
   }
 }
 
@@ -276,7 +311,8 @@ function renderDayView(context: DayContext): void {
   // Update header
   dateHeading.textContent = formatDateHeading(context.date);
 
-  // Set up "Open in Calendar" button with click handler (sandboxed iframe)
+  // Show and set up "Open in Calendar" button with click handler (sandboxed iframe)
+  dayLink.style.display = '';
   dayLink.href = '#';
   dayLink.onclick = (e) => {
     e.preventDefault();
@@ -289,7 +325,17 @@ function renderDayView(context: DayContext): void {
   // Render time grid
   renderTimeGrid(context);
 
-  // Scroll focused event into view
+  // Show expand toggle and set up handler
+  expandToggle.style.display = '';
+  expandToggle.onclick = toggleExpanded;
+
+  // Reset to compact state on new data
+  isExpanded = false;
+  timeGrid.classList.add('compact');
+  expandToggle.classList.remove('expanded');
+  toggleText.textContent = 'Show more';
+
+  // Scroll focused event into view (after a short delay for render)
   setTimeout(() => {
     const focusedElement = document.querySelector('.focused');
     if (focusedElement) {

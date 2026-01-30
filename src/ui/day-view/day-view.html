@@ -10,15 +10,21 @@
   <div id="app">
     <div class="day-view-header">
       <h2 id="date-heading">Loading...</h2>
-      <a id="day-link" href="#" target="_blank" class="open-calendar-btn">Open in Calendar</a>
+      <a id="day-link" href="#" target="_blank" class="open-calendar-btn" style="display: none;">Open in Calendar</a>
     </div>
     <div id="all-day-section" class="all-day-section" style="display: none;">
       <div class="all-day-label">All day</div>
       <div id="all-day-events" class="all-day-events"></div>
     </div>
-    <div id="time-grid" class="time-grid">
+    <div id="time-grid" class="time-grid compact">
       <!-- Time slots and events rendered here -->
     </div>
+    <button id="expand-toggle" class="expand-toggle" style="display: none;">
+      <span id="toggle-text">Show more</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="6 9 12 15 18 9"></polyline>
+      </svg>
+    </button>
   </div>
   <script type="module" src="./day-view.ts"></script>
 </body>
