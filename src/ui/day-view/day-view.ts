@@ -1,4 +1,4 @@
-import { App, applyHostStyleVariables, applyHostFonts, getDocumentTheme } from '@modelcontextprotocol/ext-apps';
+import { App, applyHostStyleVariables, applyHostFonts, applyDocumentTheme } from '@modelcontextprotocol/ext-apps';
 
 /**
  * Day View Event interface matching DayViewEvent from types
@@ -46,6 +46,10 @@ let appInstance: App | null = null;
 // Compact/expanded state
 let isExpanded = false;
 
+// Host context for locale/timezone formatting
+let hostLocale: string | undefined;
+let hostTimeZone: string | undefined;
+
 /**
  * Format hour for display (e.g., "9 AM", "12 PM", "5 PM")
  */
@@ -58,9 +62,19 @@ function formatHour(hour: number): string {
 
 /**
  * Format time for event display (e.g., "9:00 AM", "2:30 PM")
+ * Uses host locale when available for localized formatting
  */
 function formatTime(isoString: string): string {
   const date = new Date(isoString);
+  // Use Intl.DateTimeFormat with host locale if available
+  if (hostLocale) {
+    return date.toLocaleTimeString(hostLocale, {
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZone: hostTimeZone
+    });
+  }
+  // Fallback to manual formatting
   const hours = date.getHours();
   const minutes = date.getMinutes();
   const ampm = hours >= 12 ? 'PM' : 'AM';
@@ -71,10 +85,11 @@ function formatTime(isoString: string): string {
 
 /**
  * Format date for heading (e.g., "Tuesday, January 27, 2025")
+ * Uses host locale when available for localized formatting
  */
 function formatDateHeading(dateStr: string): string {
   const date = new Date(dateStr + 'T00:00:00');
-  return date.toLocaleDateString('en-US', {
+  return date.toLocaleDateString(hostLocale || 'en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -367,25 +382,60 @@ function extractDayContext(params: { content?: Array<{ type: string; text?: stri
 }
 
 /**
- * Apply host styles if available
+ * Apply host styles and context if available
  */
 function applyHostStyles(app: App): void {
   const context = app.getHostContext();
-  if (!context?.styles) return;
+  if (!context) return;
 
-  if (context.styles.variables) {
+  // Store locale and timezone for date/time formatting
+  if (context.locale) {
+    hostLocale = context.locale;
+  }
+  if (context.timeZone) {
+    hostTimeZone = context.timeZone;
+  }
+
+  // Apply style variables from host
+  if (context.styles?.variables) {
     applyHostStyleVariables(context.styles.variables);
   }
 
-  if (context.styles.css?.fonts) {
+  // Apply host fonts
+  if (context.styles?.css?.fonts) {
     applyHostFonts(context.styles.css.fonts);
   }
 
-  // Apply theme class if needed
-  const theme = getDocumentTheme();
-  if (theme === 'dark') {
-    document.body.classList.add('dark-theme');
+  // Apply theme using the proper helper (sets data-theme and color-scheme)
+  if (context.theme) {
+    applyDocumentTheme(context.theme);
   }
+}
+
+/**
+ * Show loading state while tool executes
+ */
+function showLoadingState(): void {
+  dateHeading.textContent = 'Loading...';
+  allDaySection.style.display = 'none';
+  while (timeGrid.firstChild) {
+    timeGrid.removeChild(timeGrid.firstChild);
+  }
+  dayLink.style.display = 'none';
+  expandToggle.style.display = 'none';
+}
+
+/**
+ * Show cancelled state when tool is cancelled
+ */
+function showCancelledState(reason?: string): void {
+  dateHeading.textContent = reason ? `Cancelled: ${reason}` : 'Cancelled';
+  allDaySection.style.display = 'none';
+  while (timeGrid.firstChild) {
+    timeGrid.removeChild(timeGrid.firstChild);
+  }
+  dayLink.style.display = 'none';
+  expandToggle.style.display = 'none';
 }
 
 /**
@@ -400,6 +450,11 @@ async function init(): Promise<void> {
   // Store app instance globally for openLink calls
   appInstance = app;
 
+  // Handle tool input - show loading state while tool executes
+  app.ontoolinput = () => {
+    showLoadingState();
+  };
+
   // Handle tool results
   app.ontoolresult = (params) => {
     const context = extractDayContext(params);
@@ -408,20 +463,26 @@ async function init(): Promise<void> {
     }
   };
 
-  // Handle host context changes (theme, etc.)
+  // Handle tool cancellation
+  app.ontoolcancelled = (params) => {
+    showCancelledState(params.reason);
+  };
+
+  // Handle host context changes (theme, locale, etc.)
   app.onhostcontextchanged = () => {
     applyHostStyles(app);
+  };
+
+  // Handle graceful teardown
+  app.onteardown = async () => {
+    // Clean up any resources if needed
+    appInstance = null;
+    return {};
   };
 
   try {
     await app.connect();
     applyHostStyles(app);
-
-    // Check if we already have context from initialization
-    const hostContext = app.getHostContext();
-    if (hostContext) {
-      applyHostStyles(app);
-    }
   } catch (error) {
     console.error('Failed to connect to host:', error);
     dateHeading.textContent = 'Failed to connect';
