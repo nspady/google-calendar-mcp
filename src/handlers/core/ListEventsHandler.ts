@@ -5,7 +5,9 @@ import { calendar_v3 } from 'googleapis';
 import { BatchRequestHandler } from "./BatchRequestHandler.js";
 import { buildListFieldMask } from "../../utils/field-mask-builder.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
-import { ListEventsResponse, StructuredEvent, convertGoogleEventToStructured, ExtendedEvent } from "../../types/structured-responses.js";
+import { ListEventsResponse, StructuredEvent, convertGoogleEventToStructured, ExtendedEvent, EventColorContext } from "../../types/structured-responses.js";
+import { DayContextService } from "../../services/day-context/index.js";
+import { MultiDayContextService } from "../../services/multi-day-context/index.js";
 
 interface ListEventsArgs {
   calendarId: string | string[];
@@ -18,7 +20,45 @@ interface ListEventsArgs {
   account?: string | string[];
 }
 
+// Maximum hours for a query to be considered "single day" (show day view UI)
+const SINGLE_DAY_MAX_HOURS = 24;
+
 export class ListEventsHandler extends BaseToolHandler {
+    private dayContextService: DayContextService;
+    private multiDayContextService: MultiDayContextService;
+
+    constructor() {
+        super();
+        this.dayContextService = new DayContextService();
+        this.multiDayContextService = new MultiDayContextService();
+    }
+
+    /**
+     * Check if the time range represents a single day (24 hours or less).
+     * Returns the date string (YYYY-MM-DD) if it's a single day, null otherwise.
+     */
+    private isSingleDayQuery(timeMin?: string, timeMax?: string): string | null {
+        if (!timeMin || !timeMax) return null;
+
+        try {
+            const minDate = new Date(timeMin);
+            const maxDate = new Date(timeMax);
+
+            if (isNaN(minDate.getTime()) || isNaN(maxDate.getTime())) return null;
+
+            const diffHours = (maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60);
+
+            if (diffHours <= SINGLE_DAY_MAX_HOURS) {
+                // Extract date from timeMin (the start of the range)
+                return timeMin.split('T')[0];
+            }
+        } catch {
+            // Invalid date format
+        }
+
+        return null;
+    }
+
     async runTool(args: ListEventsArgs, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
         // Get clients for specified accounts (supports single or multiple)
         const selectedAccounts = this.getClientsForAccounts(args.account, accounts);
@@ -104,9 +144,17 @@ export class ListEventsHandler extends BaseToolHandler {
         // Sort events chronologically
         this.sortEventsByStartTime(allEvents);
 
-        // Convert extended events to structured format
+        // Build color context for resolving event display colors
+        // Use first available account for event palette (global), collect calendar colors from all accounts
+        const colorContext = await this.buildMultiAccountColorContext(
+            eventsPerAccount,
+            selectedAccounts,
+            allQueriedCalendarIds
+        );
+
+        // Convert extended events to structured format with resolved colors
         const structuredEvents: StructuredEvent[] = allEvents.map(event =>
-            convertGoogleEventToStructured(event, event.calendarId, event.accountId)
+            convertGoogleEventToStructured(event, event.calendarId, event.accountId, colorContext)
         );
         const warnings: string[] = [...resolutionWarnings];
 
@@ -128,6 +176,34 @@ export class ListEventsHandler extends BaseToolHandler {
             }
         }
 
+        // Build context for MCP Apps UI visualization
+        let dayContext = undefined;
+        let multiDayContext = undefined;
+        const singleDayDate = this.isSingleDayQuery(args.timeMin, args.timeMax);
+
+        // Determine timezone: use provided timezone, or extract from first event, or default to UTC
+        const timezone = args.timeZone ||
+            structuredEvents[0]?.start?.timeZone ||
+            'UTC';
+
+        if (singleDayDate) {
+            // Single-day query: use day context (time grid view)
+            // Always include context even when empty so UI can show "no events" state
+            dayContext = this.dayContextService.buildDayContextForList(
+                structuredEvents,
+                singleDayDate,
+                timezone
+            );
+        } else if (!singleDayDate) {
+            // Multi-day query (span > 24 hours): use multi-day context (list view)
+            // Always include context even when empty so UI can show "no events" state
+            multiDayContext = this.multiDayContextService.buildMultiDayContext(
+                structuredEvents,
+                timezone,
+                { timeRange: args.timeMin && args.timeMax ? { start: args.timeMin, end: args.timeMax } : undefined }
+            );
+        }
+
         const response: ListEventsResponse = {
             events: structuredEvents,
             totalCount: allEvents.length,
@@ -135,7 +211,9 @@ export class ListEventsHandler extends BaseToolHandler {
             ...(partialFailures.length > 0 && { partialFailures }),
             ...(warnings.length > 0 && { warnings }),
             ...(selectedAccounts.size > 1 && { accounts: Array.from(selectedAccounts.keys()) }),
-            ...(note && { note })
+            ...(note && { note }),
+            ...(dayContext && { dayContext }),
+            ...(multiDayContext && { multiDayContext })
         };
 
         return createStructuredResponse(response);
@@ -238,15 +316,15 @@ export class ListEventsHandler extends BaseToolHandler {
     }
 
     private processBatchResponses(
-        responses: any[], 
+        responses: any[],
         calendarIds: string[]
     ): { events: ExtendedEvent[]; errors: Array<{ calendarId: string; error: string }> } {
         const events: ExtendedEvent[] = [];
         const errors: Array<{ calendarId: string; error: string }> = [];
-        
+
         responses.forEach((response, index) => {
             const calendarId = calendarIds[index];
-            
+
             if (response.statusCode === 200 && response.body?.items) {
                 const calendarEvents: ExtendedEvent[] = response.body.items.map((event: any) => ({
                     ...event,
@@ -254,13 +332,45 @@ export class ListEventsHandler extends BaseToolHandler {
                 }));
                 events.push(...calendarEvents);
             } else {
-                const errorMessage = response.body?.error?.message || 
-                                   response.body?.message || 
+                const errorMessage = response.body?.error?.message ||
+                                   response.body?.message ||
                                    `HTTP ${response.statusCode}`;
                 errors.push({ calendarId, error: errorMessage });
             }
         });
-        
+
         return { events, errors };
+    }
+
+    /**
+     * Builds color context for multi-account event queries.
+     * Fetches event palette once (global) and collects calendar colors from all accounts.
+     */
+    private async buildMultiAccountColorContext(
+        eventsPerAccount: Array<{ accountId: string; calendarIds: string[]; events: ExtendedEvent[] }>,
+        selectedAccounts: Map<string, OAuth2Client>,
+        allCalendarIds: string[]
+    ): Promise<EventColorContext> {
+        // Get first available account for event palette (it's global/same for all)
+        const firstAccountId = selectedAccounts.keys().next().value as string;
+        const firstClient = selectedAccounts.get(firstAccountId)!;
+        const eventPalette = await this.getEventColorPalette(firstClient);
+
+        // Collect calendar colors from each account that has those calendars
+        const calendarColors: Record<string, { background: string; foreground: string }> = {};
+
+        await Promise.all(
+            eventsPerAccount
+                .filter(result => result.calendarIds.length > 0)
+                .map(async (result) => {
+                    const client = selectedAccounts.get(result.accountId);
+                    if (client) {
+                        const colors = await this.getCalendarColors(client, result.calendarIds);
+                        Object.assign(calendarColors, colors);
+                    }
+                })
+        );
+
+        return { eventPalette, calendarColors };
     }
 }

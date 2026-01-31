@@ -117,6 +117,17 @@ export interface WorkingLocationProperties {
 }
 
 /**
+ * Color context for resolving event colors.
+ * Contains the event color palette and calendar default colors.
+ */
+export interface EventColorContext {
+  /** Event color palette mapping colorId to hex colors */
+  eventPalette: Record<string, { background: string; foreground: string }>;
+  /** Calendar default colors keyed by calendarId */
+  calendarColors: Record<string, { background: string; foreground: string }>;
+}
+
+/**
  * Complete structured representation of a Google Calendar event
  */
 export interface StructuredEvent {
@@ -135,6 +146,10 @@ export interface StructuredEvent {
   created?: string;
   updated?: string;
   colorId?: string;
+  /** Resolved background color (hex, e.g., "#7986cb") - from event colorId override or calendar default */
+  backgroundColor?: string;
+  /** Resolved foreground/text color (hex, e.g., "#ffffff") - from event colorId override or calendar default */
+  foregroundColor?: string;
   creator?: {
     email?: string;
     displayName?: string;
@@ -235,6 +250,10 @@ export interface ListEventsResponse {
     accountId: string;
     reason: string;
   }>;
+  /** Day context for MCP Apps UI visualization (only included for single-day queries) */
+  dayContext?: import('./day-context.js').DayContext;
+  /** Multi-day context for MCP Apps UI visualization (for queries spanning > 24 hours) */
+  multiDayContext?: import('./multi-day-context.js').MultiDayContext;
 }
 
 /**
@@ -252,6 +271,8 @@ export interface SearchEventsResponse {
     end: string;
   };
   warnings?: string[];
+  /** Multi-day context for MCP Apps UI visualization */
+  multiDayContext?: import('./multi-day-context.js').MultiDayContext;
 }
 
 /**
@@ -498,17 +519,61 @@ function getDayOfWeek(dateTimeOrDate: string | undefined | null, timeZone?: stri
 }
 
 /**
+ * Resolves the display colors for an event.
+ * If the event has a colorId override, uses the event palette.
+ * Otherwise, falls back to the calendar's default colors.
+ *
+ * @param event - The Google Calendar event
+ * @param calendarId - The calendar ID (for looking up default colors)
+ * @param colorContext - Color context with event palette and calendar defaults
+ * @returns Resolved background and foreground colors
+ */
+function resolveEventColors(
+  event: calendar_v3.Schema$Event,
+  calendarId: string | undefined,
+  colorContext: EventColorContext | undefined
+): { backgroundColor?: string; foregroundColor?: string } {
+  if (!colorContext) {
+    return {};
+  }
+
+  // If event has a colorId override, use the event palette
+  if (event.colorId && colorContext.eventPalette[event.colorId]) {
+    const colors = colorContext.eventPalette[event.colorId];
+    return {
+      backgroundColor: colors.background,
+      foregroundColor: colors.foreground
+    };
+  }
+
+  // Otherwise, use calendar default colors
+  if (calendarId && colorContext.calendarColors[calendarId]) {
+    const colors = colorContext.calendarColors[calendarId];
+    return {
+      backgroundColor: colors.background,
+      foregroundColor: colors.foreground
+    };
+  }
+
+  return {};
+}
+
+/**
  * Converts a Google Calendar API event to our structured format
  * @param event - The Google Calendar API event object
  * @param calendarId - Optional calendar ID to include in the response
  * @param accountId - Optional account ID to include in the response (for multi-account queries)
+ * @param colorContext - Optional color context for resolving display colors
  * @returns Structured event representation
  */
 export function convertGoogleEventToStructured(
   event: calendar_v3.Schema$Event,
   calendarId?: string,
-  accountId?: string
+  accountId?: string,
+  colorContext?: EventColorContext
 ): StructuredEvent {
+  const resolvedColors = resolveEventColors(event, calendarId, colorContext);
+
   return {
     id: event.id || '',
     summary: event.summary ?? undefined,
@@ -537,6 +602,8 @@ export function convertGoogleEventToStructured(
     created: event.created ?? undefined,
     updated: event.updated ?? undefined,
     colorId: event.colorId ?? undefined,
+    backgroundColor: resolvedColors.backgroundColor,
+    foregroundColor: resolvedColors.foregroundColor,
     creator: event.creator ? {
       email: event.creator.email ?? '',
       displayName: event.creator.displayName ?? undefined,

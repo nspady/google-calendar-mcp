@@ -742,14 +742,16 @@ export class ToolRegistry {
           sharedExtendedProperty: args.sharedExtendedProperty
         };
       },
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      hasUI: true
     },
     {
       name: "search-events",
       description: "Search for events in a calendar by text query.",
       schema: ToolSchemas['search-events'],
       handler: SearchEventsHandler,
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      hasUI: true
     },
     {
       name: "get-event",

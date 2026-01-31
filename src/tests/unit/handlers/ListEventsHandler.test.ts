@@ -449,3 +449,203 @@ describe('ListEventsHandler - Multi-account merging', () => {
     expect(parsed.partialFailures[0].accountId).toBe('personal');
   });
 });
+
+describe('ListEventsHandler - Day Context for MCP Apps UI', () => {
+  let handler: ListEventsHandler;
+  let mockOAuth2Client: OAuth2Client;
+  let mockAccounts: Map<string, OAuth2Client>;
+  let mockCalendar: any;
+
+  beforeEach(() => {
+    handler = new ListEventsHandler();
+    mockOAuth2Client = {} as OAuth2Client;
+    mockAccounts = new Map([['test', mockOAuth2Client]]);
+    mockCalendar = {
+      events: {
+        list: vi.fn()
+      },
+      calendarList: {
+        get: vi.fn().mockResolvedValue({
+          data: { timeZone: 'America/Los_Angeles' }
+        }),
+        list: vi.fn().mockResolvedValue({
+          data: { items: [{ id: 'primary', summary: 'Primary Calendar' }] }
+        })
+      },
+      colors: {
+        get: vi.fn().mockResolvedValue({
+          data: { event: {} }
+        })
+      }
+    };
+    vi.mocked(google.calendar).mockReturnValue(mockCalendar);
+  });
+
+  it('should include dayContext for single-day queries (within 24 hours)', async () => {
+    mockCalendar.events.list.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 'event-1',
+            summary: 'Morning Meeting',
+            start: { dateTime: '2025-01-30T09:00:00-08:00' },
+            end: { dateTime: '2025-01-30T10:00:00-08:00' },
+            htmlLink: 'https://calendar.google.com/event?id=1'
+          },
+          {
+            id: 'event-2',
+            summary: 'Lunch',
+            start: { dateTime: '2025-01-30T12:00:00-08:00' },
+            end: { dateTime: '2025-01-30T13:00:00-08:00' },
+            htmlLink: 'https://calendar.google.com/event?id=2'
+          }
+        ]
+      }
+    });
+
+    const result = await handler.runTool({
+      calendarId: 'primary',
+      timeMin: '2025-01-30T00:00:00',
+      timeMax: '2025-01-30T23:59:59',
+      timeZone: 'America/Los_Angeles'
+    }, mockAccounts);
+
+    const parsed = JSON.parse(result.content[0].text);
+
+    // Should include dayContext for single-day query
+    expect(parsed.dayContext).toBeDefined();
+    expect(parsed.dayContext.date).toBe('2025-01-30');
+    expect(parsed.dayContext.events).toHaveLength(2);
+    expect(parsed.dayContext.focusEventId).toBe('event-1'); // First event is focus
+    expect(parsed.dayContext.dayLink).toContain('2025/01/30');
+    expect(parsed.dayContext.timeRange).toBeDefined();
+    expect(parsed.dayContext.timeRange.startHour).toBeGreaterThanOrEqual(0);
+    expect(parsed.dayContext.timeRange.endHour).toBeLessThanOrEqual(24);
+  });
+
+  it('should NOT include dayContext for multi-day queries (over 24 hours)', async () => {
+    mockCalendar.events.list.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 'event-1',
+            summary: 'Event Day 1',
+            start: { dateTime: '2025-01-30T09:00:00-08:00' },
+            end: { dateTime: '2025-01-30T10:00:00-08:00' },
+            htmlLink: 'https://calendar.google.com/event?id=1'
+          },
+          {
+            id: 'event-2',
+            summary: 'Event Day 2',
+            start: { dateTime: '2025-01-31T09:00:00-08:00' },
+            end: { dateTime: '2025-01-31T10:00:00-08:00' },
+            htmlLink: 'https://calendar.google.com/event?id=2'
+          }
+        ]
+      }
+    });
+
+    const result = await handler.runTool({
+      calendarId: 'primary',
+      timeMin: '2025-01-30T00:00:00',
+      timeMax: '2025-01-31T23:59:59', // 2 days - over 24 hours
+      timeZone: 'America/Los_Angeles'
+    }, mockAccounts);
+
+    const parsed = JSON.parse(result.content[0].text);
+
+    // Should NOT include dayContext for multi-day query
+    expect(parsed.dayContext).toBeUndefined();
+    expect(parsed.events).toHaveLength(2);
+  });
+
+  it('should NOT include dayContext when timeMin or timeMax is missing', async () => {
+    mockCalendar.events.list.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 'event-1',
+            summary: 'Test Event',
+            start: { dateTime: '2025-01-30T09:00:00-08:00' },
+            end: { dateTime: '2025-01-30T10:00:00-08:00' },
+            htmlLink: 'https://calendar.google.com/event?id=1'
+          }
+        ]
+      }
+    });
+
+    // Only timeMin, no timeMax
+    const result = await handler.runTool({
+      calendarId: 'primary',
+      timeMin: '2025-01-30T00:00:00',
+      timeZone: 'America/Los_Angeles'
+    }, mockAccounts);
+
+    const parsed = JSON.parse(result.content[0].text);
+
+    // Should NOT include dayContext without both time bounds
+    expect(parsed.dayContext).toBeUndefined();
+  });
+
+  it('should include dayContext with empty events for UI to show "no events" state', async () => {
+    mockCalendar.events.list.mockResolvedValue({
+      data: { items: [] }
+    });
+
+    const result = await handler.runTool({
+      calendarId: 'primary',
+      timeMin: '2025-01-30T00:00:00',
+      timeMax: '2025-01-30T23:59:59',
+      timeZone: 'America/Los_Angeles'
+    }, mockAccounts);
+
+    const parsed = JSON.parse(result.content[0].text);
+
+    // dayContext should be included even when empty so UI can show "no events" state
+    expect(parsed.dayContext).toBeDefined();
+    expect(parsed.dayContext.events).toHaveLength(0);
+    expect(parsed.dayContext.date).toBe('2025-01-30');
+    expect(parsed.events).toHaveLength(0);
+  });
+
+  it('should handle all-day events in dayContext', async () => {
+    mockCalendar.events.list.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 'all-day-event',
+            summary: 'All Day Event',
+            start: { date: '2025-01-30' },
+            end: { date: '2025-01-31' },
+            htmlLink: 'https://calendar.google.com/event?id=allday'
+          },
+          {
+            id: 'timed-event',
+            summary: 'Timed Event',
+            start: { dateTime: '2025-01-30T14:00:00-08:00' },
+            end: { dateTime: '2025-01-30T15:00:00-08:00' },
+            htmlLink: 'https://calendar.google.com/event?id=timed'
+          }
+        ]
+      }
+    });
+
+    const result = await handler.runTool({
+      calendarId: 'primary',
+      timeMin: '2025-01-30T00:00:00',
+      timeMax: '2025-01-30T23:59:59',
+      timeZone: 'America/Los_Angeles'
+    }, mockAccounts);
+
+    const parsed = JSON.parse(result.content[0].text);
+
+    expect(parsed.dayContext).toBeDefined();
+    expect(parsed.dayContext.events).toHaveLength(2);
+
+    // All-day events should come first after sorting
+    const allDayEvent = parsed.dayContext.events.find((e: any) => e.id === 'all-day-event');
+    const timedEvent = parsed.dayContext.events.find((e: any) => e.id === 'timed-event');
+    expect(allDayEvent.isAllDay).toBe(true);
+    expect(timedEvent.isAllDay).toBe(false);
+  });
+});

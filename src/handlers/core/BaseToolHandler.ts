@@ -7,6 +7,7 @@ import { getCredentialsProjectId } from "../../auth/utils.js";
 import { CalendarRegistry } from "../../services/CalendarRegistry.js";
 import { validateAccountId } from "../../auth/paths.js";
 import { convertToRFC3339 } from "../../utils/datetime.js";
+import { EventColorContext } from "../../types/structured-responses.js";
 
 
 export abstract class BaseToolHandler<TArgs = any> {
@@ -810,6 +811,146 @@ Original error: ${errorMessage}`
         }
 
         return resolvedIds;
+    }
+
+    /**
+     * Fetches the event color palette from Google Calendar API.
+     * Colors are global (same for all users), so this only needs to be called once per request.
+     *
+     * @param client OAuth2Client
+     * @returns Event color palette mapping colorId to hex colors
+     */
+    protected async getEventColorPalette(client: OAuth2Client): Promise<Record<string, { background: string; foreground: string }>> {
+        try {
+            const calendar = this.getCalendar(client);
+            const response = await calendar.colors.get();
+            const colors = response.data;
+
+            const palette: Record<string, { background: string; foreground: string }> = {};
+            if (colors.event) {
+                for (const [id, color] of Object.entries(colors.event)) {
+                    palette[id] = {
+                        background: color.background || '',
+                        foreground: color.foreground || ''
+                    };
+                }
+            }
+            return palette;
+        } catch (error) {
+            // If we can't get colors, return empty palette (non-fatal)
+            return {};
+        }
+    }
+
+    /**
+     * Fetches calendar default colors for multiple calendars.
+     * Returns a map of calendarId to background/foreground colors.
+     *
+     * Handles both explicit colors (backgroundColor/foregroundColor) and
+     * colorId references (which need to be resolved from the calendar color palette).
+     *
+     * @param client OAuth2Client
+     * @param calendarIds Array of calendar IDs to fetch colors for
+     * @returns Map of calendarId to hex colors
+     */
+    protected async getCalendarColors(
+        client: OAuth2Client,
+        calendarIds: string[]
+    ): Promise<Record<string, { background: string; foreground: string }>> {
+        const colors: Record<string, { background: string; foreground: string }> = {};
+
+        try {
+            const calendarApi = this.getCalendar(client);
+
+            // Fetch both calendar list and color palette in parallel
+            const [calendarListResponse, colorsResponse] = await Promise.all([
+                calendarApi.calendarList.list(),
+                calendarApi.colors.get()
+            ]);
+
+            const calendars = calendarListResponse.data.items || [];
+
+            // Build calendar color palette for resolving colorId references
+            const calendarPalette: Record<string, { background: string; foreground: string }> = {};
+            if (colorsResponse.data.calendar) {
+                for (const [id, color] of Object.entries(colorsResponse.data.calendar)) {
+                    if (color.background && color.foreground) {
+                        calendarPalette[id] = {
+                            background: color.background,
+                            foreground: color.foreground
+                        };
+                    }
+                }
+            }
+
+            // Build a set of requested calendar IDs for fast lookup
+            const requestedIds = new Set(calendarIds);
+            const wantsPrimary = requestedIds.has('primary');
+
+            for (const cal of calendars) {
+                if (!cal.id) {
+                    continue;
+                }
+
+                // Resolve colors: prefer explicit colors, fall back to colorId lookup
+                let colorEntry: { background: string; foreground: string } | undefined;
+
+                if (cal.backgroundColor && cal.foregroundColor) {
+                    // Calendar has explicit colors set
+                    colorEntry = {
+                        background: cal.backgroundColor,
+                        foreground: cal.foregroundColor
+                    };
+                } else if (cal.colorId && calendarPalette[cal.colorId]) {
+                    // Calendar uses a colorId reference - resolve from palette
+                    colorEntry = calendarPalette[cal.colorId];
+                }
+
+                if (!colorEntry) {
+                    continue;
+                }
+
+                // If this calendar ID was explicitly requested, add it
+                if (requestedIds.has(cal.id)) {
+                    colors[cal.id] = colorEntry;
+                }
+
+                // If "primary" was requested and this is the primary calendar,
+                // add colors for both "primary" alias and the actual calendar ID
+                if (wantsPrimary && cal.primary) {
+                    colors['primary'] = colorEntry;
+                    colors[cal.id] = colorEntry;
+                }
+            }
+        } catch {
+            // If we can't get calendar colors, return empty map (non-fatal)
+        }
+
+        return colors;
+    }
+
+    /**
+     * Builds the complete color context for resolving event display colors.
+     * Fetches both event color palette and calendar default colors.
+     *
+     * @param client OAuth2Client
+     * @param calendarIds Array of calendar IDs being queried
+     * @returns EventColorContext for use with convertGoogleEventToStructured
+     */
+    protected async buildColorContext(
+        client: OAuth2Client,
+        calendarIds: string[]
+    ): Promise<EventColorContext> {
+        // Fetch both in parallel for efficiency
+        const [eventPalette, calendarColors] = await Promise.all([
+            this.getEventColorPalette(client),
+            this.getCalendarColors(client, calendarIds)
+        ]);
+
+        return {
+            eventPalette,
+            calendarColors
+        };
     }
 
 }

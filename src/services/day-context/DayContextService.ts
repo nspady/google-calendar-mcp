@@ -44,6 +44,44 @@ export class DayContextService {
   }
 
   /**
+   * Build the day context for list operations (no focus event).
+   * Used when listing events for a single day.
+   */
+  buildDayContextForList(
+    events: StructuredEvent[],
+    date: string,
+    timezone: string
+  ): DayContext {
+    // Convert to day view events
+    const dayViewEvents: DayViewEvent[] = events.map(toDayViewEvent);
+
+    // Sort: all-day first, then by start time
+    dayViewEvents.sort((a, b) => {
+      if (a.isAllDay && !b.isAllDay) return -1;
+      if (!a.isAllDay && b.isAllDay) return 1;
+      return a.start.localeCompare(b.start);
+    });
+
+    // Calculate time range
+    const timeRange = this.calculateTimeRange(events);
+
+    // Build Google Calendar day link
+    const dayLink = `https://calendar.google.com/calendar/r/day/${date.replace(/-/g, '/')}`;
+
+    // Use first event as focus, or empty string if no events
+    const focusEventId = dayViewEvents.length > 0 ? dayViewEvents[0].id : '';
+
+    return {
+      date,
+      timezone,
+      events: dayViewEvents,
+      focusEventId,
+      timeRange,
+      dayLink,
+    };
+  }
+
+  /**
    * Build the day context for the UI.
    * Combines focus event with surrounding events, deduplicates, and organizes them.
    */

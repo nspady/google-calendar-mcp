@@ -36,6 +36,7 @@
     "start": "node build/index.js",
     "build": "node scripts/build.js && npm run build:ui",
     "build:ui": "vite build --config vite.config.ui.ts",
+    "preview:ui": "vite --config vite.config.ui.ts src/ui/day-view/preview.html",
     "auth": "node build/auth-server.js",
     "account": "node scripts/account-manager.js",
     "dev": "node scripts/dev.js",

@@ -1,7 +1,7 @@
 /* CSS Variables for theming - use host variables with fallbacks */
 :root {
-  /* Use MCP Apps host variables when available, fall back to light theme */
-  --bg-primary: var(--color-background-primary, #ffffff);
+  /* Use MCP Apps host variables when available, fall back to Claude's light theme */
+  --bg-primary: var(--color-background-primary, #faf9f5);
   --bg-secondary: var(--color-background-secondary, #f8f9fa);
   --bg-tertiary: var(--color-background-tertiary, #e8eaed);
   --text-primary: var(--color-text-primary, #202124);
@@ -49,9 +49,7 @@ body {
 }
 
 #app {
-  max-width: 600px;
-  margin: 0 auto;
-  padding: 16px;
+  padding: 12px;
 }
 
 /* Header styles */
@@ -150,11 +148,7 @@ body {
 .time-row {
   display: flex;
   min-height: var(--row-height);
-  border-bottom: 1px solid var(--border-color);
-}
-
-.time-row:last-child {
-  border-bottom: none;
+  position: relative;
 }
 
 .hour-label {
@@ -165,13 +159,20 @@ body {
   text-align: right;
   padding-right: 12px;
   padding-top: 0;
-  transform: translateY(-6px);
+  /* Position label vertically centered at the top line */
+  transform: translateY(-7px);
 }
 
 .time-slot {
   flex: 1;
   position: relative;
   min-height: var(--row-height);
+  /* Line starts here, doesn't go through the hour label */
+  border-top: 1px solid var(--bg-tertiary);
+}
+
+.time-row:last-child .time-slot {
+  border-bottom: 1px solid var(--bg-tertiary);
 }
 
 /* Event blocks */
@@ -323,6 +324,163 @@ body {
   pointer-events: none;
 }
 
+/* ============================================================================
+   Multi-Day View Styles
+   ============================================================================ */
+
+.multi-day-header {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.multi-day-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+#multi-day-heading {
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.multi-day-subheading {
+  margin-top: 4px;
+  font-size: var(--font-text-xs-size, 12px);
+  color: var(--text-secondary);
+}
+
+.multi-day-events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Date group header */
+.date-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.date-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--bg-tertiary);
+}
+
+.date-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary);
+  border-radius: 50%;
+}
+
+.date-number.today {
+  background-color: var(--accent-color);
+  color: var(--color-text-inverse, #ffffff);
+}
+
+.date-text {
+  font-size: var(--font-text-sm-size, 14px);
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Event list item */
+.event-list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 0;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  border-radius: var(--border-radius-sm, 4px);
+}
+
+.event-list-item:hover {
+  background-color: var(--bg-secondary);
+}
+
+.event-list-item:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring-color);
+}
+
+.event-list-item.focused {
+  background-color: var(--bg-secondary);
+  box-shadow: 0 0 0 2px var(--accent-color);
+}
+
+.color-dot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 5px;
+  background-color: var(--accent-color);
+}
+
+.event-list-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.event-list-title {
+  font-size: var(--font-text-sm-size, 14px);
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.event-list-time {
+  font-size: var(--font-text-xs-size, 12px);
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.event-list-location {
+  font-size: var(--font-text-xs-size, 12px);
+  color: var(--text-tertiary);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.event-list-source {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.8;
+}
+
+/* Empty state for multi-day view */
+.multi-day-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+  color: var(--text-secondary);
+  font-size: var(--font-text-sm-size, 14px);
+}
+
 /* Responsive styles */
 @media (max-width: 600px) {
   #app {
@@ -365,5 +523,27 @@ body {
   .event-time,
   .event-location {
     font-size: 10px;
+  }
+
+  /* Multi-day responsive */
+  .multi-day-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .multi-day-title-row .open-calendar-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .date-number {
+    min-width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+
+  .date-text {
+    font-size: 12px;
   }
 }

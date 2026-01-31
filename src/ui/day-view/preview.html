@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Day View - Preview</title>
+  <link rel="stylesheet" href="./styles.css">
+  <style>
+    /* Preview controls */
+    .preview-controls {
+      position: fixed;
+      top: 8px;
+      right: 8px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 12px;
+      z-index: 100;
+      max-width: 200px;
+    }
+    .preview-controls h4 {
+      margin: 0 0 8px 0;
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+    .preview-controls label {
+      display: block;
+      margin: 4px 0;
+      cursor: pointer;
+    }
+    .preview-controls select,
+    .preview-controls input {
+      width: 100%;
+      margin-top: 4px;
+      padding: 4px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Preview Controls -->
+  <div class="preview-controls">
+    <h4>Preview Options</h4>
+    <label>
+      View:
+      <select id="view-select">
+        <option value="day">Single Day</option>
+        <option value="multiday">Multi-Day</option>
+        <option value="search">Search Results</option>
+      </select>
+    </label>
+    <label>
+      Theme:
+      <select id="theme-select">
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </label>
+    <label>
+      <input type="checkbox" id="show-all-day" checked>
+      Show all-day event
+    </label>
+    <label>
+      <input type="checkbox" id="show-colors" checked>
+      Use event colors
+    </label>
+  </div>
+
+  <!-- App container (same as day-view.html) -->
+  <div id="app">
+    <!-- Single-day view (time grid) -->
+    <div id="day-view-container">
+      <div class="day-view-header">
+        <h2 id="date-heading">Loading...</h2>
+        <a id="day-link" href="#" target="_blank" class="open-calendar-btn" style="display: none;">Open in Calendar</a>
+      </div>
+      <div id="all-day-section" class="all-day-section" style="display: none;">
+        <div class="all-day-label">All day</div>
+        <div id="all-day-events" class="all-day-events"></div>
+      </div>
+      <div id="time-grid" class="time-grid compact">
+        <!-- Time slots and events rendered here -->
+      </div>
+      <button id="expand-toggle" class="expand-toggle" style="display: none;">
+        <span id="toggle-text">Show more</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Multi-day view (list grouped by date) -->
+    <div id="multi-day-view-container" style="display: none;">
+      <div class="multi-day-header">
+        <div class="multi-day-title-row">
+          <h2 id="multi-day-heading">Events</h2>
+          <a id="multi-day-link" href="#" target="_blank" class="open-calendar-btn">Open in Calendar</a>
+        </div>
+        <div id="multi-day-subheading" class="multi-day-subheading"></div>
+      </div>
+      <div id="multi-day-events-list" class="multi-day-events-list">
+        <!-- Date groups and events rendered here -->
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // Mock the MCP Apps SDK for preview mode
+    window.__PREVIEW_MODE__ = true;
+
+    // Sample event data for preview
+    function getSampleDayContext(options = {}) {
+      const today = new Date();
+      const dateStr = today.toISOString().split('T')[0];
+
+      const events = [];
+
+      // All-day event
+      if (options.showAllDay !== false) {
+        events.push({
+          id: 'all-day-1',
+          summary: 'Team offsite - Planning day',
+          start: dateStr,
+          end: dateStr,
+          isAllDay: true,
+          htmlLink: 'https://calendar.google.com',
+          colorId: options.useColors ? '4' : undefined, // Flamingo
+          calendarId: 'primary'
+        });
+      }
+
+      // Morning meeting
+      events.push({
+        id: 'event-1',
+        summary: 'Daily standup',
+        start: `${dateStr}T09:00:00`,
+        end: `${dateStr}T09:30:00`,
+        isAllDay: false,
+        location: 'Zoom',
+        htmlLink: 'https://calendar.google.com',
+        colorId: options.useColors ? '7' : undefined, // Peacock
+        calendarId: 'primary'
+      });
+
+      // Design review
+      events.push({
+        id: 'event-2',
+        summary: 'Design review - Day View UI',
+        start: `${dateStr}T10:00:00`,
+        end: `${dateStr}T11:00:00`,
+        isAllDay: false,
+        location: 'Conference Room A',
+        htmlLink: 'https://calendar.google.com',
+        colorId: options.useColors ? '9' : undefined, // Blueberry
+        calendarId: 'primary'
+      });
+
+      // Lunch
+      events.push({
+        id: 'event-3',
+        summary: 'Lunch with team',
+        start: `${dateStr}T12:00:00`,
+        end: `${dateStr}T13:00:00`,
+        isAllDay: false,
+        location: 'Cafe downstairs',
+        htmlLink: 'https://calendar.google.com',
+        colorId: options.useColors ? '5' : undefined, // Banana
+        calendarId: 'primary'
+      });
+
+      // Afternoon meeting
+      events.push({
+        id: 'event-4',
+        summary: 'Sprint planning',
+        start: `${dateStr}T14:00:00`,
+        end: `${dateStr}T15:30:00`,
+        isAllDay: false,
+        htmlLink: 'https://calendar.google.com',
+        colorId: options.useColors ? '2' : undefined, // Sage
+        calendarId: 'primary'
+      });
+
+      // Focus time
+      events.push({
+        id: 'event-5',
+        summary: 'Focus time - Deep work',
+        start: `${dateStr}T16:00:00`,
+        end: `${dateStr}T17:30:00`,
+        isAllDay: false,
+        htmlLink: 'https://calendar.google.com',
+        colorId: options.useColors ? '3' : undefined, // Grape
+        calendarId: 'primary'
+      });
+
+      return {
+        date: dateStr,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        events,
+        focusEventId: 'event-2', // Focus on design review
+        timeRange: {
+          startHour: 8,
+          endHour: 18
+        },
+        dayLink: 'https://calendar.google.com'
+      };
+    }
+
+    // Sample multi-day context for preview
+    function getSampleMultiDayContext(options = {}) {
+      const today = new Date();
+      const dates = [];
+      const eventsByDate = {};
+
+      // Generate 5 days of events
+      for (let i = 0; i < 5; i++) {
+        const date = new Date(today);
+        date.setDate(date.getDate() + i);
+        const dateStr = date.toISOString().split('T')[0];
+        dates.push(dateStr);
+        eventsByDate[dateStr] = [];
+
+        // Add all-day event on first day (personal account)
+        if (i === 0 && options.showAllDay !== false) {
+          eventsByDate[dateStr].push({
+            id: `allday-${i}`,
+            summary: 'Team offsite',
+            start: dateStr,
+            end: dateStr,
+            isAllDay: true,
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#e67c73' : undefined,
+            calendarId: 'primary',
+            accountId: 'personal'
+          });
+        }
+
+        // Morning event (work account)
+        eventsByDate[dateStr].push({
+          id: `morning-${i}`,
+          summary: i === 0 ? 'Daily standup' : `Team sync - Day ${i + 1}`,
+          start: `${dateStr}T09:00:00`,
+          end: `${dateStr}T09:30:00`,
+          isAllDay: false,
+          location: 'Zoom',
+          htmlLink: 'https://calendar.google.com',
+          backgroundColor: options.useColors ? '#039be5' : undefined,
+          calendarId: 'primary',
+          accountId: 'work'
+        });
+
+        // Afternoon event (personal account, different calendar)
+        if (i % 2 === 0) {
+          eventsByDate[dateStr].push({
+            id: `afternoon-${i}`,
+            summary: 'Project review',
+            start: `${dateStr}T14:00:00`,
+            end: `${dateStr}T15:00:00`,
+            isAllDay: false,
+            location: 'Conference Room B',
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#33b679' : undefined,
+            calendarId: 'family@group.calendar.google.com',
+            calendarName: 'Family',
+            accountId: 'personal'
+          });
+        }
+      }
+
+      const startDate = dates[0];
+      const endDate = dates[dates.length - 1];
+
+      return {
+        dates,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        eventsByDate,
+        totalEventCount: Object.values(eventsByDate).flat().length,
+        timeRange: {
+          start: `${startDate}T00:00:00`,
+          end: `${endDate}T23:59:59`
+        },
+        query: options.isSearch ? 'meeting' : undefined,
+        calendarLink: 'https://calendar.google.com'
+      };
+    }
+
+    // Mock App class
+    class MockApp {
+      constructor() {
+        this.ontoolinput = null;
+        this.ontoolresult = null;
+        this.ontoolcancelled = null;
+        this.onhostcontextchanged = null;
+        this.onteardown = null;
+      }
+
+      async connect() {
+        // Simulate tool result after connection
+        setTimeout(() => {
+          if (this.ontoolresult) {
+            const options = getPreviewOptions();
+            const viewType = document.getElementById('view-select')?.value || 'day';
+
+            if (viewType === 'day') {
+              const context = getSampleDayContext(options);
+              this.ontoolresult({
+                content: [{
+                  type: 'text',
+                  text: JSON.stringify({ dayContext: context })
+                }]
+              });
+            } else {
+              options.isSearch = viewType === 'search';
+              const context = getSampleMultiDayContext(options);
+              this.ontoolresult({
+                content: [{
+                  type: 'text',
+                  text: JSON.stringify({ multiDayContext: context })
+                }]
+              });
+            }
+          }
+        }, 100);
+      }
+
+      getHostContext() {
+        const theme = document.getElementById('theme-select')?.value || 'light';
+        return {
+          locale: navigator.language,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          theme
+        };
+      }
+
+      async openLink({ url }) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+
+      async sendSizeChanged() {
+        // No-op in preview
+      }
+    }
+
+    // Get current preview options
+    function getPreviewOptions() {
+      return {
+        showAllDay: document.getElementById('show-all-day')?.checked ?? true,
+        useColors: document.getElementById('show-colors')?.checked ?? true
+      };
+    }
+
+    // Re-render with new options
+    function rerender() {
+      const app = window.__mockApp__;
+      if (app && app.ontoolresult) {
+        const options = getPreviewOptions();
+        const viewType = document.getElementById('view-select')?.value || 'day';
+
+        if (viewType === 'day') {
+          const context = getSampleDayContext(options);
+          app.ontoolresult({
+            content: [{
+              type: 'text',
+              text: JSON.stringify({ dayContext: context })
+            }]
+          });
+        } else {
+          options.isSearch = viewType === 'search';
+          const context = getSampleMultiDayContext(options);
+          app.ontoolresult({
+            content: [{
+              type: 'text',
+              text: JSON.stringify({ multiDayContext: context })
+            }]
+          });
+        }
+      }
+    }
+
+    // Apply theme
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      if (theme === 'dark') {
+        document.documentElement.style.colorScheme = 'dark';
+      } else {
+        document.documentElement.style.colorScheme = 'light';
+      }
+    }
+
+    // Set up preview controls
+    document.getElementById('theme-select')?.addEventListener('change', (e) => {
+      applyTheme(e.target.value);
+    });
+    document.getElementById('view-select')?.addEventListener('change', rerender);
+    document.getElementById('show-all-day')?.addEventListener('change', rerender);
+    document.getElementById('show-colors')?.addEventListener('change', rerender);
+
+    // Override the MCP Apps module
+    window.MockApp = MockApp;
+  </script>
+
+  <!-- Load the day-view code with mocked App -->
+  <script type="module">
+    // Import and mock before day-view loads
+    import { applyHostStyleVariables, applyHostFonts, applyDocumentTheme } from '@modelcontextprotocol/ext-apps';
+
+    // Re-export mock App
+    const App = window.MockApp;
+
+    // Store mock app instance for rerender
+    const mockApp = new App();
+    window.__mockApp__ = mockApp;
+
+    // Copy the day-view initialization logic with mock
+    // Day view elements
+    const dayViewContainer = document.getElementById('day-view-container');
+    const dateHeading = document.getElementById('date-heading');
+    const dayLink = document.getElementById('day-link');
+    const allDaySection = document.getElementById('all-day-section');
+    const allDayEvents = document.getElementById('all-day-events');
+    const timeGrid = document.getElementById('time-grid');
+    const expandToggle = document.getElementById('expand-toggle');
+    const toggleText = document.getElementById('toggle-text');
+
+    // Multi-day view elements
+    const multiDayViewContainer = document.getElementById('multi-day-view-container');
+    const multiDayHeading = document.getElementById('multi-day-heading');
+    const multiDaySubheading = document.getElementById('multi-day-subheading');
+    const multiDayLink = document.getElementById('multi-day-link');
+    const multiDayEventsList = document.getElementById('multi-day-events-list');
+
+    let appInstance = mockApp;
+    let isExpanded = false;
+    let hostLocale = navigator.language;
+    let hostTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    function formatHour(hour) {
+      if (hour === 0) return '12 AM';
+      if (hour === 12) return '12 PM';
+      if (hour < 12) return `${hour} AM`;
+      return `${hour - 12} PM`;
+    }
+
+    function formatTime(isoString) {
+      const date = new Date(isoString);
+      return date.toLocaleTimeString(hostLocale, {
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: hostTimeZone
+      });
+    }
+
+    function formatDateHeading(dateStr) {
+      const date = new Date(dateStr + 'T00:00:00');
+      return date.toLocaleDateString(hostLocale, {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    }
+
+    function getEventColorClass(colorId) {
+      if (!colorId) return '';
+      const num = parseInt(colorId, 10);
+      if (num >= 1 && num <= 11) {
+        return `event-color-${num}`;
+      }
+      return '';
+    }
+
+    function calculateEventPosition(event, startHour, endHour) {
+      const ROW_HEIGHT = 48;
+      const eventStart = new Date(event.start);
+      const eventEnd = new Date(event.end);
+      const startHourFloat = eventStart.getHours() + eventStart.getMinutes() / 60;
+      const endHourFloat = eventEnd.getHours() + eventEnd.getMinutes() / 60;
+      const clampedStart = Math.max(startHourFloat, startHour);
+      const clampedEnd = Math.min(endHourFloat, endHour);
+      const topOffset = (clampedStart - startHour) * ROW_HEIGHT;
+      const height = Math.max((clampedEnd - clampedStart) * ROW_HEIGHT, 24);
+      return { top: `${topOffset}px`, height: `${height}px` };
+    }
+
+    function openLink(url) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+
+    function toggleExpanded() {
+      isExpanded = !isExpanded;
+      if (isExpanded) {
+        timeGrid.classList.remove('compact');
+        expandToggle.classList.add('expanded');
+        toggleText.textContent = 'Show less';
+      } else {
+        timeGrid.classList.add('compact');
+        expandToggle.classList.remove('expanded');
+        toggleText.textContent = 'Show more';
+      }
+    }
+
+    function createEventElement(event, isFocused, isAllDay = false) {
+      const element = document.createElement('div');
+      element.style.cursor = 'pointer';
+      element.setAttribute('role', 'button');
+      element.setAttribute('tabindex', '0');
+      element.title = 'Click to open in Google Calendar';
+      element.addEventListener('click', () => openLink(event.htmlLink));
+
+      const colorClass = getEventColorClass(event.colorId);
+
+      if (isAllDay) {
+        element.className = `all-day-event ${colorClass} ${isFocused ? 'focused' : ''}`.trim();
+        element.textContent = event.summary;
+      } else {
+        element.className = `event-block ${colorClass} ${isFocused ? 'focused' : ''}`.trim();
+
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'event-title';
+        titleDiv.textContent = event.summary;
+        element.appendChild(titleDiv);
+
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'event-time';
+        timeDiv.textContent = `${formatTime(event.start)} - ${formatTime(event.end)}`;
+        element.appendChild(timeDiv);
+
+        if (event.location) {
+          const locationDiv = document.createElement('div');
+          locationDiv.className = 'event-location';
+          locationDiv.textContent = event.location;
+          element.appendChild(locationDiv);
+        }
+      }
+
+      return element;
+    }
+
+    function renderAllDayEvents(events, focusEventId) {
+      const allDayEvts = events.filter(e => e.isAllDay);
+      if (allDayEvts.length === 0) {
+        allDaySection.style.display = 'none';
+        return;
+      }
+      allDaySection.style.display = 'flex';
+      while (allDayEvents.firstChild) {
+        allDayEvents.removeChild(allDayEvents.firstChild);
+      }
+      for (const event of allDayEvts) {
+        const isFocused = event.id === focusEventId;
+        const element = createEventElement(event, isFocused, true);
+        allDayEvents.appendChild(element);
+      }
+    }
+
+    function renderTimeGrid(context) {
+      const { events, focusEventId, timeRange } = context;
+      const { startHour, endHour } = timeRange;
+
+      while (timeGrid.firstChild) {
+        timeGrid.removeChild(timeGrid.firstChild);
+      }
+
+      const timedEvents = events.filter(e => !e.isAllDay);
+
+      for (let hour = startHour; hour < endHour; hour++) {
+        const row = document.createElement('div');
+        row.className = 'time-row';
+
+        const hourLabel = document.createElement('div');
+        hourLabel.className = 'hour-label';
+        hourLabel.textContent = formatHour(hour);
+        row.appendChild(hourLabel);
+
+        const timeSlot = document.createElement('div');
+        timeSlot.className = 'time-slot';
+        row.appendChild(timeSlot);
+
+        timeGrid.appendChild(row);
+      }
+
+      const eventsContainer = document.createElement('div');
+      eventsContainer.style.position = 'absolute';
+      eventsContainer.style.top = '0';
+      eventsContainer.style.left = 'var(--hour-width)';
+      eventsContainer.style.right = '0';
+      eventsContainer.style.bottom = '0';
+      eventsContainer.style.pointerEvents = 'none';
+
+      for (const event of timedEvents) {
+        const isFocused = event.id === focusEventId;
+        const element = createEventElement(event, isFocused);
+        const position = calculateEventPosition(event, startHour, endHour);
+        element.style.top = position.top;
+        element.style.height = position.height;
+        element.style.pointerEvents = 'auto';
+        eventsContainer.appendChild(element);
+      }
+
+      timeGrid.style.position = 'relative';
+      timeGrid.appendChild(eventsContainer);
+    }
+
+    function showDayView() {
+      dayViewContainer.style.display = '';
+      multiDayViewContainer.style.display = 'none';
+    }
+
+    function renderDayView(context) {
+      showDayView();
+      dateHeading.textContent = formatDateHeading(context.date);
+      dayLink.style.display = '';
+      dayLink.href = '#';
+      dayLink.onclick = (e) => {
+        e.preventDefault();
+        openLink(context.dayLink);
+      };
+      renderAllDayEvents(context.events, context.focusEventId);
+      renderTimeGrid(context);
+      expandToggle.style.display = '';
+      expandToggle.onclick = toggleExpanded;
+      isExpanded = false;
+      timeGrid.classList.add('compact');
+      expandToggle.classList.remove('expanded');
+      toggleText.textContent = 'Show more';
+    }
+
+    // Multi-day view helper functions
+    function formatMultiDayDate(dateStr) {
+      const date = new Date(dateStr + 'T00:00:00');
+      const day = date.getDate().toString();
+      const month = date.toLocaleDateString(hostLocale, { month: 'short' }).toUpperCase();
+      const year = date.getFullYear();
+      const weekday = date.toLocaleDateString(hostLocale, { weekday: 'short' }).toUpperCase();
+      return { day, monthYearDay: `${month} ${year}, ${weekday}` };
+    }
+
+    function isToday(dateStr) {
+      const today = new Date();
+      const date = new Date(dateStr + 'T00:00:00');
+      return date.getFullYear() === today.getFullYear() &&
+        date.getMonth() === today.getMonth() &&
+        date.getDate() === today.getDate();
+    }
+
+    function formatMultiDayEventTime(event) {
+      if (event.isAllDay) return 'All day';
+      const startDate = new Date(event.start);
+      const endDate = new Date(event.end);
+      const startOptions = { hour: 'numeric', minute: startDate.getMinutes() > 0 ? '2-digit' : undefined };
+      const endOptions = { hour: 'numeric', minute: endDate.getMinutes() > 0 ? '2-digit' : undefined };
+      const startStr = startDate.toLocaleTimeString(hostLocale, startOptions);
+      const endStr = endDate.toLocaleTimeString(hostLocale, endOptions);
+      return `${startStr} - ${endStr}`;
+    }
+
+    function formatCalendarName(calendarId, calendarName) {
+      if (calendarName) return calendarName;
+      if (calendarId === 'primary') return 'Primary';
+      if (calendarId.includes('@')) return calendarId;
+      return calendarId;
+    }
+
+    function createEventListItem(event, isFocused) {
+      const element = document.createElement('div');
+      element.className = `event-list-item ${isFocused ? 'focused' : ''}`.trim();
+      element.style.cursor = 'pointer';
+      element.setAttribute('role', 'button');
+      element.setAttribute('tabindex', '0');
+      element.title = 'Click to open in Google Calendar';
+      element.addEventListener('click', () => openLink(event.htmlLink));
+
+      // Color dot
+      const colorDot = document.createElement('div');
+      colorDot.className = 'color-dot';
+      if (event.backgroundColor) {
+        colorDot.style.backgroundColor = event.backgroundColor;
+      }
+      element.appendChild(colorDot);
+
+      // Content container
+      const content = document.createElement('div');
+      content.className = 'event-list-content';
+
+      const titleDiv = document.createElement('div');
+      titleDiv.className = 'event-list-title';
+      titleDiv.textContent = event.summary;
+      content.appendChild(titleDiv);
+
+      const timeDiv = document.createElement('div');
+      timeDiv.className = 'event-list-time';
+      timeDiv.textContent = formatMultiDayEventTime(event);
+      content.appendChild(timeDiv);
+
+      if (event.location) {
+        const locationDiv = document.createElement('div');
+        locationDiv.className = 'event-list-location';
+        locationDiv.textContent = event.location;
+        content.appendChild(locationDiv);
+      }
+
+      // Account and calendar info
+      const sourceDiv = document.createElement('div');
+      sourceDiv.className = 'event-list-source';
+      const calendarName = formatCalendarName(event.calendarId, event.calendarName);
+      if (event.accountId) {
+        sourceDiv.textContent = `${event.accountId} · ${calendarName}`;
+      } else {
+        sourceDiv.textContent = calendarName;
+      }
+      content.appendChild(sourceDiv);
+
+      element.appendChild(content);
+      return element;
+    }
+
+    function createDateGroup(dateStr, events, focusEventId) {
+      const group = document.createElement('div');
+      group.className = 'date-group';
+
+      const header = document.createElement('div');
+      header.className = 'date-header';
+
+      const { day, monthYearDay } = formatMultiDayDate(dateStr);
+
+      const dayNumber = document.createElement('div');
+      dayNumber.className = `date-number ${isToday(dateStr) ? 'today' : ''}`.trim();
+      dayNumber.textContent = day;
+      header.appendChild(dayNumber);
+
+      const dateText = document.createElement('div');
+      dateText.className = 'date-text';
+      dateText.textContent = monthYearDay;
+      header.appendChild(dateText);
+
+      group.appendChild(header);
+
+      const eventsList = document.createElement('div');
+      eventsList.className = 'date-events';
+
+      for (const event of events) {
+        const isFocused = event.id === focusEventId;
+        const eventItem = createEventListItem(event, isFocused);
+        eventsList.appendChild(eventItem);
+      }
+
+      group.appendChild(eventsList);
+      return group;
+    }
+
+    function formatTimeRangeSubheading(context) {
+      const parts = [];
+      if (context.query) parts.push(`Search: "${context.query}"`);
+      if (context.timeRange?.start && context.timeRange?.end) {
+        const startDate = new Date(context.timeRange.start);
+        const endDate = new Date(context.timeRange.end);
+        const formatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+        const startStr = startDate.toLocaleDateString(hostLocale, formatOptions);
+        const endStr = endDate.toLocaleDateString(hostLocale, formatOptions);
+        parts.push(`${startStr} - ${endStr}`);
+      }
+      parts.push(`${context.totalEventCount} event${context.totalEventCount !== 1 ? 's' : ''}`);
+      return parts.join(' · ');
+    }
+
+    function renderMultiDayView(context) {
+      // Hide day view, show multi-day view
+      dayViewContainer.style.display = 'none';
+      multiDayViewContainer.style.display = '';
+
+      multiDayHeading.textContent = context.query ? 'Search Results' : 'Events';
+      multiDaySubheading.textContent = formatTimeRangeSubheading(context);
+
+      multiDayLink.href = '#';
+      multiDayLink.onclick = (e) => {
+        e.preventDefault();
+        openLink(context.calendarLink);
+      };
+
+      // Clear existing content
+      while (multiDayEventsList.firstChild) {
+        multiDayEventsList.removeChild(multiDayEventsList.firstChild);
+      }
+
+      // Render date groups
+      if (context.totalEventCount === 0) {
+        const emptyState = document.createElement('div');
+        emptyState.className = 'multi-day-empty';
+        if (context.query) {
+          emptyState.textContent = `No results found for "${context.query}"`;
+        } else if (context.timeRange?.start && context.timeRange?.end) {
+          // Format the date range for the empty message
+          const startDate = new Date(context.timeRange.start);
+          const endDate = new Date(context.timeRange.end);
+          const formatOptions = { month: 'short', day: 'numeric' };
+          const startStr = startDate.toLocaleDateString(hostLocale, formatOptions);
+          const endStr = endDate.toLocaleDateString(hostLocale, formatOptions);
+          emptyState.textContent = `No events from ${startStr} to ${endStr}`;
+        } else {
+          emptyState.textContent = 'No events found';
+        }
+        multiDayEventsList.appendChild(emptyState);
+      } else {
+        for (const date of context.dates) {
+          const events = context.eventsByDate[date] || [];
+          if (events.length > 0) {
+            const dateGroup = createDateGroup(date, events, context.focusEventId);
+            multiDayEventsList.appendChild(dateGroup);
+          }
+        }
+      }
+    }
+
+    function extractDayContext(params) {
+      if (!params.content) return null;
+      for (const block of params.content) {
+        if (block.type === 'text' && block.text) {
+          try {
+            const parsed = JSON.parse(block.text);
+            if (parsed.dayContext) {
+              return parsed.dayContext;
+            }
+          } catch {}
+        }
+      }
+      return null;
+    }
+
+    function extractMultiDayContext(params) {
+      if (!params.content) return null;
+      for (const block of params.content) {
+        if (block.type === 'text' && block.text) {
+          try {
+            const parsed = JSON.parse(block.text);
+            if (parsed.multiDayContext) {
+              return parsed.multiDayContext;
+            }
+          } catch {}
+        }
+      }
+      return null;
+    }
+
+    // Set up handlers
+    mockApp.ontoolresult = (params) => {
+      // Check for multi-day context first
+      const multiDayContext = extractMultiDayContext(params);
+      if (multiDayContext) {
+        renderMultiDayView(multiDayContext);
+        return;
+      }
+
+      // Check for single-day context
+      const dayContext = extractDayContext(params);
+      if (dayContext) {
+        renderDayView(dayContext);
+      }
+    };
+
+    // Initialize
+    mockApp.connect();
+  </script>
+</body>
+</html>

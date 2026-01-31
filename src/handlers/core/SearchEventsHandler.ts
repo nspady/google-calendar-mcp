@@ -5,7 +5,8 @@ import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
 import { buildListFieldMask } from "../../utils/field-mask-builder.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
-import { SearchEventsResponse, StructuredEvent, convertGoogleEventToStructured, ExtendedEvent } from "../../types/structured-responses.js";
+import { SearchEventsResponse, StructuredEvent, convertGoogleEventToStructured, ExtendedEvent, EventColorContext } from "../../types/structured-responses.js";
+import { MultiDayContextService } from "../../services/multi-day-context/index.js";
 
 // Internal args type for searchEvents with single calendarId (after normalization)
 interface SearchEventsArgs {
@@ -20,6 +21,13 @@ interface SearchEventsArgs {
 }
 
 export class SearchEventsHandler extends BaseToolHandler {
+    private multiDayContextService: MultiDayContextService;
+
+    constructor() {
+        super();
+        this.multiDayContextService = new MultiDayContextService();
+    }
+
     async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
         const validArgs = args as SearchEventsInput;
 
@@ -97,9 +105,16 @@ export class SearchEventsHandler extends BaseToolHandler {
         // Sort events chronologically
         this.sortEventsByStartTime(allEvents);
 
-        // Convert to structured format
+        // Build color context for resolving event display colors
+        const colorContext = await this.buildSearchColorContext(
+            accountCalendarMap,
+            selectedAccounts,
+            queriedCalendarIds
+        );
+
+        // Convert to structured format with resolved colors
         const structuredEvents: StructuredEvent[] = allEvents.map(event =>
-            convertGoogleEventToStructured(event, event.calendarId, event.accountId)
+            convertGoogleEventToStructured(event, event.calendarId, event.accountId, colorContext)
         );
 
         const response: SearchEventsResponse = {
@@ -127,6 +142,20 @@ export class SearchEventsHandler extends BaseToolHandler {
             };
         }
 
+        // Build multi-day context for search results (always include for MCP Apps UI)
+        // Include even when empty so UI can show "no results found" state
+        const timezone = validArgs.timeZone ||
+            structuredEvents[0]?.start?.timeZone ||
+            'UTC';
+        response.multiDayContext = this.multiDayContextService.buildMultiDayContext(
+            structuredEvents,
+            timezone,
+            {
+                query: validArgs.query,
+                timeRange: response.timeRange
+            }
+        );
+
         return createStructuredResponse(response);
     }
 
@@ -141,9 +170,9 @@ export class SearchEventsHandler extends BaseToolHandler {
             const { timeMin, timeMax } = await this.normalizeTimeRange(
                 client, args.calendarId, args.timeMin, args.timeMax, args.timeZone
             );
-            
+
             const fieldMask = buildListFieldMask(args.fields);
-            
+
             const response = await calendar.events.list({
                 calendarId: args.calendarId,
                 q: args.query,
@@ -161,4 +190,32 @@ export class SearchEventsHandler extends BaseToolHandler {
         }
     }
 
+    /**
+     * Builds color context for search queries across multiple calendars/accounts.
+     */
+    private async buildSearchColorContext(
+        accountCalendarMap: Map<string, string[]>,
+        selectedAccounts: Map<string, OAuth2Client>,
+        queriedCalendarIds: string[]
+    ): Promise<EventColorContext> {
+        // Get first available account for event palette (it's global/same for all)
+        const firstAccountId = selectedAccounts.keys().next().value as string;
+        const firstClient = selectedAccounts.get(firstAccountId)!;
+        const eventPalette = await this.getEventColorPalette(firstClient);
+
+        // Collect calendar colors from each account that has those calendars
+        const calendarColors: Record<string, { background: string; foreground: string }> = {};
+
+        await Promise.all(
+            Array.from(accountCalendarMap.entries()).map(async ([accountId, calendarIds]) => {
+                const client = selectedAccounts.get(accountId);
+                if (client && calendarIds.length > 0) {
+                    const colors = await this.getCalendarColors(client, calendarIds);
+                    Object.assign(calendarColors, colors);
+                }
+            })
+        );
+
+        return { eventPalette, calendarColors };
+    }
 }
