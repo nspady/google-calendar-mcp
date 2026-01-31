@@ -102,7 +102,8 @@ describe('UpdateEventHandler', () => {
       events: {
         patch: vi.fn(),
         get: vi.fn(),
-        insert: vi.fn()
+        insert: vi.fn(),
+        list: vi.fn()
       },
       calendars: {
         get: vi.fn()
@@ -1135,6 +1136,444 @@ describe('UpdateEventHandler', () => {
       expect(response.event).toBeDefined();
       expect(response.event.start.dateTime).toBeDefined();
       expect(response.event.end.dateTime).toBeDefined();
+    });
+  });
+
+  describe('Day Context', () => {
+    it('should include dayContext in response after update', async () => {
+      const existingEvent = {
+        id: 'event123',
+        summary: 'Original Meeting',
+        start: { dateTime: '2026-01-27T14:00:00Z' },
+        end: { dateTime: '2026-01-27T15:00:00Z' }
+      };
+
+      const updatedEvent = {
+        id: 'event123',
+        summary: 'Updated Meeting',
+        start: { dateTime: '2026-01-27T14:00:00Z' },
+        end: { dateTime: '2026-01-27T15:00:00Z' },
+        htmlLink: 'https://calendar.google.com/event?eid=event123'
+      };
+
+      const surroundingEvents = [
+        {
+          id: 'other1',
+          summary: 'Morning Event',
+          start: { dateTime: '2026-01-27T10:00:00Z' },
+          end: { dateTime: '2026-01-27T11:00:00Z' },
+          htmlLink: 'https://calendar.google.com/event?eid=other1'
+        },
+        {
+          id: 'other2',
+          summary: 'Afternoon Event',
+          start: { dateTime: '2026-01-27T16:00:00Z' },
+          end: { dateTime: '2026-01-27T17:00:00Z' },
+          htmlLink: 'https://calendar.google.com/event?eid=other2'
+        }
+      ];
+
+      mockCalendar.events.get.mockResolvedValue({ data: existingEvent });
+      mockCalendar.events.patch.mockResolvedValue({ data: updatedEvent });
+      mockCalendar.events.list.mockResolvedValue({ data: { items: surroundingEvents } });
+
+      const args = {
+        calendarId: 'primary',
+        eventId: 'event123',
+        summary: 'Updated Meeting'
+      };
+
+      const result = await handler.runTool(args, mockAccounts);
+      const response = JSON.parse((result.content[0] as any).text);
+
+      expect(response.dayContext).toBeDefined();
+      expect(response.dayContext.focusEventId).toBe('event123');
+      expect(response.dayContext.date).toBe('2026-01-27');
+      expect(response.dayContext.events).toBeDefined();
+      expect(response.dayContext.events.length).toBeGreaterThan(1);
+      expect(response.dayContext.timezone).toBeDefined();
+      expect(response.dayContext.timeRange).toBeDefined();
+      expect(response.dayContext.dayLink).toBeDefined();
+    });
+
+    it('should set focusEventId to updated event ID', async () => {
+      const existingEvent = {
+        id: 'focus-event',
+        summary: 'Focus Event',
+        start: { dateTime: '2026-01-27T14:00:00Z' },
+        end: { dateTime: '2026-01-27T15:00:00Z' }
+      };
+
+      const updatedEvent = {
+        ...existingEvent,
+        summary: 'Updated Focus Event',
+        htmlLink: 'https://calendar.google.com/event?eid=focus-event'
+      };
+
+      mockCalendar.events.get.mockResolvedValue({ data: existingEvent });
+      mockCalendar.events.patch.mockResolvedValue({ data: updatedEvent });
+      mockCalendar.events.list.mockResolvedValue({ data: { items: [] } });
+
+      const result = await handler.runTool({
+        calendarId: 'primary',
+        eventId: 'focus-event',
+        summary: 'Updated Focus Event'
+      }, mockAccounts);
+
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.dayContext).toBeDefined();
+      expect(response.dayContext.focusEventId).toBe('focus-event');
+    });
+
+    it('should include surrounding events from the same day', async () => {
+      const existingEvent = {
+        id: 'event123',
+        summary: 'Meeting',
+        start: { dateTime: '2026-01-27T14:00:00Z' },
+        end: { dateTime: '2026-01-27T15:00:00Z' }
+      };
+
+      const updatedEvent = {
+        ...existingEvent,
+        htmlLink: 'https://calendar.google.com/event?eid=event123'
+      };
+
+      const sameDayEvents = [
+        {
+          id: 'morning',
+          summary: 'Morning',
+          start: { dateTime: '2026-01-27T09:00:00Z' },
+          end: { dateTime: '2026-01-27T10:00:00Z' },
+          htmlLink: 'https://calendar.google.com/event?eid=morning'
+        },
+        {
+          id: 'evening',
+          summary: 'Evening',
+          start: { dateTime: '2026-01-27T18:00:00Z' },
+          end: { dateTime: '2026-01-27T19:00:00Z' },
+          htmlLink: 'https://calendar.google.com/event?eid=evening'
+        }
+      ];
+
+      mockCalendar.events.get.mockResolvedValue({ data: existingEvent });
+      mockCalendar.events.patch.mockResolvedValue({ data: updatedEvent });
+      mockCalendar.events.list.mockResolvedValue({ data: { items: sameDayEvents } });
+
+      const result = await handler.runTool({
+        calendarId: 'primary',
+        eventId: 'event123',
+        summary: 'Updated Meeting'
+      }, mockAccounts);
+
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.dayContext).toBeDefined();
+      expect(response.dayContext.events.length).toBe(3); // Updated event + 2 surrounding
+
+      // Check that all events are from the same day
+      const allEventIds = response.dayContext.events.map((e: any) => e.id);
+      expect(allEventIds).toContain('event123');
+      expect(allEventIds).toContain('morning');
+      expect(allEventIds).toContain('evening');
+    });
+
+    it('should extract correct date from updated event', async () => {
+      const existingEvent = {
+        id: 'event123',
+        summary: 'Meeting',
+        start: { dateTime: '2026-02-15T10:00:00Z' },
+        end: { dateTime: '2026-02-15T11:00:00Z' }
+      };
+
+      const updatedEvent = {
+        id: 'event123',
+        summary: 'Meeting',
+        start: { dateTime: '2026-02-15T14:00:00Z' },
+        end: { dateTime: '2026-02-15T15:00:00Z' },
+        htmlLink: 'https://calendar.google.com/event?eid=event123'
+      };
+
+      mockCalendar.events.get.mockResolvedValue({ data: existingEvent });
+      mockCalendar.events.patch.mockResolvedValue({ data: updatedEvent });
+      mockCalendar.events.list.mockResolvedValue({ data: { items: [] } });
+
+      const result = await handler.runTool({
+        calendarId: 'primary',
+        eventId: 'event123',
+        start: '2026-02-15T14:00:00',
+        end: '2026-02-15T15:00:00'
+      }, mockAccounts);
+
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.dayContext).toBeDefined();
+      expect(response.dayContext.date).toBe('2026-02-15');
+    });
+
+    it('should succeed even if dayContext fetch fails', async () => {
+      const existingEvent = {
+        id: 'event123',
+        summary: 'Meeting',
+        start: { dateTime: '2026-01-27T14:00:00Z' },
+        end: { dateTime: '2026-01-27T15:00:00Z' }
+      };
+
+      const updatedEvent = {
+        ...existingEvent,
+        summary: 'Updated Meeting',
+        htmlLink: 'https://calendar.google.com/event?eid=event123'
+      };
+
+      mockCalendar.events.get.mockResolvedValue({ data: existingEvent });
+      mockCalendar.events.patch.mockResolvedValue({ data: updatedEvent });
+      // Make list fail to simulate dayContext fetch error
+      mockCalendar.events.list.mockRejectedValue(new Error('API Error'));
+
+      const result = await handler.runTool({
+        calendarId: 'primary',
+        eventId: 'event123',
+        summary: 'Updated Meeting'
+      }, mockAccounts);
+
+      const response = JSON.parse((result.content[0] as any).text);
+
+      // Update should succeed
+      expect(response.event).toBeDefined();
+      expect(response.event.id).toBe('event123');
+      expect(response.event.summary).toBe('Updated Meeting');
+
+      // dayContext should be undefined (graceful degradation)
+      expect(response.dayContext).toBeUndefined();
+    });
+
+    it('should return event but undefined dayContext on fetch error', async () => {
+      const existingEvent = {
+        id: 'event456',
+        summary: 'Meeting',
+        start: { dateTime: '2026-01-27T10:00:00Z' },
+        end: { dateTime: '2026-01-27T11:00:00Z' }
+      };
+
+      const updatedEvent = {
+        ...existingEvent,
+        location: 'New Location',
+        htmlLink: 'https://calendar.google.com/event?eid=event456'
+      };
+
+      mockCalendar.events.get.mockResolvedValue({ data: existingEvent });
+      mockCalendar.events.patch.mockResolvedValue({ data: updatedEvent });
+      mockCalendar.events.list.mockRejectedValue(new Error('Network error'));
+
+      const result = await handler.runTool({
+        calendarId: 'primary',
+        eventId: 'event456',
+        location: 'New Location'
+      }, mockAccounts);
+
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.event).toBeDefined();
+      expect(response.event.location).toBe('New Location');
+      expect(response.dayContext).toBeUndefined();
+    });
+
+    it('should not throw error when list fails', async () => {
+      const existingEvent = {
+        id: 'event789',
+        summary: 'Meeting',
+        start: { dateTime: '2026-01-27T10:00:00Z' },
+        end: { dateTime: '2026-01-27T11:00:00Z' }
+      };
+
+      const updatedEvent = {
+        ...existingEvent,
+        htmlLink: 'https://calendar.google.com/event?eid=event789'
+      };
+
+      mockCalendar.events.get.mockResolvedValue({ data: existingEvent });
+      mockCalendar.events.patch.mockResolvedValue({ data: updatedEvent });
+      mockCalendar.events.list.mockRejectedValue(new Error('Permission denied'));
+
+      // Should not throw
+      await expect(handler.runTool({
+        calendarId: 'primary',
+        eventId: 'event789',
+        summary: 'Updated'
+      }, mockAccounts)).resolves.toBeDefined();
+    });
+
+    it('should not duplicate updated event in dayContext', async () => {
+      const existingEvent = {
+        id: 'event-unique',
+        summary: 'Meeting',
+        start: { dateTime: '2026-01-27T14:00:00Z' },
+        end: { dateTime: '2026-01-27T15:00:00Z' }
+      };
+
+      const updatedEvent = {
+        ...existingEvent,
+        summary: 'Updated Meeting',
+        htmlLink: 'https://calendar.google.com/event?eid=event-unique'
+      };
+
+      // List returns the event being updated (should be deduplicated)
+      const surroundingEvents = [
+        {
+          id: 'event-unique', // Same as updated event
+          summary: 'Original Meeting',
+          start: { dateTime: '2026-01-27T14:00:00Z' },
+          end: { dateTime: '2026-01-27T15:00:00Z' },
+          htmlLink: 'https://calendar.google.com/event?eid=event-unique'
+        },
+        {
+          id: 'other-event',
+          summary: 'Other Event',
+          start: { dateTime: '2026-01-27T10:00:00Z' },
+          end: { dateTime: '2026-01-27T11:00:00Z' },
+          htmlLink: 'https://calendar.google.com/event?eid=other-event'
+        }
+      ];
+
+      mockCalendar.events.get.mockResolvedValue({ data: existingEvent });
+      mockCalendar.events.patch.mockResolvedValue({ data: updatedEvent });
+      mockCalendar.events.list.mockResolvedValue({ data: { items: surroundingEvents } });
+
+      const result = await handler.runTool({
+        calendarId: 'primary',
+        eventId: 'event-unique',
+        summary: 'Updated Meeting'
+      }, mockAccounts);
+
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.dayContext).toBeDefined();
+
+      // Should have 2 events, not 3 (deduplication should work)
+      expect(response.dayContext.events.length).toBe(2);
+
+      // Check unique event IDs
+      const eventIds = response.dayContext.events.map((e: any) => e.id);
+      expect(eventIds).toContain('event-unique');
+      expect(eventIds).toContain('other-event');
+
+      // event-unique should appear only once
+      const uniqueCount = eventIds.filter((id: string) => id === 'event-unique').length;
+      expect(uniqueCount).toBe(1);
+    });
+
+    it('should handle when surrounding events include updated event', async () => {
+      const existingEvent = {
+        id: 'dedup-test',
+        summary: 'Test',
+        start: { dateTime: '2026-01-27T14:00:00Z' },
+        end: { dateTime: '2026-01-27T15:00:00Z' }
+      };
+
+      const updatedEvent = {
+        ...existingEvent,
+        htmlLink: 'https://calendar.google.com/event?eid=dedup-test'
+      };
+
+      // Surrounding events include the same event multiple times
+      const surroundingEvents = [
+        {
+          id: 'dedup-test',
+          summary: 'Test',
+          start: { dateTime: '2026-01-27T14:00:00Z' },
+          end: { dateTime: '2026-01-27T15:00:00Z' },
+          htmlLink: 'https://calendar.google.com/event?eid=dedup-test'
+        }
+      ];
+
+      mockCalendar.events.get.mockResolvedValue({ data: existingEvent });
+      mockCalendar.events.patch.mockResolvedValue({ data: updatedEvent });
+      mockCalendar.events.list.mockResolvedValue({ data: { items: surroundingEvents } });
+
+      const result = await handler.runTool({
+        calendarId: 'primary',
+        eventId: 'dedup-test',
+        summary: 'Updated Test'
+      }, mockAccounts);
+
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.dayContext).toBeDefined();
+      expect(response.dayContext.events.length).toBe(1); // Should be deduplicated
+    });
+
+    it('should have unique event IDs in dayContext.events', async () => {
+      const existingEvent = {
+        id: 'main-event',
+        summary: 'Main',
+        start: { dateTime: '2026-01-27T14:00:00Z' },
+        end: { dateTime: '2026-01-27T15:00:00Z' }
+      };
+
+      const updatedEvent = {
+        ...existingEvent,
+        htmlLink: 'https://calendar.google.com/event?eid=main-event'
+      };
+
+      const surroundingEvents = [
+        {
+          id: 'event1',
+          summary: 'Event 1',
+          start: { dateTime: '2026-01-27T10:00:00Z' },
+          end: { dateTime: '2026-01-27T11:00:00Z' },
+          htmlLink: 'https://calendar.google.com/event?eid=event1'
+        },
+        {
+          id: 'event2',
+          summary: 'Event 2',
+          start: { dateTime: '2026-01-27T16:00:00Z' },
+          end: { dateTime: '2026-01-27T17:00:00Z' },
+          htmlLink: 'https://calendar.google.com/event?eid=event2'
+        }
+      ];
+
+      mockCalendar.events.get.mockResolvedValue({ data: existingEvent });
+      mockCalendar.events.patch.mockResolvedValue({ data: updatedEvent });
+      mockCalendar.events.list.mockResolvedValue({ data: { items: surroundingEvents } });
+
+      const result = await handler.runTool({
+        calendarId: 'primary',
+        eventId: 'main-event',
+        summary: 'Updated Main'
+      }, mockAccounts);
+
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.dayContext).toBeDefined();
+
+      const eventIds = response.dayContext.events.map((e: any) => e.id);
+      const uniqueIds = new Set(eventIds);
+
+      // All IDs should be unique
+      expect(eventIds.length).toBe(uniqueIds.size);
+    });
+
+    it('should handle timezone in dayContext correctly', async () => {
+      const existingEvent = {
+        id: 'event123',
+        summary: 'Meeting',
+        start: { dateTime: '2026-01-27T14:00:00-08:00', timeZone: 'America/Los_Angeles' },
+        end: { dateTime: '2026-01-27T15:00:00-08:00', timeZone: 'America/Los_Angeles' }
+      };
+
+      const updatedEvent = {
+        ...existingEvent,
+        htmlLink: 'https://calendar.google.com/event?eid=event123'
+      };
+
+      mockCalendar.events.get.mockResolvedValue({ data: existingEvent });
+      mockCalendar.events.patch.mockResolvedValue({ data: updatedEvent });
+      mockCalendar.events.list.mockResolvedValue({ data: { items: [] } });
+
+      const result = await handler.runTool({
+        calendarId: 'primary',
+        eventId: 'event123',
+        summary: 'Updated'
+      }, mockAccounts);
+
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.dayContext).toBeDefined();
+      expect(response.dayContext.timezone).toBeDefined();
+      // Should use calendar's timezone (mocked as America/Los_Angeles in beforeEach)
+      expect(response.dayContext.timezone).toBe('America/Los_Angeles');
     });
   });
 });
