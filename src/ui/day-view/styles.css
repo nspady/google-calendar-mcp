@@ -596,6 +596,48 @@ body {
   margin-top: 2px;
 }
 
+/* ============================================================================
+   Overlap Indicator Styles
+   ============================================================================ */
+
+/* Overlap indicator row between events */
+.overlap-indicator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+/* Parallel color bars container */
+.overlap-indicator .overlap-bars {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* Individual color bars matching the event row style */
+.overlap-indicator .overlap-bar {
+  width: 4px;
+  height: 24px;
+  border-radius: 2px;
+}
+
+/* Overlap text */
+.overlap-indicator .overlap-text {
+  font-weight: 500;
+}
+
+/* Tighter spacing when events overlap */
+.expanded-event-item.overlaps-next {
+  padding-bottom: 2px;
+}
+
+.expanded-event-item.overlapped-by-prev {
+  padding-top: 2px;
+}
+
 /* Event list item */
 .event-list-item {
   display: flex;

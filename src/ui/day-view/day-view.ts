@@ -659,6 +659,75 @@ function calculateMultiDayEventPosition(
 }
 
 /**
+ * Check if two events overlap in time
+ */
+function eventsOverlap(eventA: MultiDayViewEvent, eventB: MultiDayViewEvent): { overlaps: boolean; overlapMinutes: number } {
+  if (eventA.isAllDay || eventB.isAllDay) return { overlaps: false, overlapMinutes: 0 };
+
+  const startA = new Date(eventA.start).getTime();
+  const endA = new Date(eventA.end).getTime();
+  const startB = new Date(eventB.start).getTime();
+  const endB = new Date(eventB.end).getTime();
+
+  const overlaps = startA < endB && startB < endA;
+  if (!overlaps) return { overlaps: false, overlapMinutes: 0 };
+
+  // Calculate overlap duration
+  const overlapStart = Math.max(startA, startB);
+  const overlapEnd = Math.min(endA, endB);
+  const overlapMinutes = Math.round((overlapEnd - overlapStart) / (1000 * 60));
+
+  return { overlaps: true, overlapMinutes };
+}
+
+/**
+ * Format overlap duration for display
+ */
+function formatOverlapDuration(minutes: number): string {
+  if (minutes < 60) {
+    return `${minutes}m overlap`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (mins === 0) {
+    return `${hours}h overlap`;
+  }
+  return `${hours}h ${mins}m overlap`;
+}
+
+/**
+ * Create overlap indicator element with parallel color bars
+ */
+function createOverlapIndicator(overlapMinutes: number, prevColor: string, nextColor: string): HTMLDivElement {
+  const indicator = document.createElement('div');
+  indicator.className = 'overlap-indicator';
+
+  // Parallel color bars on the left (matching event row style)
+  const bars = document.createElement('div');
+  bars.className = 'overlap-bars';
+
+  const bar1 = document.createElement('div');
+  bar1.className = 'overlap-bar';
+  bar1.style.backgroundColor = prevColor;
+  bars.appendChild(bar1);
+
+  const bar2 = document.createElement('div');
+  bar2.className = 'overlap-bar';
+  bar2.style.backgroundColor = nextColor;
+  bars.appendChild(bar2);
+
+  indicator.appendChild(bars);
+
+  // Overlap duration text
+  const text = document.createElement('span');
+  text.className = 'overlap-text';
+  text.textContent = formatOverlapDuration(overlapMinutes);
+  indicator.appendChild(text);
+
+  return indicator;
+}
+
+/**
  * Create an event list element for an expanded day in multi-day view (compact list instead of time grid)
  */
 function createDayEventList(events: MultiDayViewEvent[], focusEventId?: string): HTMLDivElement {
@@ -740,19 +809,37 @@ function createDayEventList(events: MultiDayViewEvent[], focusEventId?: string):
     container.appendChild(allDaySection);
   }
 
-  // Timed events
-  for (const event of timedEvents) {
+  // Timed events with overlap detection
+  for (let i = 0; i < timedEvents.length; i++) {
+    const event = timedEvents[i];
+    const prevEvent = i > 0 ? timedEvents[i - 1] : null;
+    const nextEvent = i < timedEvents.length - 1 ? timedEvents[i + 1] : null;
+
+    // Check for overlaps
+    const overlapWithPrev = prevEvent ? eventsOverlap(prevEvent, event) : { overlaps: false, overlapMinutes: 0 };
+    const overlapWithNext = nextEvent ? eventsOverlap(event, nextEvent) : { overlaps: false, overlapMinutes: 0 };
+
     const isFocused = event.id === focusEventId;
     const item = document.createElement('div');
-    item.className = `expanded-event-item ${isFocused ? 'focused' : ''}`.trim();
+
+    // Build class list with overlap states
+    const classes = ['expanded-event-item'];
+    if (isFocused) classes.push('focused');
+    if (overlapWithNext.overlaps) classes.push('overlaps-next');
+    if (overlapWithPrev.overlaps) classes.push('overlapped-by-prev');
+    item.className = classes.join(' ');
+
     item.style.cursor = 'pointer';
     item.setAttribute('role', 'button');
     item.setAttribute('tabindex', '0');
 
-    // Detailed tooltip
+    // Detailed tooltip - include overlap info
     const tooltipParts = [event.summary];
     tooltipParts.push(`${formatTime(event.start)} - ${formatTime(event.end)}`);
     if (event.location) tooltipParts.push(event.location);
+    if (overlapWithPrev.overlaps || overlapWithNext.overlaps) {
+      tooltipParts.push('⚠ Overlaps with another event');
+    }
     tooltipParts.push('Click to open in Google Calendar');
     item.title = tooltipParts.join('\n');
 
@@ -764,10 +851,23 @@ function createDayEventList(events: MultiDayViewEvent[], focusEventId?: string):
       }
     });
 
-    // Color indicator
+    // Color indicator - with overlap stripe if overlapping
     const colorBar = document.createElement('div');
+    const eventColor = event.backgroundColor || 'var(--accent-color)';
     colorBar.className = 'event-color-bar';
-    colorBar.style.backgroundColor = event.backgroundColor || 'var(--accent-color)';
+    if (overlapWithNext.overlaps || overlapWithPrev.overlaps) {
+      colorBar.classList.add('has-overlap');
+    }
+    colorBar.style.backgroundColor = eventColor;
+
+    // Add overlap stripe showing the other event's color
+    if (overlapWithNext.overlaps && nextEvent) {
+      const stripe = document.createElement('div');
+      stripe.className = 'overlap-stripe';
+      stripe.style.backgroundColor = nextEvent.backgroundColor || 'var(--accent-color)';
+      colorBar.appendChild(stripe);
+    }
+
     item.appendChild(colorBar);
 
     // Time column - show start and end time
@@ -800,6 +900,16 @@ function createDayEventList(events: MultiDayViewEvent[], focusEventId?: string):
 
     item.appendChild(details);
     container.appendChild(item);
+
+    // Add overlap indicator between this event and the next if they overlap
+    if (overlapWithNext.overlaps && nextEvent) {
+      const indicator = createOverlapIndicator(
+        overlapWithNext.overlapMinutes,
+        eventColor,
+        nextEvent.backgroundColor || 'var(--accent-color)'
+      );
+      container.appendChild(indicator);
+    }
   }
 
   return container;

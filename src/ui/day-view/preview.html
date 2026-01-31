@@ -299,6 +299,96 @@
           accountId: 'work'
         });
 
+        // OVERLAPPING EVENTS on day 0 (today) - School Drop Off + Studio30
+        if (i === 0) {
+          // First event: 8:00 AM - 8:30 AM
+          eventsByDate[dateStr].push({
+            id: `overlap-school-${i}`,
+            summary: 'School Drop Off',
+            start: `${dateStr}T08:00:00`,
+            end: `${dateStr}T08:30:00`,
+            isAllDay: false,
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#7986cb' : undefined, // Lavender
+            calendarId: 'family@group.calendar.google.com',
+            calendarName: 'Family',
+            accountId: 'personal'
+          });
+          // Second event: 8:15 AM - 9:00 AM (overlaps by 15 min)
+          eventsByDate[dateStr].push({
+            id: `overlap-studio-${i}`,
+            summary: 'Studio30',
+            start: `${dateStr}T08:15:00`,
+            end: `${dateStr}T09:00:00`,
+            isAllDay: false,
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#7986cb' : undefined, // Same color (same calendar)
+            calendarId: 'family@group.calendar.google.com',
+            calendarName: 'Family',
+            accountId: 'personal'
+          });
+        }
+
+        // OVERLAPPING EVENTS on day 1 (like Brand AI Weekly Focus + Alston's MTB)
+        if (i === 1) {
+          // First event: 3:00 PM - 4:00 PM
+          eventsByDate[dateStr].push({
+            id: `overlap-a-${i}`,
+            summary: 'Brand AI Weekly Focus',
+            start: `${dateStr}T15:00:00`,
+            end: `${dateStr}T16:00:00`,
+            isAllDay: false,
+            location: 'Virtual',
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#f6bf26' : undefined, // Banana/yellow
+            calendarId: 'primary',
+            accountId: 'work'
+          });
+          // Second event: 3:30 PM - 5:45 PM (overlaps by 30 min)
+          eventsByDate[dateStr].push({
+            id: `overlap-b-${i}`,
+            summary: 'Alston Mnt Biking',
+            start: `${dateStr}T15:30:00`,
+            end: `${dateStr}T17:45:00`,
+            isAllDay: false,
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#7986cb' : undefined, // Lavender
+            calendarId: 'personal@gmail.com',
+            calendarName: 'Personal',
+            accountId: 'personal'
+          });
+        }
+
+        // Another overlap scenario on day 3 - triple overlap
+        if (i === 3) {
+          // Meeting 1: 10:00 AM - 11:30 AM
+          eventsByDate[dateStr].push({
+            id: `triple-a-${i}`,
+            summary: 'Architecture Review',
+            start: `${dateStr}T10:00:00`,
+            end: `${dateStr}T11:30:00`,
+            isAllDay: false,
+            location: 'Room 301',
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#e67c73' : undefined, // Flamingo
+            calendarId: 'primary',
+            accountId: 'work'
+          });
+          // Meeting 2: 11:00 AM - 12:00 PM (overlaps with #1 by 30 min)
+          eventsByDate[dateStr].push({
+            id: `triple-b-${i}`,
+            summary: 'Quick 1:1 with Sarah',
+            start: `${dateStr}T11:00:00`,
+            end: `${dateStr}T12:00:00`,
+            isAllDay: false,
+            location: 'Zoom',
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#33b679' : undefined, // Sage
+            calendarId: 'primary',
+            accountId: 'work'
+          });
+        }
+
         // Afternoon event (personal account, different calendar)
         if (i % 2 === 0) {
           eventsByDate[dateStr].push({
@@ -774,6 +864,66 @@
       return calendarId;
     }
 
+    // Overlap detection helpers
+    function eventsOverlap(eventA, eventB) {
+      if (eventA.isAllDay || eventB.isAllDay) return { overlaps: false, overlapMinutes: 0 };
+
+      const startA = new Date(eventA.start).getTime();
+      const endA = new Date(eventA.end).getTime();
+      const startB = new Date(eventB.start).getTime();
+      const endB = new Date(eventB.end).getTime();
+
+      const overlaps = startA < endB && startB < endA;
+      if (!overlaps) return { overlaps: false, overlapMinutes: 0 };
+
+      const overlapStart = Math.max(startA, startB);
+      const overlapEnd = Math.min(endA, endB);
+      const overlapMinutes = Math.round((overlapEnd - overlapStart) / (1000 * 60));
+
+      return { overlaps: true, overlapMinutes };
+    }
+
+    function formatOverlapDuration(minutes) {
+      if (minutes < 60) {
+        return `${minutes}m overlap`;
+      }
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      if (mins === 0) {
+        return `${hours}h overlap`;
+      }
+      return `${hours}h ${mins}m overlap`;
+    }
+
+    function createOverlapIndicator(overlapMinutes, prevColor, nextColor) {
+      const indicator = document.createElement('div');
+      indicator.className = 'overlap-indicator';
+
+      // Parallel color bars on the left (matching event row style)
+      const bars = document.createElement('div');
+      bars.className = 'overlap-bars';
+
+      const bar1 = document.createElement('div');
+      bar1.className = 'overlap-bar';
+      bar1.style.backgroundColor = prevColor;
+      bars.appendChild(bar1);
+
+      const bar2 = document.createElement('div');
+      bar2.className = 'overlap-bar';
+      bar2.style.backgroundColor = nextColor;
+      bars.appendChild(bar2);
+
+      indicator.appendChild(bars);
+
+      // Overlap duration text
+      const text = document.createElement('span');
+      text.className = 'overlap-text';
+      text.textContent = formatOverlapDuration(overlapMinutes);
+      indicator.appendChild(text);
+
+      return indicator;
+    }
+
     function createEventListItem(event, isFocused) {
       const element = document.createElement('div');
       element.className = `event-list-item ${isFocused ? 'focused' : ''}`.trim();
@@ -947,19 +1097,37 @@
         container.appendChild(allDaySection);
       }
 
-      // Timed events
-      for (const event of timedEvents) {
+      // Timed events with overlap detection
+      for (let i = 0; i < timedEvents.length; i++) {
+        const event = timedEvents[i];
+        const prevEvent = i > 0 ? timedEvents[i - 1] : null;
+        const nextEvent = i < timedEvents.length - 1 ? timedEvents[i + 1] : null;
+
+        // Check for overlaps
+        const overlapWithPrev = prevEvent ? eventsOverlap(prevEvent, event) : { overlaps: false, overlapMinutes: 0 };
+        const overlapWithNext = nextEvent ? eventsOverlap(event, nextEvent) : { overlaps: false, overlapMinutes: 0 };
+
         const isFocused = event.id === focusEventId;
         const item = document.createElement('div');
-        item.className = `expanded-event-item ${isFocused ? 'focused' : ''}`.trim();
+
+        // Build class list with overlap states
+        const classes = ['expanded-event-item'];
+        if (isFocused) classes.push('focused');
+        if (overlapWithNext.overlaps) classes.push('overlaps-next');
+        if (overlapWithPrev.overlaps) classes.push('overlapped-by-prev');
+        item.className = classes.join(' ');
+
         item.style.cursor = 'pointer';
         item.setAttribute('role', 'button');
         item.setAttribute('tabindex', '0');
 
-        // Detailed tooltip
+        // Detailed tooltip - include overlap info
         const tooltipParts = [event.summary];
         tooltipParts.push(`${formatTime(event.start)} - ${formatTime(event.end)}`);
         if (event.location) tooltipParts.push(event.location);
+        if (overlapWithPrev.overlaps || overlapWithNext.overlaps) {
+          tooltipParts.push('⚠ Overlaps with another event');
+        }
         tooltipParts.push('Click to open in Google Calendar');
         item.title = tooltipParts.join('\n');
 
@@ -971,10 +1139,23 @@
           }
         });
 
-        // Color indicator
+        // Color indicator - with overlap stripe if overlapping
         const colorBar = document.createElement('div');
+        const eventColor = event.backgroundColor || 'var(--accent-color)';
         colorBar.className = 'event-color-bar';
-        colorBar.style.backgroundColor = event.backgroundColor || 'var(--accent-color)';
+        if (overlapWithNext.overlaps || overlapWithPrev.overlaps) {
+          colorBar.classList.add('has-overlap');
+        }
+        colorBar.style.backgroundColor = eventColor;
+
+        // Add overlap stripe showing the other event's color
+        if (overlapWithNext.overlaps && nextEvent) {
+          const stripe = document.createElement('div');
+          stripe.className = 'overlap-stripe';
+          stripe.style.backgroundColor = nextEvent.backgroundColor || 'var(--accent-color)';
+          colorBar.appendChild(stripe);
+        }
+
         item.appendChild(colorBar);
 
         // Time column - show start and end time
@@ -1007,6 +1188,16 @@
 
         item.appendChild(details);
         container.appendChild(item);
+
+        // Add overlap indicator between this event and the next if they overlap
+        if (overlapWithNext.overlaps && nextEvent) {
+          const indicator = createOverlapIndicator(
+            overlapWithNext.overlapMinutes,
+            eventColor,
+            nextEvent.backgroundColor || 'var(--accent-color)'
+          );
+          container.appendChild(indicator);
+        }
       }
 
       return container;
