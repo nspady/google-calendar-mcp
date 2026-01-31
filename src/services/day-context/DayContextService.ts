@@ -44,13 +44,14 @@ export class DayContextService {
   }
 
   /**
-   * Build the day context for list operations (no focus event).
-   * Used when listing events for a single day.
+   * Common logic for building day context.
+   * Converts events, sorts them, calculates time range, and builds day link.
    */
-  buildDayContextForList(
+  private _buildCommonDayContext(
     events: StructuredEvent[],
     date: string,
-    timezone: string
+    timezone: string,
+    focusEventId: string
   ): DayContext {
     // Convert to day view events
     const dayViewEvents: DayViewEvent[] = events.map(toDayViewEvent);
@@ -68,9 +69,6 @@ export class DayContextService {
     // Build Google Calendar day link
     const dayLink = `https://calendar.google.com/calendar/r/day/${date.replace(/-/g, '/')}`;
 
-    // Use first event as focus, or empty string if no events
-    const focusEventId = dayViewEvents.length > 0 ? dayViewEvents[0].id : '';
-
     return {
       date,
       timezone,
@@ -79,6 +77,21 @@ export class DayContextService {
       timeRange,
       dayLink,
     };
+  }
+
+  /**
+   * Build the day context for list operations (no focus event).
+   * Used when listing events for a single day.
+   */
+  buildDayContextForList(
+    events: StructuredEvent[],
+    date: string,
+    timezone: string
+  ): DayContext {
+    // Use first event as focus, or empty string if no events
+    const focusEventId = events.length > 0 ? events[0].id : '';
+
+    return this._buildCommonDayContext(events, date, timezone, focusEventId);
   }
 
   /**
@@ -104,29 +117,6 @@ export class DayContextService {
     }
     const allEvents = Array.from(eventMap.values());
 
-    // Convert to day view events
-    const dayViewEvents: DayViewEvent[] = allEvents.map(toDayViewEvent);
-
-    // Sort: all-day first, then by start time
-    dayViewEvents.sort((a, b) => {
-      if (a.isAllDay && !b.isAllDay) return -1;
-      if (!a.isAllDay && b.isAllDay) return 1;
-      return a.start.localeCompare(b.start);
-    });
-
-    // Calculate time range
-    const timeRange = this.calculateTimeRange(allEvents);
-
-    // Build Google Calendar day link
-    const dayLink = `https://calendar.google.com/calendar/r/day/${date.replace(/-/g, '/')}`;
-
-    return {
-      date,
-      timezone,
-      events: dayViewEvents,
-      focusEventId: focusEvent.id,
-      timeRange,
-      dayLink,
-    };
+    return this._buildCommonDayContext(allEvents, date, timezone, focusEvent.id);
   }
 }
