@@ -45,6 +45,7 @@ interface MultiDayViewEvent {
   backgroundColor?: string;
   foregroundColor?: string;
   calendarId: string;
+  calendarName?: string;
   accountId?: string;
 }
 
@@ -60,6 +61,16 @@ interface MultiDayContext {
   timeRange?: { start: string; end: string };
   query?: string;
   calendarLink: string;
+}
+
+/**
+ * Calendar summary for collapsed day view
+ */
+interface CalendarSummary {
+  calendarId: string;
+  calendarName: string;
+  backgroundColor: string;
+  count: number;
 }
 
 // DOM element references - Day view
@@ -82,8 +93,11 @@ const multiDayEventsList = document.getElementById('multi-day-events-list') as H
 // Global app instance for opening links (sandboxed iframe requires app.openLink)
 let appInstance: App | null = null;
 
-// Compact/expanded state
+// Compact/expanded state for single-day view
 let isExpanded = false;
+
+// Expanded days state for multi-day view (tracks which dates are expanded)
+let expandedDays: Set<string> = new Set();
 
 // Host context for locale/timezone formatting
 let hostLocale: string | undefined;
@@ -522,6 +536,272 @@ function formatCalendarName(calendarId: string, calendarName?: string): string {
 }
 
 /**
+ * Compute calendar summary for a day's events (for collapsed view)
+ * Groups by account nickname (accountId) for cleaner display
+ */
+function computeCalendarSummary(events: MultiDayViewEvent[]): CalendarSummary[] {
+  const byAccount = new Map<string, CalendarSummary>();
+
+  for (const event of events) {
+    // Use accountId as the grouping key, fall back to calendarId if no account
+    const key = event.accountId || event.calendarId;
+    const existing = byAccount.get(key);
+    if (existing) {
+      existing.count++;
+    } else {
+      byAccount.set(key, {
+        calendarId: event.calendarId,
+        calendarName: event.accountId || formatCalendarName(event.calendarId),
+        backgroundColor: event.backgroundColor || 'var(--accent-color)',
+        count: 1
+      });
+    }
+  }
+
+  return Array.from(byAccount.values());
+}
+
+/**
+ * Calculate time range for a day's events (for expanded time grid view)
+ */
+function calculateDayTimeRange(events: MultiDayViewEvent[]): { startHour: number; endHour: number } {
+  const timedEvents = events.filter(e => !e.isAllDay);
+
+  if (timedEvents.length === 0) {
+    return { startHour: 8, endHour: 18 }; // Default business hours
+  }
+
+  let minHour = 24;
+  let maxHour = 0;
+
+  for (const event of timedEvents) {
+    const start = new Date(event.start);
+    const end = new Date(event.end);
+    minHour = Math.min(minHour, start.getHours());
+    maxHour = Math.max(maxHour, end.getHours() + (end.getMinutes() > 0 ? 1 : 0));
+  }
+
+  // Add padding and clamp
+  return {
+    startHour: Math.max(0, minHour - 1),
+    endHour: Math.min(24, maxHour + 1)
+  };
+}
+
+/**
+ * Calculate event position for multi-day time grid (uses compact row height)
+ */
+function calculateMultiDayEventPosition(
+  event: MultiDayViewEvent,
+  startHour: number,
+  endHour: number
+): { top: string; height: string } {
+  const ROW_HEIGHT = 32; // Compact row height for multi-day expanded view
+
+  const eventStart = new Date(event.start);
+  const eventEnd = new Date(event.end);
+
+  const startHourFloat = eventStart.getHours() + eventStart.getMinutes() / 60;
+  const endHourFloat = eventEnd.getHours() + eventEnd.getMinutes() / 60;
+
+  const clampedStart = Math.max(startHourFloat, startHour);
+  const clampedEnd = Math.min(endHourFloat, endHour);
+
+  const topOffset = (clampedStart - startHour) * ROW_HEIGHT;
+  const height = Math.max((clampedEnd - clampedStart) * ROW_HEIGHT, 24);
+
+  return {
+    top: `${topOffset}px`,
+    height: `${height}px`
+  };
+}
+
+/**
+ * Create a time grid element for an expanded day in multi-day view
+ */
+function createDayTimeGrid(events: MultiDayViewEvent[], focusEventId?: string): HTMLDivElement {
+  const container = document.createElement('div');
+  container.className = 'expanded-day-view';
+
+  const allDayEvents = events.filter(e => e.isAllDay);
+  const timedEvents = events.filter(e => !e.isAllDay);
+  const timeRange = calculateDayTimeRange(events);
+
+  // All-day events section
+  if (allDayEvents.length > 0) {
+    const allDaySection = document.createElement('div');
+    allDaySection.className = 'all-day-section';
+    allDaySection.style.display = 'flex';
+
+    const allDayLabel = document.createElement('div');
+    allDayLabel.className = 'all-day-label';
+    allDayLabel.textContent = 'All day';
+    allDaySection.appendChild(allDayLabel);
+
+    const allDayEventsContainer = document.createElement('div');
+    allDayEventsContainer.className = 'all-day-events';
+
+    for (const event of allDayEvents) {
+      const isFocused = event.id === focusEventId;
+      const element = document.createElement('div');
+      element.className = `all-day-event ${isFocused ? 'focused' : ''}`.trim();
+      element.style.cursor = 'pointer';
+      element.style.backgroundColor = event.backgroundColor || 'var(--accent-color)';
+      element.textContent = event.summary;
+      element.title = 'Click to open in Google Calendar';
+      element.addEventListener('click', () => openLink(event.htmlLink));
+      allDayEventsContainer.appendChild(element);
+    }
+
+    allDaySection.appendChild(allDayEventsContainer);
+    container.appendChild(allDaySection);
+  }
+
+  // Time grid
+  const gridContainer = document.createElement('div');
+  gridContainer.className = 'time-grid';
+  gridContainer.style.position = 'relative';
+
+  // Create time rows
+  for (let hour = timeRange.startHour; hour < timeRange.endHour; hour++) {
+    const row = document.createElement('div');
+    row.className = 'time-row';
+
+    const hourLabel = document.createElement('div');
+    hourLabel.className = 'hour-label';
+    hourLabel.textContent = formatHour(hour);
+    row.appendChild(hourLabel);
+
+    const timeSlot = document.createElement('div');
+    timeSlot.className = 'time-slot';
+    row.appendChild(timeSlot);
+
+    gridContainer.appendChild(row);
+  }
+
+  // Create events container
+  const eventsContainer = document.createElement('div');
+  eventsContainer.style.position = 'absolute';
+  eventsContainer.style.top = '0';
+  eventsContainer.style.left = 'var(--hour-width)';
+  eventsContainer.style.right = '0';
+  eventsContainer.style.bottom = '0';
+  eventsContainer.style.pointerEvents = 'none';
+
+  // Position and add events
+  for (const event of timedEvents) {
+    const isFocused = event.id === focusEventId;
+    const element = document.createElement('div');
+    element.className = `event-block ${isFocused ? 'focused' : ''}`.trim();
+    element.style.cursor = 'pointer';
+    element.style.backgroundColor = event.backgroundColor || 'var(--accent-color)';
+    element.title = 'Click to open in Google Calendar';
+    element.addEventListener('click', () => openLink(event.htmlLink));
+
+    const position = calculateMultiDayEventPosition(event, timeRange.startHour, timeRange.endHour);
+    element.style.top = position.top;
+    element.style.height = position.height;
+    element.style.pointerEvents = 'auto';
+
+    // Event title
+    const titleDiv = document.createElement('div');
+    titleDiv.className = 'event-title';
+    titleDiv.textContent = event.summary;
+    element.appendChild(titleDiv);
+
+    // Event time
+    const timeDiv = document.createElement('div');
+    timeDiv.className = 'event-time';
+    timeDiv.textContent = `${formatTime(event.start)} - ${formatTime(event.end)}`;
+    element.appendChild(timeDiv);
+
+    // Location
+    if (event.location) {
+      const locationDiv = document.createElement('div');
+      locationDiv.className = 'event-location';
+      locationDiv.textContent = event.location;
+      element.appendChild(locationDiv);
+    }
+
+    eventsContainer.appendChild(element);
+  }
+
+  gridContainer.appendChild(eventsContainer);
+  container.appendChild(gridContainer);
+
+  return container;
+}
+
+/**
+ * Create calendar summary element for date header
+ */
+function createCalendarSummary(events: MultiDayViewEvent[]): HTMLDivElement {
+  const summary = computeCalendarSummary(events);
+
+  const container = document.createElement('div');
+  container.className = 'calendar-summary';
+
+  for (const cal of summary) {
+    const item = document.createElement('div');
+    item.className = 'calendar-summary-item';
+
+    const dot = document.createElement('span');
+    dot.className = 'color-dot';
+    dot.style.backgroundColor = cal.backgroundColor;
+    item.appendChild(dot);
+
+    const name = document.createElement('span');
+    name.className = 'calendar-name';
+    name.textContent = cal.calendarName;
+    item.appendChild(name);
+
+    const count = document.createElement('span');
+    count.className = 'calendar-count';
+    count.textContent = `· ${cal.count}`;
+    item.appendChild(count);
+
+    container.appendChild(item);
+  }
+
+  return container;
+}
+
+/**
+ * Toggle expanded state for a day in multi-day view
+ */
+function toggleDayExpanded(dateStr: string): void {
+  const group = document.querySelector(`[data-date="${dateStr}"]`) as HTMLDivElement | null;
+  if (!group) return;
+
+  const header = group.querySelector('.date-header') as HTMLDivElement | null;
+  const eventsContainer = group.querySelector('.date-events') as HTMLDivElement | null;
+
+  if (!header || !eventsContainer) return;
+
+  const isCurrentlyExpanded = expandedDays.has(dateStr);
+
+  if (isCurrentlyExpanded) {
+    expandedDays.delete(dateStr);
+    header.classList.remove('expanded');
+    header.setAttribute('aria-expanded', 'false');
+    eventsContainer.classList.add('collapsed');
+  } else {
+    expandedDays.add(dateStr);
+    header.classList.add('expanded');
+    header.setAttribute('aria-expanded', 'true');
+    eventsContainer.classList.remove('collapsed');
+  }
+
+  // Notify host of size change
+  if (appInstance) {
+    setTimeout(() => {
+      const height = document.documentElement.scrollHeight;
+      appInstance?.sendSizeChanged({ height }).catch(() => {});
+    }, 50);
+  }
+}
+
+/**
  * Create an event list item element for multi-day view
  */
 function createEventListItem(
@@ -602,10 +882,14 @@ function createDateGroup(
 ): HTMLDivElement {
   const group = document.createElement('div');
   group.className = 'date-group';
+  group.setAttribute('data-date', dateStr);
 
-  // Date header
+  // Date header (clickable to expand/collapse)
   const header = document.createElement('div');
   header.className = 'date-header';
+  header.setAttribute('role', 'button');
+  header.setAttribute('tabindex', '0');
+  header.setAttribute('aria-expanded', 'false');
 
   const { day, monthYearDay } = formatMultiDayDate(dateStr);
 
@@ -621,19 +905,46 @@ function createDateGroup(
   dateText.textContent = monthYearDay;
   header.appendChild(dateText);
 
+  // Calendar summary (inline in header)
+  const calendarSummary = createCalendarSummary(events);
+  header.appendChild(calendarSummary);
+
+  // Expand icon (using SVG for the chevron)
+  const expandIcon = document.createElement('div');
+  expandIcon.className = 'date-expand-icon';
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('width', '16');
+  svg.setAttribute('height', '16');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+  polyline.setAttribute('points', '6 9 12 15 18 9');
+  svg.appendChild(polyline);
+  expandIcon.appendChild(svg);
+  header.appendChild(expandIcon);
+
+  // Click handler for expand/collapse
+  header.addEventListener('click', () => {
+    toggleDayExpanded(dateStr);
+  });
+
+  // Keyboard handler
+  header.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleDayExpanded(dateStr);
+    }
+  });
+
   group.appendChild(header);
 
-  // Events list
-  const eventsList = document.createElement('div');
-  eventsList.className = 'date-events';
+  // Day time grid view (starts collapsed)
+  const dayTimeGrid = createDayTimeGrid(events, focusEventId);
+  dayTimeGrid.className = 'date-events collapsed';
 
-  for (const event of events) {
-    const isFocused = event.id === focusEventId;
-    const eventItem = createEventListItem(event, isFocused);
-    eventsList.appendChild(eventItem);
-  }
-
-  group.appendChild(eventsList);
+  group.appendChild(dayTimeGrid);
 
   return group;
 }
@@ -670,6 +981,9 @@ function formatTimeRangeSubheading(context: MultiDayContext): string {
  * Render multi-day view
  */
 function renderMultiDayView(context: MultiDayContext): void {
+  // Reset expanded days state
+  expandedDays.clear();
+
   // Hide day view, show multi-day view
   dayViewContainer.style.display = 'none';
   multiDayViewContainer.style.display = '';

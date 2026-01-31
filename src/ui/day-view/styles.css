@@ -371,6 +371,37 @@ body {
   gap: 8px;
   padding: 8px 0;
   border-bottom: 1px solid var(--bg-tertiary);
+  cursor: pointer;
+  transition: background-color 0.2s;
+  border-radius: var(--border-radius-sm, 4px);
+  margin: 0 -4px;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.date-header:hover {
+  background-color: var(--bg-secondary);
+}
+
+.date-header:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--focus-ring-color);
+}
+
+.date-expand-icon {
+  margin-left: auto;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.date-expand-icon svg {
+  transition: transform 0.2s;
+}
+
+.date-header.expanded .date-expand-icon svg {
+  transform: rotate(180deg);
 }
 
 .date-number {
@@ -396,6 +427,102 @@ body {
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+/* Calendar summary (inline in date header, right aligned) */
+.calendar-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-left: auto;
+  margin-right: 12px;
+  justify-content: flex-end;
+}
+
+.calendar-summary-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-text-xs-size, 12px);
+  color: var(--text-secondary);
+}
+
+.calendar-summary-item .color-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 0;
+}
+
+.calendar-summary-item .calendar-name {
+  font-weight: 500;
+}
+
+.calendar-summary-item .calendar-count {
+  color: var(--text-tertiary);
+}
+
+/* Date events container (hidden when collapsed) */
+.date-events {
+  overflow: hidden;
+  padding-left: 8px;
+}
+
+.date-events.collapsed {
+  display: none;
+}
+
+/* Expanded day view (time grid within multi-day view) */
+.expanded-day-view {
+  margin-top: 8px;
+  border-radius: var(--border-radius-sm, 4px);
+  --row-height: 32px; /* More compact rows */
+}
+
+.expanded-day-view .time-grid {
+  max-height: none;
+}
+
+.expanded-day-view .time-grid::after {
+  display: none;
+}
+
+.expanded-day-view .time-row {
+  min-height: var(--row-height);
+}
+
+.expanded-day-view .time-slot {
+  min-height: var(--row-height);
+}
+
+.expanded-day-view .hour-label {
+  font-size: 10px;
+  transform: translateY(-5px);
+}
+
+.expanded-day-view .event-block {
+  padding: 2px 6px;
+}
+
+.expanded-day-view .event-title {
+  font-size: 11px;
+}
+
+.expanded-day-view .event-time {
+  font-size: 10px;
+}
+
+.expanded-day-view .event-location {
+  display: none; /* Hide location in compact view */
+}
+
+.expanded-day-view .all-day-section {
+  padding: 4px 0;
+  margin-bottom: 4px;
+}
+
+.expanded-day-view .all-day-event {
+  padding: 4px 8px;
+  font-size: 11px;
 }
 
 /* Event list item */
