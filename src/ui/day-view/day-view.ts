@@ -97,6 +97,8 @@ let appInstance: App | null = null;
 let isExpanded = false;
 
 // Expanded days state for multi-day view (tracks which dates are expanded)
+// Maximum number of expanded days to prevent unbounded memory growth
+const MAX_EXPANDED_DAYS = 50;
 let expandedDays: Set<string> = new Set();
 
 // Host context for locale/timezone formatting
@@ -1203,6 +1205,25 @@ function toggleDayExpanded(dateStr: string): void {
     header.setAttribute('aria-expanded', 'false');
     eventsContainer.classList.add('collapsed');
   } else {
+    // Check if we're at the limit before adding
+    if (expandedDays.size >= MAX_EXPANDED_DAYS) {
+      // Remove the oldest entry (first item in Set iteration order)
+      const oldest = Array.from(expandedDays)[0];
+      expandedDays.delete(oldest);
+      // Also collapse the oldest day's UI
+      const oldestGroup = document.querySelector(`[data-date="${oldest}"]`) as HTMLDivElement | null;
+      if (oldestGroup) {
+        const oldestHeader = oldestGroup.querySelector('.date-header') as HTMLDivElement | null;
+        const oldestContainer = oldestGroup.querySelector('.date-events') as HTMLDivElement | null;
+        if (oldestHeader) {
+          oldestHeader.classList.remove('expanded');
+          oldestHeader.setAttribute('aria-expanded', 'false');
+        }
+        if (oldestContainer) {
+          oldestContainer.classList.add('collapsed');
+        }
+      }
+    }
     expandedDays.add(dateStr);
     header.classList.add('expanded');
     header.setAttribute('aria-expanded', 'true');
