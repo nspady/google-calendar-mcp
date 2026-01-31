@@ -587,6 +587,13 @@ body {
   min-width: 0;
 }
 
+.event-item-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
 .event-item-title {
   font-size: var(--font-text-sm-size, 14px);
   font-weight: 500;
@@ -594,6 +601,15 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.event-item-calendar {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .event-item-location {

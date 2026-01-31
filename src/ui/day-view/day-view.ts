@@ -799,10 +799,19 @@ function createOverlapGroup(
 
   const detailsFirst = document.createElement('div');
   detailsFirst.className = 'event-details';
+
+  const titleRowFirst = document.createElement('div');
+  titleRowFirst.className = 'event-item-title-row';
   const titleFirst = document.createElement('div');
   titleFirst.className = 'event-item-title';
   titleFirst.textContent = eventA.summary;
-  detailsFirst.appendChild(titleFirst);
+  titleRowFirst.appendChild(titleFirst);
+  const calFirst = document.createElement('div');
+  calFirst.className = 'event-item-calendar';
+  calFirst.textContent = formatCalendarName(eventA.calendarId, eventA.calendarName);
+  titleRowFirst.appendChild(calFirst);
+  detailsFirst.appendChild(titleRowFirst);
+
   if (eventA.location) {
     const locFirst = document.createElement('div');
     locFirst.className = 'event-item-location';
@@ -892,10 +901,19 @@ function createOverlapGroup(
 
   const detailsSecond = document.createElement('div');
   detailsSecond.className = 'event-details';
+
+  const titleRowSecond = document.createElement('div');
+  titleRowSecond.className = 'event-item-title-row';
   const titleSecond = document.createElement('div');
   titleSecond.className = 'event-item-title';
   titleSecond.textContent = eventB.summary;
-  detailsSecond.appendChild(titleSecond);
+  titleRowSecond.appendChild(titleSecond);
+  const calSecond = document.createElement('div');
+  calSecond.className = 'event-item-calendar';
+  calSecond.textContent = formatCalendarName(eventB.calendarId, eventB.calendarName);
+  titleRowSecond.appendChild(calSecond);
+  detailsSecond.appendChild(titleRowSecond);
+
   if (eventB.location) {
     const locSecond = document.createElement('div');
     locSecond.className = 'event-item-location';
@@ -1101,10 +1119,21 @@ function createDayEventList(events: MultiDayViewEvent[], focusEventId?: string):
     const details = document.createElement('div');
     details.className = 'event-details';
 
+    // Title row with calendar label inline
+    const titleRow = document.createElement('div');
+    titleRow.className = 'event-item-title-row';
+
     const title = document.createElement('div');
     title.className = 'event-item-title';
     title.textContent = event.summary;
-    details.appendChild(title);
+    titleRow.appendChild(title);
+
+    const calendarLabel = document.createElement('div');
+    calendarLabel.className = 'event-item-calendar';
+    calendarLabel.textContent = formatCalendarName(event.calendarId, event.calendarName);
+    titleRow.appendChild(calendarLabel);
+
+    details.appendChild(titleRow);
 
     if (event.location) {
       const location = document.createElement('div');
