@@ -575,4 +575,239 @@ describe('SearchEventsHandler', () => {
       }, multiAccounts)).rejects.toThrow('None of the requested calendars could be found');
     });
   });
+
+  describe('Multi-Day Context', () => {
+    it('should include multiDayContext in response with search results', async () => {
+      const mockEvents = [
+        {
+          id: 'event1',
+          summary: 'Team Meeting',
+          start: { dateTime: '2025-01-15T10:00:00Z' },
+          end: { dateTime: '2025-01-15T11:00:00Z' },
+          htmlLink: 'https://calendar.google.com/event?eid=event1'
+        },
+        {
+          id: 'event2',
+          summary: 'Team Planning',
+          start: { dateTime: '2025-01-16T14:00:00Z' },
+          end: { dateTime: '2025-01-16T15:00:00Z' },
+          htmlLink: 'https://calendar.google.com/event?eid=event2'
+        }
+      ];
+
+      mockCalendar.events.list.mockResolvedValue({ data: { items: mockEvents } });
+
+      const args = {
+        calendarId: 'primary',
+        query: 'Team',
+        timeMin: '2025-01-01T00:00:00',
+        timeMax: '2025-01-31T23:59:59'
+      };
+
+      const result = await handler.runTool(args, mockAccounts);
+      const response = JSON.parse(result.content[0].text);
+
+      expect(response.multiDayContext).toBeDefined();
+      expect(response.multiDayContext.totalEventCount).toBe(2);
+      expect(response.multiDayContext.query).toBe('Team');
+      expect(response.multiDayContext.dates).toBeDefined();
+      expect(response.multiDayContext.eventsByDate).toBeDefined();
+      expect(response.multiDayContext.timezone).toBeDefined();
+      expect(response.multiDayContext.calendarLink).toBeDefined();
+    });
+
+    it('should include multiDayContext even when no events found', async () => {
+      mockCalendar.events.list.mockResolvedValue({ data: { items: [] } });
+
+      const args = {
+        calendarId: 'primary',
+        query: 'NonexistentEvent',
+        timeMin: '2025-01-01T00:00:00',
+        timeMax: '2025-01-31T23:59:59'
+      };
+
+      const result = await handler.runTool(args, mockAccounts);
+      const response = JSON.parse(result.content[0].text);
+
+      expect(response.multiDayContext).toBeDefined();
+      expect(response.multiDayContext.totalEventCount).toBe(0);
+      expect(response.multiDayContext.dates).toEqual([]);
+      expect(response.multiDayContext.eventsByDate).toEqual({});
+      expect(response.multiDayContext.query).toBe('NonexistentEvent');
+    });
+
+    it('should include query in multiDayContext', async () => {
+      mockCalendar.events.list.mockResolvedValue({ data: { items: [] } });
+
+      const args = {
+        calendarId: 'primary',
+        query: 'Important Meeting'
+      };
+
+      const result = await handler.runTool(args, mockAccounts);
+      const response = JSON.parse(result.content[0].text);
+
+      expect(response.multiDayContext).toBeDefined();
+      expect(response.multiDayContext.query).toBe('Important Meeting');
+    });
+
+    it('should include timeRange in multiDayContext when provided', async () => {
+      mockCalendar.events.list.mockResolvedValue({ data: { items: [] } });
+
+      const args = {
+        calendarId: 'primary',
+        query: 'Meeting',
+        timeMin: '2025-01-01T00:00:00',
+        timeMax: '2025-01-31T23:59:59'
+      };
+
+      const result = await handler.runTool(args, mockAccounts);
+      const response = JSON.parse(result.content[0].text);
+
+      expect(response.multiDayContext).toBeDefined();
+      expect(response.multiDayContext.timeRange).toBeDefined();
+      expect(response.multiDayContext.timeRange.start).toBe('2025-01-01T00:00:00Z');
+      expect(response.multiDayContext.timeRange.end).toBe('2025-01-31T23:59:59Z');
+    });
+
+    it('should use provided timezone in multiDayContext', async () => {
+      mockCalendar.events.list.mockResolvedValue({ data: { items: [] } });
+
+      const args = {
+        calendarId: 'primary',
+        query: 'Meeting',
+        timeZone: 'Europe/London'
+      };
+
+      const result = await handler.runTool(args, mockAccounts);
+      const response = JSON.parse(result.content[0].text);
+
+      expect(response.multiDayContext).toBeDefined();
+      expect(response.multiDayContext.timezone).toBe('Europe/London');
+    });
+
+    it('should fallback to first event timezone when timeZone not provided', async () => {
+      const mockEvents = [
+        {
+          id: 'event1',
+          summary: 'Meeting',
+          start: { dateTime: '2025-01-15T10:00:00Z', timeZone: 'Asia/Tokyo' },
+          end: { dateTime: '2025-01-15T11:00:00Z', timeZone: 'Asia/Tokyo' },
+          htmlLink: 'https://calendar.google.com/event?eid=event1'
+        }
+      ];
+
+      mockCalendar.events.list.mockResolvedValue({ data: { items: mockEvents } });
+
+      const args = {
+        calendarId: 'primary',
+        query: 'Meeting'
+        // No timeZone specified
+      };
+
+      const result = await handler.runTool(args, mockAccounts);
+      const response = JSON.parse(result.content[0].text);
+
+      expect(response.multiDayContext).toBeDefined();
+      // Should use event's timezone or fall back to calendar timezone
+      expect(response.multiDayContext.timezone).toBeDefined();
+    });
+
+    it('should fallback to UTC when no timezone available', async () => {
+      const mockEvents = [
+        {
+          id: 'event1',
+          summary: 'Meeting',
+          start: { dateTime: '2025-01-15T10:00:00Z' },
+          end: { dateTime: '2025-01-15T11:00:00Z' },
+          htmlLink: 'https://calendar.google.com/event?eid=event1'
+          // No timeZone in event
+        }
+      ];
+
+      mockCalendar.events.list.mockResolvedValue({ data: { items: mockEvents } });
+
+      // Mock getCalendarTimezone to return undefined (simulating failure)
+      vi.spyOn(handler as any, 'getCalendarTimezone').mockResolvedValue(undefined);
+
+      const args = {
+        calendarId: 'primary',
+        query: 'Meeting'
+        // No timeZone specified
+      };
+
+      const result = await handler.runTool(args, mockAccounts);
+      const response = JSON.parse(result.content[0].text);
+
+      expect(response.multiDayContext).toBeDefined();
+      // Should fallback to UTC when no timezone available
+      expect(response.multiDayContext.timezone).toBe('UTC');
+    });
+
+    it('should handle empty search results with valid multiDayContext structure', async () => {
+      mockCalendar.events.list.mockResolvedValue({ data: { items: [] } });
+
+      const args = {
+        calendarId: 'primary',
+        query: 'NonexistentEvent'
+      };
+
+      const result = await handler.runTool(args, mockAccounts);
+      const response = JSON.parse(result.content[0].text);
+
+      expect(response.multiDayContext).toBeDefined();
+      expect(response.multiDayContext.totalEventCount).toBe(0);
+      expect(response.multiDayContext.dates).toEqual([]);
+      expect(response.multiDayContext.eventsByDate).toEqual({});
+      expect(Array.isArray(response.multiDayContext.dates)).toBe(true);
+      expect(typeof response.multiDayContext.eventsByDate).toBe('object');
+    });
+
+    it('should group events by date in multiDayContext', async () => {
+      const mockEvents = [
+        {
+          id: 'event1',
+          summary: 'Morning Meeting',
+          start: { dateTime: '2025-01-15T09:00:00Z' },
+          end: { dateTime: '2025-01-15T10:00:00Z' },
+          htmlLink: 'https://calendar.google.com/event?eid=event1'
+        },
+        {
+          id: 'event2',
+          summary: 'Afternoon Meeting',
+          start: { dateTime: '2025-01-15T14:00:00Z' },
+          end: { dateTime: '2025-01-15T15:00:00Z' },
+          htmlLink: 'https://calendar.google.com/event?eid=event2'
+        },
+        {
+          id: 'event3',
+          summary: 'Next Day Meeting',
+          start: { dateTime: '2025-01-16T10:00:00Z' },
+          end: { dateTime: '2025-01-16T11:00:00Z' },
+          htmlLink: 'https://calendar.google.com/event?eid=event3'
+        }
+      ];
+
+      mockCalendar.events.list.mockResolvedValue({ data: { items: mockEvents } });
+
+      const args = {
+        calendarId: 'primary',
+        query: 'Meeting'
+      };
+
+      const result = await handler.runTool(args, mockAccounts);
+      const response = JSON.parse(result.content[0].text);
+
+      expect(response.multiDayContext).toBeDefined();
+      expect(response.multiDayContext.dates.length).toBeGreaterThan(0);
+      expect(Object.keys(response.multiDayContext.eventsByDate).length).toBeGreaterThan(0);
+
+      // Should have dates sorted (dates are strings in YYYY-MM-DD format, can use string comparison)
+      const dates = response.multiDayContext.dates;
+      if (dates.length > 1) {
+        // String comparison works for YYYY-MM-DD format
+        expect(dates[0] <= dates[dates.length - 1]).toBe(true);
+      }
+    });
+  });
 });
