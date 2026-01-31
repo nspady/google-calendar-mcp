@@ -696,6 +696,52 @@ function formatOverlapDuration(minutes: number): string {
 }
 
 /**
+ * Calculate event duration in minutes
+ */
+function getEventDurationMinutes(event: MultiDayViewEvent): number {
+  const start = new Date(event.start).getTime();
+  const end = new Date(event.end).getTime();
+  return Math.round((end - start) / (1000 * 60));
+}
+
+/**
+ * Calculate proportional height for event based on duration
+ * Min: 30 minutes = 44px (base height)
+ * Max: 180 minutes (3 hours) = 120px
+ * Scale linearly between those values
+ */
+function calculateEventHeight(durationMinutes: number): { height: number; continues: boolean } {
+  const MIN_DURATION = 30;  // 30 minutes
+  const MAX_DURATION = 180; // 3 hours
+  const MIN_HEIGHT = 44;    // pixels
+  const MAX_HEIGHT = 120;   // pixels
+
+  const continues = durationMinutes > MAX_DURATION;
+  const clampedDuration = Math.min(Math.max(durationMinutes, MIN_DURATION), MAX_DURATION);
+
+  // Linear interpolation
+  const ratio = (clampedDuration - MIN_DURATION) / (MAX_DURATION - MIN_DURATION);
+  const height = MIN_HEIGHT + ratio * (MAX_HEIGHT - MIN_HEIGHT);
+
+  return { height: Math.round(height), continues };
+}
+
+/**
+ * Format duration for display (e.g., "2h 30m")
+ */
+function formatDuration(minutes: number): string {
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (mins === 0) {
+    return `${hours}h`;
+  }
+  return `${hours}h ${mins}m`;
+}
+
+/**
  * Create overlap indicator element with parallel color bars
  */
 function createOverlapIndicator(overlapMinutes: number, prevColor: string, nextColor: string): HTMLDivElement {
@@ -809,7 +855,7 @@ function createDayEventList(events: MultiDayViewEvent[], focusEventId?: string):
     container.appendChild(allDaySection);
   }
 
-  // Timed events with overlap detection
+  // Timed events with overlap detection and proportional heights
   for (let i = 0; i < timedEvents.length; i++) {
     const event = timedEvents[i];
     const prevEvent = i > 0 ? timedEvents[i - 1] : null;
@@ -819,6 +865,10 @@ function createDayEventList(events: MultiDayViewEvent[], focusEventId?: string):
     const overlapWithPrev = prevEvent ? eventsOverlap(prevEvent, event) : { overlaps: false, overlapMinutes: 0 };
     const overlapWithNext = nextEvent ? eventsOverlap(event, nextEvent) : { overlaps: false, overlapMinutes: 0 };
 
+    // Calculate proportional height based on duration
+    const durationMinutes = getEventDurationMinutes(event);
+    const { height, continues } = calculateEventHeight(durationMinutes);
+
     const isFocused = event.id === focusEventId;
     const item = document.createElement('div');
 
@@ -827,15 +877,19 @@ function createDayEventList(events: MultiDayViewEvent[], focusEventId?: string):
     if (isFocused) classes.push('focused');
     if (overlapWithNext.overlaps) classes.push('overlaps-next');
     if (overlapWithPrev.overlaps) classes.push('overlapped-by-prev');
+    if (continues) classes.push('event-continues-row');
     item.className = classes.join(' ');
+
+    // Apply proportional height
+    item.style.minHeight = `${height}px`;
 
     item.style.cursor = 'pointer';
     item.setAttribute('role', 'button');
     item.setAttribute('tabindex', '0');
 
-    // Detailed tooltip - include overlap info
+    // Detailed tooltip - include overlap and duration info
     const tooltipParts = [event.summary];
-    tooltipParts.push(`${formatTime(event.start)} - ${formatTime(event.end)}`);
+    tooltipParts.push(`${formatTime(event.start)} - ${formatTime(event.end)} (${formatDuration(durationMinutes)})`);
     if (event.location) tooltipParts.push(event.location);
     if (overlapWithPrev.overlaps || overlapWithNext.overlaps) {
       tooltipParts.push('⚠ Overlaps with another event');
@@ -851,21 +905,25 @@ function createDayEventList(events: MultiDayViewEvent[], focusEventId?: string):
       }
     });
 
-    // Color indicator - with overlap stripe if overlapping
+    // Color indicator bar
     const colorBar = document.createElement('div');
     const eventColor = event.backgroundColor || 'var(--accent-color)';
     colorBar.className = 'event-color-bar';
-    if (overlapWithNext.overlaps || overlapWithPrev.overlaps) {
-      colorBar.classList.add('has-overlap');
-    }
     colorBar.style.backgroundColor = eventColor;
 
-    // Add overlap stripe showing the other event's color
-    if (overlapWithNext.overlaps && nextEvent) {
-      const stripe = document.createElement('div');
-      stripe.className = 'overlap-stripe';
-      stripe.style.backgroundColor = nextEvent.backgroundColor || 'var(--accent-color)';
-      colorBar.appendChild(stripe);
+    // Add "continues" indicator for events longer than 3 hours
+    if (continues) {
+      colorBar.classList.add('event-continues');
+      // Add dashes below the bar
+      const dashes = document.createElement('div');
+      dashes.className = 'event-continues-dashes';
+      for (let d = 0; d < 2; d++) {
+        const dash = document.createElement('div');
+        dash.className = 'dash';
+        dash.style.backgroundColor = eventColor;
+        dashes.appendChild(dash);
+      }
+      colorBar.appendChild(dashes);
     }
 
     item.appendChild(colorBar);
@@ -880,6 +938,13 @@ function createDayEventList(events: MultiDayViewEvent[], focusEventId?: string):
     endTime.className = 'event-end-time';
     endTime.textContent = formatTime(event.end);
     timeCol.appendChild(endTime);
+    // Show duration for long events
+    if (continues) {
+      const durationLabel = document.createElement('div');
+      durationLabel.className = 'event-duration-label';
+      durationLabel.textContent = formatDuration(durationMinutes);
+      timeCol.appendChild(durationLabel);
+    }
     item.appendChild(timeCol);
 
     // Event details

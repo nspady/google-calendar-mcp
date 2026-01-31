@@ -423,6 +423,48 @@
           });
         }
 
+        // PROPORTIONAL HEIGHT DEMO - events of varying duration on day 2
+        if (i === 2) {
+          // Short event: 15 min (will show at minimum height)
+          eventsByDate[dateStr].push({
+            id: `short-${i}`,
+            summary: 'Quick check-in',
+            start: `${dateStr}T10:00:00`,
+            end: `${dateStr}T10:15:00`,
+            isAllDay: false,
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#33b679' : undefined, // Sage
+            calendarId: 'primary',
+            accountId: 'work'
+          });
+          // Medium event: 1.5 hours
+          eventsByDate[dateStr].push({
+            id: `medium-${i}`,
+            summary: 'Design Workshop',
+            start: `${dateStr}T10:30:00`,
+            end: `${dateStr}T12:00:00`,
+            isAllDay: false,
+            location: 'Design Lab',
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#8e24aa' : undefined, // Grape
+            calendarId: 'primary',
+            accountId: 'work'
+          });
+          // Long event: 4 hours (will show "continues" indicator)
+          eventsByDate[dateStr].push({
+            id: `long-${i}`,
+            summary: 'All-hands Meeting + Q&A',
+            start: `${dateStr}T13:00:00`,
+            end: `${dateStr}T17:00:00`,
+            isAllDay: false,
+            location: 'Main Auditorium',
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#d50000' : undefined, // Tomato
+            calendarId: 'primary',
+            accountId: 'work'
+          });
+        }
+
         // Personal events
         eventsByDate[dateStr].push({
           id: `personal-${i}`,
@@ -895,6 +937,40 @@
       return `${hours}h ${mins}m overlap`;
     }
 
+    // Duration and proportional height helpers
+    function getEventDurationMinutes(event) {
+      const start = new Date(event.start).getTime();
+      const end = new Date(event.end).getTime();
+      return Math.round((end - start) / (1000 * 60));
+    }
+
+    function calculateEventHeight(durationMinutes) {
+      const MIN_DURATION = 30;  // 30 minutes
+      const MAX_DURATION = 180; // 3 hours
+      const MIN_HEIGHT = 44;    // pixels
+      const MAX_HEIGHT = 120;   // pixels
+
+      const continues = durationMinutes > MAX_DURATION;
+      const clampedDuration = Math.min(Math.max(durationMinutes, MIN_DURATION), MAX_DURATION);
+
+      const ratio = (clampedDuration - MIN_DURATION) / (MAX_DURATION - MIN_DURATION);
+      const height = MIN_HEIGHT + ratio * (MAX_HEIGHT - MIN_HEIGHT);
+
+      return { height: Math.round(height), continues };
+    }
+
+    function formatDuration(minutes) {
+      if (minutes < 60) {
+        return `${minutes}m`;
+      }
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      if (mins === 0) {
+        return `${hours}h`;
+      }
+      return `${hours}h ${mins}m`;
+    }
+
     function createOverlapIndicator(overlapMinutes, prevColor, nextColor) {
       const indicator = document.createElement('div');
       indicator.className = 'overlap-indicator';
@@ -1097,7 +1173,7 @@
         container.appendChild(allDaySection);
       }
 
-      // Timed events with overlap detection
+      // Timed events with overlap detection and proportional heights
       for (let i = 0; i < timedEvents.length; i++) {
         const event = timedEvents[i];
         const prevEvent = i > 0 ? timedEvents[i - 1] : null;
@@ -1107,6 +1183,10 @@
         const overlapWithPrev = prevEvent ? eventsOverlap(prevEvent, event) : { overlaps: false, overlapMinutes: 0 };
         const overlapWithNext = nextEvent ? eventsOverlap(event, nextEvent) : { overlaps: false, overlapMinutes: 0 };
 
+        // Calculate proportional height based on duration
+        const durationMinutes = getEventDurationMinutes(event);
+        const { height, continues } = calculateEventHeight(durationMinutes);
+
         const isFocused = event.id === focusEventId;
         const item = document.createElement('div');
 
@@ -1115,15 +1195,19 @@
         if (isFocused) classes.push('focused');
         if (overlapWithNext.overlaps) classes.push('overlaps-next');
         if (overlapWithPrev.overlaps) classes.push('overlapped-by-prev');
+        if (continues) classes.push('event-continues-row');
         item.className = classes.join(' ');
+
+        // Apply proportional height
+        item.style.minHeight = `${height}px`;
 
         item.style.cursor = 'pointer';
         item.setAttribute('role', 'button');
         item.setAttribute('tabindex', '0');
 
-        // Detailed tooltip - include overlap info
+        // Detailed tooltip - include overlap and duration info
         const tooltipParts = [event.summary];
-        tooltipParts.push(`${formatTime(event.start)} - ${formatTime(event.end)}`);
+        tooltipParts.push(`${formatTime(event.start)} - ${formatTime(event.end)} (${formatDuration(durationMinutes)})`);
         if (event.location) tooltipParts.push(event.location);
         if (overlapWithPrev.overlaps || overlapWithNext.overlaps) {
           tooltipParts.push('⚠ Overlaps with another event');
@@ -1139,21 +1223,25 @@
           }
         });
 
-        // Color indicator - with overlap stripe if overlapping
+        // Color indicator bar
         const colorBar = document.createElement('div');
         const eventColor = event.backgroundColor || 'var(--accent-color)';
         colorBar.className = 'event-color-bar';
-        if (overlapWithNext.overlaps || overlapWithPrev.overlaps) {
-          colorBar.classList.add('has-overlap');
-        }
         colorBar.style.backgroundColor = eventColor;
 
-        // Add overlap stripe showing the other event's color
-        if (overlapWithNext.overlaps && nextEvent) {
-          const stripe = document.createElement('div');
-          stripe.className = 'overlap-stripe';
-          stripe.style.backgroundColor = nextEvent.backgroundColor || 'var(--accent-color)';
-          colorBar.appendChild(stripe);
+        // Add "continues" indicator for events longer than 3 hours
+        if (continues) {
+          colorBar.classList.add('event-continues');
+          // Add dashes below the bar
+          const dashes = document.createElement('div');
+          dashes.className = 'event-continues-dashes';
+          for (let d = 0; d < 2; d++) {
+            const dash = document.createElement('div');
+            dash.className = 'dash';
+            dash.style.backgroundColor = eventColor;
+            dashes.appendChild(dash);
+          }
+          colorBar.appendChild(dashes);
         }
 
         item.appendChild(colorBar);
@@ -1168,6 +1256,13 @@
         endTime.className = 'event-end-time';
         endTime.textContent = formatTime(event.end);
         timeCol.appendChild(endTime);
+        // Show duration for long events
+        if (continues) {
+          const durationLabel = document.createElement('div');
+          durationLabel.className = 'event-duration-label';
+          durationLabel.textContent = formatDuration(durationMinutes);
+          timeCol.appendChild(durationLabel);
+        }
         item.appendChild(timeCol);
 
         // Event details

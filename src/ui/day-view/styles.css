@@ -513,11 +513,20 @@ body {
 
 .expanded-event-item {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 12px;
   padding: 6px 8px;
+  min-height: 44px;
   border-radius: var(--border-radius-sm, 4px);
   transition: background-color 0.15s;
+}
+
+/* Content alignment when using stretch */
+.expanded-event-item .event-time-col,
+.expanded-event-item .event-details {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .expanded-event-item:hover {
@@ -536,9 +545,9 @@ body {
 
 .event-color-bar {
   width: 4px;
-  height: 32px;
   border-radius: 2px;
   flex-shrink: 0;
+  align-self: stretch;
 }
 
 .event-time-col {
@@ -636,6 +645,43 @@ body {
 
 .expanded-event-item.overlapped-by-prev {
   padding-top: 2px;
+}
+
+/* Extra margin for events that continue (to show dashes) */
+.expanded-event-item.event-continues-row {
+  margin-bottom: 12px;
+}
+
+/* Long event indicator - shows event continues beyond displayed height */
+.event-color-bar.event-continues {
+  position: relative;
+  border-radius: 2px 2px 0 0;
+  overflow: visible;
+}
+
+/* Dashed continuation indicator - child element added via JS */
+.event-continues-dashes {
+  position: absolute;
+  bottom: -14px;
+  left: 0;
+  width: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.event-continues-dashes .dash {
+  width: 4px;
+  height: 4px;
+  border-radius: 1px;
+  opacity: 0.7;
+}
+
+/* Duration label for long events */
+.event-duration-label {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
 }
 
 /* Event list item */
