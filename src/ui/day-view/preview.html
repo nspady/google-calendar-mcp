@@ -207,6 +207,13 @@
       };
     }
 
+    // Helper to get next day (for all-day event exclusive end dates)
+    function nextDay(dateStr) {
+      const date = new Date(dateStr + 'T00:00:00');
+      date.setDate(date.getDate() + 1);
+      return date.toISOString().split('T')[0];
+    }
+
     // Sample multi-day context for preview
     function getSampleMultiDayContext(options = {}) {
       const today = new Date();
@@ -221,19 +228,61 @@
         dates.push(dateStr);
         eventsByDate[dateStr] = [];
 
-        // Add all-day event on first day (personal account)
+        // Add single-day all-day event on first day
         if (i === 0 && options.showAllDay !== false) {
           eventsByDate[dateStr].push({
-            id: `allday-${i}`,
-            summary: 'Team offsite',
+            id: `allday-single-${i}`,
+            summary: 'Company Holiday',
             start: dateStr,
-            end: dateStr,
+            end: nextDay(dateStr), // All-day events have exclusive end date
             isAllDay: true,
             htmlLink: 'https://calendar.google.com',
             backgroundColor: options.useColors ? '#e67c73' : undefined,
             calendarId: 'primary',
             accountId: 'personal'
           });
+        }
+
+        // Add multi-day all-day event spanning days 1-3
+        if (i >= 1 && i <= 3 && options.showAllDay !== false) {
+          // Only add once on day 1, but it will appear on days 1, 2, 3
+          if (i === 1) {
+            const multiDayStart = dateStr;
+            const multiDayEndDate = new Date(date);
+            multiDayEndDate.setDate(multiDayEndDate.getDate() + 3); // 3 days later (exclusive end)
+            const multiDayEnd = multiDayEndDate.toISOString().split('T')[0];
+
+            // Add to all days it spans
+            eventsByDate[dateStr].push({
+              id: 'allday-multi',
+              summary: 'Team Retreat',
+              start: multiDayStart,
+              end: multiDayEnd,
+              isAllDay: true,
+              htmlLink: 'https://calendar.google.com',
+              backgroundColor: options.useColors ? '#7986cb' : undefined,
+              calendarId: 'primary',
+              accountId: 'work'
+            });
+          } else {
+            // Add reference to same event on subsequent days
+            const multiDayStart = dates[1]; // Day 1
+            const multiDayEndDate = new Date(dates[1] + 'T00:00:00');
+            multiDayEndDate.setDate(multiDayEndDate.getDate() + 3);
+            const multiDayEnd = multiDayEndDate.toISOString().split('T')[0];
+
+            eventsByDate[dateStr].push({
+              id: 'allday-multi',
+              summary: 'Team Retreat',
+              start: multiDayStart,
+              end: multiDayEnd,
+              isAllDay: true,
+              htmlLink: 'https://calendar.google.com',
+              backgroundColor: options.useColors ? '#7986cb' : undefined,
+              calendarId: 'primary',
+              accountId: 'work'
+            });
+          }
         }
 
         // Morning event (work account)
@@ -493,6 +542,24 @@
       });
     }
 
+    function formatAllDayRange(startStr, endStr) {
+      const start = new Date(startStr);
+      const end = new Date(endStr);
+      // All-day events: end is exclusive, subtract 1 day for display
+      const actualEnd = new Date(end);
+      actualEnd.setDate(actualEnd.getDate() - 1);
+
+      const formatOptions = { month: 'short', day: 'numeric' };
+      const startFormatted = start.toLocaleDateString(hostLocale, formatOptions);
+
+      if (start.toDateString() === actualEnd.toDateString()) {
+        return { text: 'All day', dateRange: startFormatted, isMultiDay: false };
+      }
+
+      const endFormatted = actualEnd.toLocaleDateString(hostLocale, formatOptions);
+      return { text: 'All day', dateRange: `${startFormatted}–${endFormatted}`, isMultiDay: true };
+    }
+
     function getEventColorClass(colorId) {
       if (!colorId) return '';
       const num = parseInt(colorId, 10);
@@ -537,7 +604,14 @@
       element.style.cursor = 'pointer';
       element.setAttribute('role', 'button');
       element.setAttribute('tabindex', '0');
-      element.title = 'Click to open in Google Calendar';
+      // Detailed tooltip
+      const tooltipParts = [event.summary];
+      if (!isAllDay) {
+        tooltipParts.push(`${formatTime(event.start)} - ${formatTime(event.end)}`);
+      }
+      if (event.location) tooltipParts.push(event.location);
+      tooltipParts.push('Click to open in Google Calendar');
+      element.title = tooltipParts.join('\n');
       element.addEventListener('click', () => openLink(event.htmlLink));
 
       const colorClass = getEventColorClass(event.colorId);
@@ -548,15 +622,21 @@
       } else {
         element.className = `event-block ${colorClass} ${isFocused ? 'focused' : ''}`.trim();
 
+        // Content wrapper for horizontal layout
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'event-content';
+
         const titleDiv = document.createElement('div');
         titleDiv.className = 'event-title';
         titleDiv.textContent = event.summary;
-        element.appendChild(titleDiv);
+        contentDiv.appendChild(titleDiv);
 
         const timeDiv = document.createElement('div');
         timeDiv.className = 'event-time';
         timeDiv.textContent = `${formatTime(event.start)} - ${formatTime(event.end)}`;
-        element.appendChild(timeDiv);
+        contentDiv.appendChild(timeDiv);
+
+        element.appendChild(contentDiv);
 
         if (event.location) {
           const locationDiv = document.createElement('div');
@@ -700,7 +780,16 @@
       element.style.cursor = 'pointer';
       element.setAttribute('role', 'button');
       element.setAttribute('tabindex', '0');
-      element.title = 'Click to open in Google Calendar';
+      // Detailed tooltip
+      const tooltipParts = [event.summary];
+      if (event.isAllDay) {
+        tooltipParts.push('All day');
+      } else {
+        tooltipParts.push(`${formatTime(event.start)} - ${formatTime(event.end)}`);
+      }
+      if (event.location) tooltipParts.push(event.location);
+      tooltipParts.push('Click to open in Google Calendar');
+      element.title = tooltipParts.join('\n');
       element.addEventListener('click', () => openLink(event.htmlLink));
 
       // Color dot
@@ -779,109 +868,146 @@
       return { top: `${topOffset}px`, height: `${height}px` };
     }
 
-    function createDayTimeGrid(events, focusEventId) {
+    function createDayEventList(events, focusEventId) {
       const container = document.createElement('div');
-      container.className = 'expanded-day-view';
+      container.className = 'expanded-day-list';
 
       const allDayEvents = events.filter(e => e.isAllDay);
-      const timedEvents = events.filter(e => !e.isAllDay);
-      const timeRange = calculateDayTimeRange(events);
+      const timedEvents = events.filter(e => !e.isAllDay).sort(
+        (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
+      );
 
       // All-day events section
       if (allDayEvents.length > 0) {
         const allDaySection = document.createElement('div');
-        allDaySection.className = 'all-day-section';
-        allDaySection.style.display = 'flex';
+        allDaySection.className = 'all-day-list-section';
 
         const allDayLabel = document.createElement('div');
-        allDayLabel.className = 'all-day-label';
+        allDayLabel.className = 'all-day-list-label';
         allDayLabel.textContent = 'All day';
         allDaySection.appendChild(allDayLabel);
 
-        const allDayEventsContainer = document.createElement('div');
-        allDayEventsContainer.className = 'all-day-events';
-
         for (const event of allDayEvents) {
           const isFocused = event.id === focusEventId;
-          const element = document.createElement('div');
-          element.className = `all-day-event ${isFocused ? 'focused' : ''}`.trim();
-          element.style.cursor = 'pointer';
-          element.style.backgroundColor = event.backgroundColor || 'var(--accent-color)';
-          element.textContent = event.summary;
-          element.title = 'Click to open in Google Calendar';
-          element.addEventListener('click', () => openLink(event.htmlLink));
-          allDayEventsContainer.appendChild(element);
+          const allDayRange = formatAllDayRange(event.start, event.end);
+
+          const item = document.createElement('div');
+          item.className = `expanded-event-item ${isFocused ? 'focused' : ''}`.trim();
+          item.style.cursor = 'pointer';
+          item.setAttribute('role', 'button');
+          item.setAttribute('tabindex', '0');
+
+          // Tooltip
+          const tooltipParts = [event.summary];
+          tooltipParts.push(allDayRange.dateRange ? `All day (${allDayRange.dateRange})` : 'All day');
+          if (event.location) tooltipParts.push(event.location);
+          tooltipParts.push('Click to open in Google Calendar');
+          item.title = tooltipParts.join('\n');
+
+          item.addEventListener('click', () => openLink(event.htmlLink));
+          item.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              openLink(event.htmlLink);
+            }
+          });
+
+          // Color bar
+          const colorBar = document.createElement('div');
+          colorBar.className = 'event-color-bar';
+          colorBar.style.backgroundColor = event.backgroundColor || 'var(--accent-color)';
+          item.appendChild(colorBar);
+
+          // Time column - show date or date range
+          const timeCol = document.createElement('div');
+          timeCol.className = 'event-time-col';
+          timeCol.textContent = allDayRange.dateRange;
+          item.appendChild(timeCol);
+
+          // Event details
+          const details = document.createElement('div');
+          details.className = 'event-details';
+
+          const title = document.createElement('div');
+          title.className = 'event-item-title';
+          title.textContent = event.summary;
+          details.appendChild(title);
+
+          if (event.location) {
+            const location = document.createElement('div');
+            location.className = 'event-item-location';
+            location.textContent = event.location;
+            details.appendChild(location);
+          }
+
+          item.appendChild(details);
+          allDaySection.appendChild(item);
         }
 
-        allDaySection.appendChild(allDayEventsContainer);
         container.appendChild(allDaySection);
       }
 
-      // Time grid
-      const gridContainer = document.createElement('div');
-      gridContainer.className = 'time-grid';
-      gridContainer.style.position = 'relative';
-
-      for (let hour = timeRange.startHour; hour < timeRange.endHour; hour++) {
-        const row = document.createElement('div');
-        row.className = 'time-row';
-
-        const hourLabel = document.createElement('div');
-        hourLabel.className = 'hour-label';
-        hourLabel.textContent = formatHour(hour);
-        row.appendChild(hourLabel);
-
-        const timeSlot = document.createElement('div');
-        timeSlot.className = 'time-slot';
-        row.appendChild(timeSlot);
-
-        gridContainer.appendChild(row);
-      }
-
-      const eventsContainer = document.createElement('div');
-      eventsContainer.style.position = 'absolute';
-      eventsContainer.style.top = '0';
-      eventsContainer.style.left = 'var(--hour-width)';
-      eventsContainer.style.right = '0';
-      eventsContainer.style.bottom = '0';
-      eventsContainer.style.pointerEvents = 'none';
-
+      // Timed events
       for (const event of timedEvents) {
         const isFocused = event.id === focusEventId;
-        const element = document.createElement('div');
-        element.className = `event-block ${isFocused ? 'focused' : ''}`.trim();
-        element.style.cursor = 'pointer';
-        element.style.backgroundColor = event.backgroundColor || 'var(--accent-color)';
-        element.title = 'Click to open in Google Calendar';
-        element.addEventListener('click', () => openLink(event.htmlLink));
+        const item = document.createElement('div');
+        item.className = `expanded-event-item ${isFocused ? 'focused' : ''}`.trim();
+        item.style.cursor = 'pointer';
+        item.setAttribute('role', 'button');
+        item.setAttribute('tabindex', '0');
 
-        const position = calculateMultiDayEventPosition(event, timeRange.startHour, timeRange.endHour);
-        element.style.top = position.top;
-        element.style.height = position.height;
-        element.style.pointerEvents = 'auto';
+        // Detailed tooltip
+        const tooltipParts = [event.summary];
+        tooltipParts.push(`${formatTime(event.start)} - ${formatTime(event.end)}`);
+        if (event.location) tooltipParts.push(event.location);
+        tooltipParts.push('Click to open in Google Calendar');
+        item.title = tooltipParts.join('\n');
 
-        const titleDiv = document.createElement('div');
-        titleDiv.className = 'event-title';
-        titleDiv.textContent = event.summary;
-        element.appendChild(titleDiv);
+        item.addEventListener('click', () => openLink(event.htmlLink));
+        item.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openLink(event.htmlLink);
+          }
+        });
 
-        const timeDiv = document.createElement('div');
-        timeDiv.className = 'event-time';
-        timeDiv.textContent = `${formatTime(event.start)} - ${formatTime(event.end)}`;
-        element.appendChild(timeDiv);
+        // Color indicator
+        const colorBar = document.createElement('div');
+        colorBar.className = 'event-color-bar';
+        colorBar.style.backgroundColor = event.backgroundColor || 'var(--accent-color)';
+        item.appendChild(colorBar);
+
+        // Time column - show start and end time
+        const timeCol = document.createElement('div');
+        timeCol.className = 'event-time-col';
+        const startTime = document.createElement('div');
+        startTime.textContent = formatTime(event.start);
+        timeCol.appendChild(startTime);
+        const endTime = document.createElement('div');
+        endTime.className = 'event-end-time';
+        endTime.textContent = formatTime(event.end);
+        timeCol.appendChild(endTime);
+        item.appendChild(timeCol);
+
+        // Event details
+        const details = document.createElement('div');
+        details.className = 'event-details';
+
+        const title = document.createElement('div');
+        title.className = 'event-item-title';
+        title.textContent = event.summary;
+        details.appendChild(title);
 
         if (event.location) {
-          const locationDiv = document.createElement('div');
-          locationDiv.className = 'event-location';
-          locationDiv.textContent = event.location;
-          element.appendChild(locationDiv);
+          const location = document.createElement('div');
+          location.className = 'event-item-location';
+          location.textContent = event.location;
+          details.appendChild(location);
         }
 
-        eventsContainer.appendChild(element);
+        item.appendChild(details);
+        container.appendChild(item);
       }
-
-      gridContainer.appendChild(eventsContainer);
-      container.appendChild(gridContainer);
 
       return container;
     }
@@ -1012,11 +1138,11 @@
 
       group.appendChild(header);
 
-      // Day time grid view (starts collapsed)
-      const dayTimeGrid = createDayTimeGrid(events, focusEventId);
-      dayTimeGrid.className = 'date-events collapsed';
+      // Day event list (starts collapsed)
+      const dayEventList = createDayEventList(events, focusEventId);
+      dayEventList.className = 'date-events collapsed';
 
-      group.appendChild(dayTimeGrid);
+      group.appendChild(dayEventList);
       return group;
     }
 
