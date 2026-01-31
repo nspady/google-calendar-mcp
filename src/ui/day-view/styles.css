@@ -606,37 +606,113 @@ body {
 }
 
 /* ============================================================================
-   Overlap Indicator Styles
+   Overlap Group Styles - Connected timeline visualization
    ============================================================================ */
 
-/* Overlap indicator row between events */
-.overlap-indicator {
+/* Container for overlapping events - renders them as a connected group */
+.overlap-group {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 4px 8px;
-  font-size: 11px;
-  color: var(--text-tertiary);
+  flex-direction: column;
+  position: relative;
 }
 
-/* Parallel color bars container */
-.overlap-indicator .overlap-bars {
+/* The first event in an overlap - its bar extends down */
+.overlap-group .overlap-event-first {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  padding: 6px 8px;
+  padding-bottom: 0;
+  border-radius: var(--border-radius-sm, 4px) var(--border-radius-sm, 4px) 0 0;
+  cursor: pointer;
+}
+
+.overlap-group .overlap-event-first:hover {
+  background-color: var(--bg-secondary);
+}
+
+/* Color bar for first event - extends to cover its full duration */
+.overlap-group .overlap-bar-first {
+  width: 4px;
+  border-radius: 2px 2px 0 0;
+  flex-shrink: 0;
+}
+
+/* The overlap region - shows both bars side by side */
+.overlap-region {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  padding: 4px 8px;
+  margin-left: 0;
+}
+
+.overlap-region .overlap-bars {
   display: flex;
   gap: 2px;
   flex-shrink: 0;
 }
 
-/* Individual color bars matching the event row style */
-.overlap-indicator .overlap-bar {
+.overlap-region .overlap-bar {
   width: 4px;
-  height: 24px;
-  border-radius: 2px;
+  border-radius: 0;
 }
 
-/* Overlap text */
-.overlap-indicator .overlap-text {
-  font-weight: 500;
+.overlap-region .overlap-bar.bar-first {
+  border-radius: 0 0 2px 2px;
 }
+
+.overlap-region .overlap-bar.bar-second {
+  border-radius: 2px 2px 0 0;
+}
+
+.overlap-region .overlap-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+}
+
+/* The second event in overlap - inset to show it starts during overlap */
+.overlap-group .overlap-event-second {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  padding: 6px 8px;
+  padding-top: 0;
+  margin-left: 6px;
+  border-radius: 0 0 var(--border-radius-sm, 4px) var(--border-radius-sm, 4px);
+  cursor: pointer;
+}
+
+.overlap-group .overlap-event-second:hover {
+  background-color: var(--bg-secondary);
+}
+
+/* Color bar for second event - continues from overlap region */
+.overlap-group .overlap-bar-second {
+  width: 4px;
+  border-radius: 0 0 2px 2px;
+  flex-shrink: 0;
+}
+
+/* Content columns within overlap events */
+.overlap-group .event-time-col,
+.overlap-group .event-details {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Extra margin after overlap group */
+.overlap-group {
+  margin-bottom: 4px;
+}
+
+/* ============================================================================
+   Regular Overlap Indicator (fallback for simpler display)
+   ============================================================================ */
 
 /* Tighter spacing when events overlap */
 .expanded-event-item.overlaps-next {
