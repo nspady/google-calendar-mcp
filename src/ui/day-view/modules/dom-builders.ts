@@ -96,7 +96,7 @@ export function createEventElement(
 
 /**
  * Create an overlap group element that renders two overlapping events as a connected visual
- * Shows the first event, then the overlapping portion with both bars, then the second event continuation
+ * Shows the first event, then the overlapping portion with both bars, then continuation of whichever event ends later
  */
 export function createOverlapGroup(
   eventA: MultiDayViewEvent,
@@ -108,23 +108,39 @@ export function createOverlapGroup(
   const group = document.createElement('div');
   group.className = 'overlap-group';
 
+  // Calculate which event ends later for proper bar styling
+  const endA = new Date(eventA.end).getTime();
+  const endB = new Date(eventB.end).getTime();
+  const aEndsAfterB = endA > endB;
+
+  // Add modifier class for CSS bar styling
+  if (aEndsAfterB) {
+    group.classList.add('first-continues');
+  } else {
+    group.classList.add('second-continues');
+  }
+
   const colorA = eventA.backgroundColor || 'var(--accent-color)';
   const colorB = eventB.backgroundColor || 'var(--accent-color)';
 
-  // Calculate heights for each segment
+  // Calculate timestamps
+  const startA = new Date(eventA.start).getTime();
+  const startB = new Date(eventB.start).getTime();
+
+  // Calculate durations for tooltips
   const durationA = getEventDurationMinutes(eventA);
   const durationB = getEventDurationMinutes(eventB);
 
-  // Height for first event's non-overlapping portion (before overlap starts)
-  const startA = new Date(eventA.start).getTime();
-  const startB = new Date(eventB.start).getTime();
-  const endA = new Date(eventA.end).getTime();
+  // Calculate segment durations
   const beforeOverlapMinutes = Math.round((startB - startA) / (1000 * 60));
-  const afterOverlapMinutes = Math.round((new Date(eventB.end).getTime() - endA) / (1000 * 60));
+  // After overlap: time from when the shorter event ends to when the longer event ends
+  const afterOverlapMinutes = aEndsAfterB
+    ? Math.round((endA - endB) / (1000 * 60))  // A continues after B ends
+    : Math.round((endB - endA) / (1000 * 60)); // B continues after A ends
 
   const { height: heightBeforeOverlap } = calculateEventHeight(Math.max(beforeOverlapMinutes, 15));
   const { height: heightOverlap } = calculateEventHeight(Math.max(overlapMinutes, 15));
-  const { height: heightAfterOverlap, continues: continuesB } = calculateEventHeight(Math.max(afterOverlapMinutes, 15));
+  const { height: heightAfterOverlap, continues: continuesAfter } = calculateEventHeight(Math.max(afterOverlapMinutes, 15));
 
   // --- First Event (before overlap) ---
   const firstRow = document.createElement('div');
@@ -180,10 +196,14 @@ export function createOverlapGroup(
 
   group.appendChild(firstRow);
 
-  // --- Overlap Region (both bars side by side) ---
+  // --- Overlap Region with Event B info ---
   const overlapRow = document.createElement('div');
-  overlapRow.className = 'overlap-region';
+  overlapRow.className = 'overlap-region overlap-region-with-event';
   overlapRow.style.minHeight = `${heightOverlap}px`;
+  overlapRow.setAttribute('role', 'button');
+  overlapRow.setAttribute('tabindex', '0');
+  overlapRow.title = `${eventB.summary}\n${formatTime(eventB.start)} - ${formatTime(eventB.end)} (${formatDuration(durationB)})\nClick to open in Google Calendar`;
+  overlapRow.addEventListener('click', () => openLink(eventB.htmlLink, appInstance));
 
   const overlapBars = document.createElement('div');
   overlapBars.className = 'overlap-bars';
@@ -200,87 +220,140 @@ export function createOverlapGroup(
 
   overlapRow.appendChild(overlapBars);
 
+  // Event B time column
+  const timeColB = document.createElement('div');
+  timeColB.className = 'event-time-col';
+  const startTimeBEl = document.createElement('div');
+  startTimeBEl.textContent = formatTime(eventB.start);
+  timeColB.appendChild(startTimeBEl);
+  const endTimeBEl = document.createElement('div');
+  endTimeBEl.className = 'event-end-time';
+  endTimeBEl.textContent = formatTime(eventB.end);
+  timeColB.appendChild(endTimeBEl);
+  overlapRow.appendChild(timeColB);
+
+  // Event B details
+  const detailsB = document.createElement('div');
+  detailsB.className = 'event-details';
+
+  const titleRowB = document.createElement('div');
+  titleRowB.className = 'event-item-title-row';
+  const titleB = document.createElement('div');
+  titleB.className = 'event-item-title';
+  titleB.textContent = eventB.summary;
+  titleRowB.appendChild(titleB);
+  const calB = document.createElement('div');
+  calB.className = 'event-item-calendar';
+  calB.textContent = formatCalendarName(eventB.calendarId, eventB.calendarName);
+  titleRowB.appendChild(calB);
+  detailsB.appendChild(titleRowB);
+
+  if (eventB.location) {
+    const locB = document.createElement('div');
+    locB.className = 'event-item-location';
+    locB.textContent = eventB.location;
+    detailsB.appendChild(locB);
+  }
+  overlapRow.appendChild(detailsB);
+
+  // Overlap duration label
   const overlapLabel = document.createElement('div');
   overlapLabel.className = 'overlap-label';
   overlapLabel.textContent = formatOverlapDuration(overlapMinutes);
   overlapRow.appendChild(overlapLabel);
 
+  if (eventB.id === focusEventId) {
+    overlapRow.classList.add('focused');
+  }
+
   group.appendChild(overlapRow);
 
-  // --- Second Event (after overlap, inset) ---
-  const secondRow = document.createElement('div');
-  secondRow.className = 'overlap-event-second';
-  secondRow.style.minHeight = `${heightAfterOverlap}px`;
-  secondRow.setAttribute('role', 'button');
-  secondRow.setAttribute('tabindex', '0');
-  secondRow.title = `${eventB.summary}\n${formatTime(eventB.start)} - ${formatTime(eventB.end)} (${formatDuration(durationB)})\nClick to open in Google Calendar`;
-  secondRow.addEventListener('click', () => openLink(eventB.htmlLink, appInstance));
+  // --- Continuation section (whichever event ends later) ---
+  if (afterOverlapMinutes > 0) {
+    if (aEndsAfterB) {
+      // Event A continues after Event B ends - show A's bar continuing
+      const continuationRow = document.createElement('div');
+      continuationRow.className = 'overlap-event-continuation';
+      continuationRow.style.minHeight = `${heightAfterOverlap}px`;
+      continuationRow.setAttribute('role', 'button');
+      continuationRow.setAttribute('tabindex', '0');
+      continuationRow.title = `${eventA.summary} continues\n${formatTime(eventA.start)} - ${formatTime(eventA.end)} (${formatDuration(durationA)})\nClick to open in Google Calendar`;
+      continuationRow.addEventListener('click', () => openLink(eventA.htmlLink, appInstance));
 
-  const barSecond = document.createElement('div');
-  barSecond.className = 'overlap-bar-second';
-  barSecond.style.backgroundColor = colorB;
+      const barContinuation = document.createElement('div');
+      barContinuation.className = 'overlap-bar-continuation';
+      barContinuation.style.backgroundColor = colorA;
 
-  // Add continues indicator if needed
-  if (continuesB) {
-    barSecond.classList.add('event-continues');
-    const dashes = document.createElement('div');
-    dashes.className = 'event-continues-dashes';
-    for (let d = 0; d < 2; d++) {
-      const dash = document.createElement('div');
-      dash.className = 'dash';
-      dash.style.backgroundColor = colorB;
-      dashes.appendChild(dash);
+      // Add continues indicator if the continuation is capped
+      if (continuesAfter) {
+        barContinuation.classList.add('event-continues');
+        const dashes = document.createElement('div');
+        dashes.className = 'event-continues-dashes';
+        for (let d = 0; d < 2; d++) {
+          const dash = document.createElement('div');
+          dash.className = 'dash';
+          dash.style.backgroundColor = colorA;
+          dashes.appendChild(dash);
+        }
+        barContinuation.appendChild(dashes);
+      }
+
+      continuationRow.appendChild(barContinuation);
+
+      // Show "continues until X" label
+      const continueLabel = document.createElement('div');
+      continueLabel.className = 'continuation-label';
+      continueLabel.textContent = `continues until ${formatTime(eventA.end)}`;
+      continuationRow.appendChild(continueLabel);
+
+      if (eventA.id === focusEventId) {
+        continuationRow.classList.add('focused');
+      }
+
+      group.appendChild(continuationRow);
+    } else {
+      // Event B continues after Event A ends - show B's continuation (original behavior)
+      const secondRow = document.createElement('div');
+      secondRow.className = 'overlap-event-second';
+      secondRow.style.minHeight = `${heightAfterOverlap}px`;
+      secondRow.setAttribute('role', 'button');
+      secondRow.setAttribute('tabindex', '0');
+      secondRow.title = `${eventB.summary}\n${formatTime(eventB.start)} - ${formatTime(eventB.end)} (${formatDuration(durationB)})\nClick to open in Google Calendar`;
+      secondRow.addEventListener('click', () => openLink(eventB.htmlLink, appInstance));
+
+      const barSecond = document.createElement('div');
+      barSecond.className = 'overlap-bar-second';
+      barSecond.style.backgroundColor = colorB;
+
+      // Add continues indicator if needed
+      if (continuesAfter) {
+        barSecond.classList.add('event-continues');
+        const dashes = document.createElement('div');
+        dashes.className = 'event-continues-dashes';
+        for (let d = 0; d < 2; d++) {
+          const dash = document.createElement('div');
+          dash.className = 'dash';
+          dash.style.backgroundColor = colorB;
+          dashes.appendChild(dash);
+        }
+        barSecond.appendChild(dashes);
+      }
+
+      secondRow.appendChild(barSecond);
+
+      // Show "continues until X" label
+      const continueLabel = document.createElement('div');
+      continueLabel.className = 'continuation-label';
+      continueLabel.textContent = `continues until ${formatTime(eventB.end)}`;
+      secondRow.appendChild(continueLabel);
+
+      if (eventB.id === focusEventId) {
+        secondRow.classList.add('focused');
+      }
+
+      group.appendChild(secondRow);
     }
-    barSecond.appendChild(dashes);
   }
-
-  secondRow.appendChild(barSecond);
-
-  const timeColSecond = document.createElement('div');
-  timeColSecond.className = 'event-time-col';
-  const startTimeB = document.createElement('div');
-  startTimeB.textContent = formatTime(eventB.start);
-  timeColSecond.appendChild(startTimeB);
-  const endTimeB = document.createElement('div');
-  endTimeB.className = 'event-end-time';
-  endTimeB.textContent = formatTime(eventB.end);
-  timeColSecond.appendChild(endTimeB);
-  if (continuesB) {
-    const durationLabel = document.createElement('div');
-    durationLabel.className = 'event-duration-label';
-    durationLabel.textContent = formatDuration(durationB);
-    timeColSecond.appendChild(durationLabel);
-  }
-  secondRow.appendChild(timeColSecond);
-
-  const detailsSecond = document.createElement('div');
-  detailsSecond.className = 'event-details';
-
-  const titleRowSecond = document.createElement('div');
-  titleRowSecond.className = 'event-item-title-row';
-  const titleSecond = document.createElement('div');
-  titleSecond.className = 'event-item-title';
-  titleSecond.textContent = eventB.summary;
-  titleRowSecond.appendChild(titleSecond);
-  const calSecond = document.createElement('div');
-  calSecond.className = 'event-item-calendar';
-  calSecond.textContent = formatCalendarName(eventB.calendarId, eventB.calendarName);
-  titleRowSecond.appendChild(calSecond);
-  detailsSecond.appendChild(titleRowSecond);
-
-  if (eventB.location) {
-    const locSecond = document.createElement('div');
-    locSecond.className = 'event-item-location';
-    locSecond.textContent = eventB.location;
-    detailsSecond.appendChild(locSecond);
-  }
-  secondRow.appendChild(detailsSecond);
-
-  if (eventB.id === focusEventId) {
-    secondRow.classList.add('focused');
-  }
-
-  group.appendChild(secondRow);
 
   return group;
 }

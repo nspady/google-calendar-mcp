@@ -674,12 +674,24 @@ body {
   border-radius: 0;
 }
 
-.overlap-region .overlap-bar.bar-first {
+/* When Event A (first) ends at or before the overlap ends */
+.overlap-group.second-continues .overlap-region .overlap-bar.bar-first {
   border-radius: 0 0 2px 2px;
 }
 
-.overlap-region .overlap-bar.bar-second {
+/* When Event A (first) continues after Event B ends - no rounded bottom */
+.overlap-group.first-continues .overlap-region .overlap-bar.bar-first {
+  border-radius: 0;
+}
+
+/* When Event B (second) starts in overlap and continues */
+.overlap-group.second-continues .overlap-region .overlap-bar.bar-second {
   border-radius: 2px 2px 0 0;
+}
+
+/* When Event B (second) ends during overlap (contained in A) - rounded on both ends */
+.overlap-group.first-continues .overlap-region .overlap-bar.bar-second {
+  border-radius: 2px;
 }
 
 .overlap-region .overlap-label {
@@ -724,6 +736,52 @@ body {
 /* Extra margin after overlap group */
 .overlap-group {
   margin-bottom: 4px;
+}
+
+/* Overlap region with event info (clickable) */
+.overlap-region.overlap-region-with-event {
+  cursor: pointer;
+  border-radius: 0;
+}
+
+.overlap-region.overlap-region-with-event:hover {
+  background-color: var(--bg-secondary);
+}
+
+.overlap-region.overlap-region-with-event .overlap-label {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* When Event A continues after Event B ends */
+.overlap-group .overlap-event-continuation {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  padding: 6px 8px;
+  padding-top: 0;
+  border-radius: 0 0 var(--border-radius-sm, 4px) var(--border-radius-sm, 4px);
+  cursor: pointer;
+}
+
+.overlap-group .overlap-event-continuation:hover {
+  background-color: var(--bg-secondary);
+}
+
+/* Color bar for continuation - extends from overlap region */
+.overlap-group .overlap-bar-continuation {
+  width: 4px;
+  border-radius: 0 0 2px 2px;
+  flex-shrink: 0;
+}
+
+/* Continuation label styling */
+.overlap-group .continuation-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
 }
 
 /* ============================================================================
