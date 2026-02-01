@@ -7,8 +7,6 @@ import { renderAuthSuccess, renderAuthError, loadWebFile } from "../web/template
 
 /**
  * Security headers for HTML responses
- * Note: HTTP mode is designed for localhost development/testing only.
- * For production deployments, use stdio mode with Claude Desktop.
  */
 const SECURITY_HEADERS = {
   'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'",
@@ -18,22 +16,60 @@ const SECURITY_HEADERS = {
   'X-XSS-Protection': '1; mode=block'
 };
 
-
 /**
- * Validate if an origin is from localhost
- * Properly parses the URL to prevent bypass via subdomains like localhost.attacker.com
- * Exported for testing
+ * Validate if an origin is allowed.
+ * Checks against ALLOWED_ORIGIN environment variable for production,
+ * falls back to localhost for development.
+ * Properly parses the URL to prevent bypass via subdomains.
+ * Exported for testing.
  */
-export function isLocalhostOrigin(origin: string): boolean {
+export function isAllowedOrigin(origin: string): boolean {
   try {
     const url = new URL(origin);
     const hostname = url.hostname;
-    // Only allow exact localhost or 127.0.0.1
+
+    // Check environment variable for allowed origin
+    const allowedOrigin = process.env.ALLOWED_ORIGIN;
+    if (allowedOrigin) {
+      try {
+        const allowedUrl = new URL(allowedOrigin);
+        return url.origin === allowedUrl.origin;
+      } catch {
+        // Invalid ALLOWED_ORIGIN env var, fall through to localhost check
+      }
+    }
+
+    // Fall back to localhost for development
     return hostname === 'localhost' || hostname === '127.0.0.1';
   } catch {
     // Invalid URL - reject
     return false;
   }
+}
+
+/**
+ * Validate bearer token from Authorization header.
+ * Compares against MCP_BEARER_TOKEN environment variable.
+ * Returns true if valid, false otherwise.
+ */
+function validateBearerToken(authHeader: string | undefined): boolean {
+  const requiredToken = process.env.MCP_BEARER_TOKEN;
+
+  // If no bearer token is configured, allow all requests (development mode)
+  if (!requiredToken) {
+    return true;
+  }
+
+  // Check if Authorization header exists and has Bearer format
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return false;
+  }
+
+  // Extract token from "Bearer <token>" format
+  const token = authHeader.substring(7);
+
+  // Constant-time comparison to prevent timing attacks
+  return token === requiredToken;
 }
 
 export interface HttpTransportConfig {
@@ -59,15 +95,21 @@ export class HttpTransportHandler {
   /**
    * Creates an OAuth2Client configured for the given account.
    * Consolidates credential loading and redirect URI construction.
+   * Uses OAUTH_REDIRECT_BASE_URL environment variable if set, otherwise falls back to localhost.
    */
   private async createOAuth2Client(accountId: string, host: string, port: number): Promise<import('google-auth-library').OAuth2Client> {
     const { OAuth2Client } = await import('google-auth-library');
     const { loadCredentials } = await import('../auth/client.js');
     const { client_id, client_secret } = await loadCredentials();
+
+    // Use environment variable for production, fallback to localhost for development
+    const baseUrl = process.env.OAUTH_REDIRECT_BASE_URL || `http://${host}:${port}`;
+    const redirectUri = `${baseUrl}/oauth2callback?account=${accountId}`;
+
     return new OAuth2Client(
       client_id,
       client_secret,
-      `http://${host}:${port}/oauth2callback?account=${accountId}`
+      redirectUri
     );
   }
 
@@ -123,8 +165,8 @@ export class HttpTransportHandler {
       const origin = req.headers.origin;
 
       // For requests with Origin header, validate it using proper URL parsing
-      // This prevents bypass via subdomains like localhost.attacker.com
-      if (origin && !isLocalhostOrigin(origin)) {
+      // Checks against ALLOWED_ORIGIN environment variable or falls back to localhost
+      if (origin && !isAllowedOrigin(origin)) {
         res.writeHead(403, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           error: 'Forbidden: Invalid origin',
@@ -145,14 +187,13 @@ export class HttpTransportHandler {
         return;
       }
 
-      // Handle CORS - restrict to localhost only for security
-      // HTTP mode is designed for local development/testing only
-      const allowedCorsOrigin = origin && isLocalhostOrigin(origin)
+      // Handle CORS - use ALLOWED_ORIGIN env var for production, localhost for development
+      const allowedCorsOrigin = origin && isAllowedOrigin(origin)
         ? origin
-        : `http://${host}:${port}`;
+        : (process.env.ALLOWED_ORIGIN || `http://${host}:${port}`);
       res.setHeader('Access-Control-Allow-Origin', allowedCorsOrigin);
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, mcp-session-id');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, mcp-session-id, Authorization');
       
       if (req.method === 'OPTIONS') {
         res.writeHead(200);
@@ -318,8 +359,8 @@ export class HttpTransportHandler {
           // Invalidate calendar registry cache since accounts changed
           CalendarRegistry.getInstance().clearCache();
 
-          // Compute allowed origin for postMessage (localhost only)
-          const postMessageOrigin = `http://${host}:${port}`;
+          // Compute allowed origin for postMessage - use production URL if available
+          const postMessageOrigin = process.env.ALLOWED_ORIGIN || `http://${host}:${port}`;
 
           const successHtml = await renderAuthSuccess({
             accountId,
@@ -416,6 +457,17 @@ export class HttpTransportHandler {
           status: 'healthy',
           server: 'google-calendar-mcp',
           timestamp: new Date().toISOString()
+        }));
+        return;
+      }
+
+      // All other requests are MCP requests - validate bearer token if required
+      const authHeader = req.headers.authorization;
+      if (!validateBearerToken(authHeader)) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          error: 'Unauthorized',
+          message: 'Invalid or missing bearer token. Please provide a valid Authorization: Bearer <token> header.'
         }));
         return;
       }

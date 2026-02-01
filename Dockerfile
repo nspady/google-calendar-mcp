@@ -38,5 +38,5 @@ USER nodejs
 # Expose port for HTTP mode (optional)
 EXPOSE 3000
 
-# Default command - run directly to avoid npm output
-CMD ["node", "build/index.js"]
+# Default command - start in HTTP mode on all interfaces for Railway/cloud deployment
+CMD ["node", "build/index.js", "--transport", "http", "--host", "0.0.0.0"]

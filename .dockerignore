@@ -1,2 +1,72 @@
+# Credentials and tokens
 gcp-oauth.keys.json
 .gcp-saved-tokens.json
+tokens.json
+*.keys.json
+
+# Node modules (will be installed in container)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build output (will be generated during build)
+build/
+dist/
+*.tsbuildinfo
+
+# Testing
+coverage/
+.nyc_output/
+*.test.ts
+*.spec.ts
+src/tests/
+test/
+tests/
+
+# Development files
+.env
+.env.*
+!.env.example
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation (not needed in container)
+*.md
+!README.md
+docs/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Worktrees
+.worktrees/
+
+# Local development
+.claude/
+.cursor/
+
+# Deployment configs (already in image)
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Misc
+*.orig
+*.rej
+*.swp

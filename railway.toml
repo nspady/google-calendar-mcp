@@ -1,0 +1,14 @@
+# Railway deployment configuration
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Health check endpoint to verify service is running
+healthcheckPath = "/health"
+healthcheckTimeout = 100
+
+# Restart policy on failure
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
