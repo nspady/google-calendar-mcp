@@ -3,14 +3,15 @@
  */
 
 import type { App } from '@modelcontextprotocol/ext-apps';
-import type { DayViewEvent, MultiDayViewEvent, CalendarSummary } from './types.js';
+import type { DayViewEvent, MultiDayViewEvent, AvailableSlot } from './types.js';
 import {
   formatTime,
   formatDuration,
   formatOverlapDuration,
   formatAllDayRange,
   formatMultiDayDate,
-  formatCalendarName
+  formatCalendarName,
+  formatSlotTime
 } from './formatting.js';
 import {
   getEventColorClass,
@@ -341,12 +342,6 @@ export function createOverlapGroup(
 
       secondRow.appendChild(barSecond);
 
-      // Show "continues until X" label
-      const continueLabel = document.createElement('div');
-      continueLabel.className = 'continuation-label';
-      continueLabel.textContent = `continues until ${formatTime(eventB.end)}`;
-      secondRow.appendChild(continueLabel);
-
       if (eventB.id === focusEventId) {
         secondRow.classList.add('focused');
       }
@@ -390,6 +385,72 @@ export function createCalendarSummary(events: MultiDayViewEvent[]): HTMLDivEleme
   }
 
   return container;
+}
+
+/**
+ * Create an available slot element for scheduling mode
+ */
+export function createAvailableSlotElement(
+  slot: AvailableSlot,
+  onSelect?: (slot: AvailableSlot) => void
+): HTMLDivElement {
+  const item = document.createElement('div');
+  item.className = 'available-slot-item';
+  item.setAttribute('role', 'button');
+  item.setAttribute('tabindex', '0');
+  item.title = 'Click to select this time slot';
+
+  const bar = document.createElement('div');
+  bar.className = 'slot-color-bar';
+
+  const timeCol = document.createElement('div');
+  timeCol.className = 'slot-time-col';
+
+  const startTime = document.createElement('div');
+  startTime.className = 'slot-start-time';
+  startTime.textContent = formatSlotTime(slot.startMinutes);
+  timeCol.appendChild(startTime);
+
+  const endTime = document.createElement('div');
+  endTime.className = 'slot-end-time';
+  endTime.textContent = formatSlotTime(slot.endMinutes);
+  timeCol.appendChild(endTime);
+
+  const details = document.createElement('div');
+  details.className = 'slot-details';
+
+  const label = document.createElement('div');
+  label.className = 'slot-label';
+  label.textContent = 'Available';
+  details.appendChild(label);
+
+  const sublabel = document.createElement('div');
+  sublabel.className = 'slot-sublabel';
+  sublabel.textContent = 'Everyone is free';
+  details.appendChild(sublabel);
+
+  item.appendChild(bar);
+  item.appendChild(timeCol);
+  item.appendChild(details);
+
+  const handleSelect = (): void => {
+    // Remove selected class from all other slots
+    document.querySelectorAll('.available-slot-item.selected').forEach(el => el.classList.remove('selected'));
+    item.classList.add('selected');
+    if (onSelect) {
+      onSelect(slot);
+    }
+  };
+
+  item.addEventListener('click', handleSelect);
+  item.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleSelect();
+    }
+  });
+
+  return item;
 }
 
 /**
@@ -483,7 +544,9 @@ export function createEventListItem(
 export function createDayEventList(
   events: MultiDayViewEvent[],
   appInstance: App | null,
-  focusEventId?: string
+  focusEventId?: string,
+  availableSlots?: AvailableSlot[],
+  onSlotSelect?: (slot: AvailableSlot) => void
 ): HTMLDivElement {
   const container = document.createElement('div');
   container.className = 'expanded-day-list';
@@ -563,137 +626,175 @@ export function createDayEventList(
     container.appendChild(allDaySection);
   }
 
-  // Timed events with overlap detection and proportional heights
-  // Track which events have been rendered (to skip events that were part of an overlap group)
+  // Build unified timeline of events and available slots
+  // Convert slots to timeline items with comparable start times
+  const slots = availableSlots || [];
+  const slotItems = slots.map(slot => ({
+    type: 'slot' as const,
+    startMinutes: slot.startMinutes,
+    slot: slot
+  }));
+
+  // Track rendered events for overlap handling
   const renderedEventIds = new Set<string>();
 
-  for (let i = 0; i < timedEvents.length; i++) {
-    const event = timedEvents[i];
+  // Process events and slots in chronological order
+  let eventIndex = 0;
+  let slotIndex = 0;
 
-    // Skip if already rendered as part of an overlap group
-    if (renderedEventIds.has(event.id)) {
-      continue;
-    }
-
-    const nextEvent = i < timedEvents.length - 1 ? timedEvents[i + 1] : null;
-
-    // Check for overlap with next event
-    const overlapWithNext = nextEvent ? eventsOverlap(event, nextEvent) : { overlaps: false, overlapMinutes: 0 };
-
-    // If overlapping with next, render as an overlap group
-    if (overlapWithNext.overlaps && nextEvent) {
-      const overlapGroup = createOverlapGroup(event, nextEvent, overlapWithNext.overlapMinutes, appInstance, focusEventId);
-      container.appendChild(overlapGroup);
-      // Mark both events as rendered
-      renderedEventIds.add(event.id);
-      renderedEventIds.add(nextEvent.id);
-      continue;
-    }
-
-    // Otherwise render as a regular event row
-    const durationMinutes = getEventDurationMinutes(event);
-    const { height, continues } = calculateEventHeight(durationMinutes);
-
-    const isFocused = event.id === focusEventId;
-    const item = document.createElement('div');
-
-    // Build class list
-    const classes = ['expanded-event-item'];
-    if (isFocused) classes.push('focused');
-    if (continues) classes.push('event-continues-row');
-    item.className = classes.join(' ');
-
-    // Apply proportional height
-    item.style.minHeight = `${height}px`;
-
-    item.style.cursor = 'pointer';
-    item.setAttribute('role', 'button');
-    item.setAttribute('tabindex', '0');
-
-    // Detailed tooltip
-    const tooltipParts = [event.summary];
-    tooltipParts.push(`${formatTime(event.start)} - ${formatTime(event.end)} (${formatDuration(durationMinutes)})`);
-    if (event.location) tooltipParts.push(event.location);
-    tooltipParts.push('Click to open in Google Calendar');
-    item.title = tooltipParts.join('\n');
-
-    item.addEventListener('click', () => openLink(event.htmlLink, appInstance));
-    item.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        openLink(event.htmlLink, appInstance);
+  while (eventIndex < timedEvents.length || slotIndex < slotItems.length) {
+    // Get current event start time in minutes (if any remaining)
+    let eventStartMinutes = Infinity;
+    if (eventIndex < timedEvents.length) {
+      const event = timedEvents[eventIndex];
+      if (!renderedEventIds.has(event.id)) {
+        const eventDate = new Date(event.start);
+        eventStartMinutes = eventDate.getHours() * 60 + eventDate.getMinutes();
       }
-    });
+    }
 
-    // Color indicator bar
-    const colorBar = document.createElement('div');
-    const eventColor = event.backgroundColor || 'var(--accent-color)';
-    colorBar.className = 'event-color-bar';
-    colorBar.style.backgroundColor = eventColor;
+    // Get current slot start time (if any remaining)
+    const slotStartMinutes = slotIndex < slotItems.length ? slotItems[slotIndex].startMinutes : Infinity;
 
-    // Add "continues" indicator for events longer than 3 hours
-    if (continues) {
-      colorBar.classList.add('event-continues');
-      const dashes = document.createElement('div');
-      dashes.className = 'event-continues-dashes';
-      for (let d = 0; d < 2; d++) {
-        const dash = document.createElement('div');
-        dash.className = 'dash';
-        dash.style.backgroundColor = eventColor;
-        dashes.appendChild(dash);
+    // Render whichever comes first
+    if (slotStartMinutes < eventStartMinutes && slotIndex < slotItems.length) {
+      // Render available slot
+      const slotEl = createAvailableSlotElement(slotItems[slotIndex].slot, onSlotSelect);
+      container.appendChild(slotEl);
+      slotIndex++;
+    } else if (eventIndex < timedEvents.length) {
+      const event = timedEvents[eventIndex];
+
+      // Skip if already rendered as part of an overlap group
+      if (renderedEventIds.has(event.id)) {
+        eventIndex++;
+        continue;
       }
-      colorBar.appendChild(dashes);
+
+      const nextEvent = eventIndex < timedEvents.length - 1 ? timedEvents[eventIndex + 1] : null;
+
+      // Check for overlap with next event
+      const overlapWithNext = nextEvent ? eventsOverlap(event, nextEvent) : { overlaps: false, overlapMinutes: 0 };
+
+      // If overlapping with next, render as an overlap group
+      if (overlapWithNext.overlaps && nextEvent) {
+        const overlapGroup = createOverlapGroup(event, nextEvent, overlapWithNext.overlapMinutes, appInstance, focusEventId);
+        container.appendChild(overlapGroup);
+        // Mark both events as rendered
+        renderedEventIds.add(event.id);
+        renderedEventIds.add(nextEvent.id);
+        eventIndex++;
+        continue;
+      }
+
+      // Otherwise render as a regular event row
+      const durationMinutes = getEventDurationMinutes(event);
+      const { height, continues } = calculateEventHeight(durationMinutes);
+
+      const isFocused = event.id === focusEventId;
+      const item = document.createElement('div');
+
+      // Build class list
+      const classes = ['expanded-event-item'];
+      if (isFocused) classes.push('focused');
+      if (continues) classes.push('event-continues-row');
+      item.className = classes.join(' ');
+
+      // Apply proportional height
+      item.style.minHeight = `${height}px`;
+
+      item.style.cursor = 'pointer';
+      item.setAttribute('role', 'button');
+      item.setAttribute('tabindex', '0');
+
+      // Detailed tooltip
+      const tooltipParts = [event.summary];
+      tooltipParts.push(`${formatTime(event.start)} - ${formatTime(event.end)} (${formatDuration(durationMinutes)})`);
+      if (event.location) tooltipParts.push(event.location);
+      tooltipParts.push('Click to open in Google Calendar');
+      item.title = tooltipParts.join('\n');
+
+      item.addEventListener('click', () => openLink(event.htmlLink, appInstance));
+      item.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openLink(event.htmlLink, appInstance);
+        }
+      });
+
+      // Color indicator bar
+      const colorBar = document.createElement('div');
+      const eventColor = event.backgroundColor || 'var(--accent-color)';
+      colorBar.className = 'event-color-bar';
+      colorBar.style.backgroundColor = eventColor;
+
+      // Add "continues" indicator for events longer than 3 hours
+      if (continues) {
+        colorBar.classList.add('event-continues');
+        const dashes = document.createElement('div');
+        dashes.className = 'event-continues-dashes';
+        for (let d = 0; d < 2; d++) {
+          const dash = document.createElement('div');
+          dash.className = 'dash';
+          dash.style.backgroundColor = eventColor;
+          dashes.appendChild(dash);
+        }
+        colorBar.appendChild(dashes);
+      }
+
+      item.appendChild(colorBar);
+
+      // Time column
+      const timeCol = document.createElement('div');
+      timeCol.className = 'event-time-col';
+      const startTime = document.createElement('div');
+      startTime.textContent = formatTime(event.start);
+      timeCol.appendChild(startTime);
+      const endTime = document.createElement('div');
+      endTime.className = 'event-end-time';
+      endTime.textContent = formatTime(event.end);
+      timeCol.appendChild(endTime);
+      if (continues) {
+        const durationLabel = document.createElement('div');
+        durationLabel.className = 'event-duration-label';
+        durationLabel.textContent = formatDuration(durationMinutes);
+        timeCol.appendChild(durationLabel);
+      }
+      item.appendChild(timeCol);
+
+      // Event details
+      const details = document.createElement('div');
+      details.className = 'event-details';
+
+      // Title row with calendar label inline
+      const titleRow = document.createElement('div');
+      titleRow.className = 'event-item-title-row';
+
+      const title = document.createElement('div');
+      title.className = 'event-item-title';
+      title.textContent = event.summary;
+      titleRow.appendChild(title);
+
+      const calendarLabel = document.createElement('div');
+      calendarLabel.className = 'event-item-calendar';
+      calendarLabel.textContent = formatCalendarName(event.calendarId, event.calendarName);
+      titleRow.appendChild(calendarLabel);
+
+      details.appendChild(titleRow);
+
+      if (event.location) {
+        const location = document.createElement('div');
+        location.className = 'event-item-location';
+        location.textContent = event.location;
+        details.appendChild(location);
+      }
+
+      item.appendChild(details);
+      container.appendChild(item);
+      eventIndex++;
+    } else {
+      break;
     }
-
-    item.appendChild(colorBar);
-
-    // Time column
-    const timeCol = document.createElement('div');
-    timeCol.className = 'event-time-col';
-    const startTime = document.createElement('div');
-    startTime.textContent = formatTime(event.start);
-    timeCol.appendChild(startTime);
-    const endTime = document.createElement('div');
-    endTime.className = 'event-end-time';
-    endTime.textContent = formatTime(event.end);
-    timeCol.appendChild(endTime);
-    if (continues) {
-      const durationLabel = document.createElement('div');
-      durationLabel.className = 'event-duration-label';
-      durationLabel.textContent = formatDuration(durationMinutes);
-      timeCol.appendChild(durationLabel);
-    }
-    item.appendChild(timeCol);
-
-    // Event details
-    const details = document.createElement('div');
-    details.className = 'event-details';
-
-    // Title row with calendar label inline
-    const titleRow = document.createElement('div');
-    titleRow.className = 'event-item-title-row';
-
-    const title = document.createElement('div');
-    title.className = 'event-item-title';
-    title.textContent = event.summary;
-    titleRow.appendChild(title);
-
-    const calendarLabel = document.createElement('div');
-    calendarLabel.className = 'event-item-calendar';
-    calendarLabel.textContent = formatCalendarName(event.calendarId, event.calendarName);
-    titleRow.appendChild(calendarLabel);
-
-    details.appendChild(titleRow);
-
-    if (event.location) {
-      const location = document.createElement('div');
-      location.className = 'event-item-location';
-      location.textContent = event.location;
-      details.appendChild(location);
-    }
-
-    item.appendChild(details);
-    container.appendChild(item);
   }
 
   return container;
@@ -707,7 +808,9 @@ export function createDateGroup(
   events: MultiDayViewEvent[],
   appInstance: App | null,
   toggleDayExpanded: (dateStr: string) => void,
-  focusEventId?: string
+  focusEventId?: string,
+  availableSlots?: AvailableSlot[],
+  onSlotSelect?: (slot: AvailableSlot) => void
 ): HTMLDivElement {
   const group = document.createElement('div');
   group.className = 'date-group';
@@ -737,6 +840,15 @@ export function createDateGroup(
   // Calendar summary (inline in header)
   const calendarSummary = createCalendarSummary(events);
   header.appendChild(calendarSummary);
+
+  // Available slots summary (when in scheduling mode)
+  const slots = availableSlots || [];
+  if (slots.length > 0) {
+    const slotsSummary = document.createElement('div');
+    slotsSummary.className = 'slots-summary';
+    slotsSummary.textContent = `${slots.length} slot${slots.length > 1 ? 's' : ''} available`;
+    header.appendChild(slotsSummary);
+  }
 
   // Expand icon (using SVG for the chevron)
   const expandIcon = document.createElement('div');
@@ -770,7 +882,7 @@ export function createDateGroup(
   group.appendChild(header);
 
   // Day event list (starts collapsed)
-  const eventsList = createDayEventList(events, appInstance, focusEventId);
+  const eventsList = createDayEventList(events, appInstance, focusEventId, slots, onSlotSelect);
   eventsList.className = 'date-events collapsed';
   group.appendChild(eventsList);
 

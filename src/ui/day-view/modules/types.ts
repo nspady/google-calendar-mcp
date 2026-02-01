@@ -74,3 +74,20 @@ export interface CalendarSummary {
   backgroundColor: string;
   count: number;
 }
+
+/**
+ * Available time slot for scheduling mode
+ */
+export interface AvailableSlot {
+  startMinutes: number;
+  endMinutes: number;
+  duration: number;
+}
+
+/**
+ * Scheduling mode configuration
+ */
+export interface SchedulingMode {
+  enabled: boolean;
+  durationMinutes: number;
+}

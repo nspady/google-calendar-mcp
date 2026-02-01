@@ -723,31 +723,37 @@
         }))
         .sort((a, b) => a.start - b.start);
 
-      // Find gaps
+      // Find gaps and split into meeting-duration slots
       let currentTime = workStart;
       for (const event of timedEvents) {
         if (event.start > currentTime) {
-          const gapDuration = event.start - currentTime;
-          if (gapDuration >= durationMinutes) {
-            slots.push({
-              startMinutes: currentTime,
-              endMinutes: event.start,
-              duration: gapDuration
-            });
+          const gapEnd = event.start;
+          if (gapEnd - currentTime >= durationMinutes) {
+            // Create multiple slots at meeting-duration intervals
+            let slotStart = currentTime;
+            while (slotStart + durationMinutes <= gapEnd) {
+              slots.push({
+                startMinutes: slotStart,
+                endMinutes: slotStart + durationMinutes,
+                duration: durationMinutes
+              });
+              slotStart += durationMinutes;
+            }
           }
         }
         currentTime = Math.max(currentTime, event.end);
       }
 
       // Check gap after last event until end of work day
-      if (workEnd > currentTime) {
-        const gapDuration = workEnd - currentTime;
-        if (gapDuration >= durationMinutes) {
+      if (workEnd > currentTime && workEnd - currentTime >= durationMinutes) {
+        let slotStart = currentTime;
+        while (slotStart + durationMinutes <= workEnd) {
           slots.push({
-            startMinutes: currentTime,
-            endMinutes: workEnd,
-            duration: gapDuration
+            startMinutes: slotStart,
+            endMinutes: slotStart + durationMinutes,
+            duration: durationMinutes
           });
+          slotStart += durationMinutes;
         }
       }
 
@@ -790,12 +796,7 @@
 
       const label = document.createElement('div');
       label.className = 'slot-label';
-      const durationHours = Math.floor(slot.duration / 60);
-      const durationMins = slot.duration % 60;
-      const durationStr = durationHours > 0
-        ? (durationMins > 0 ? durationHours + 'h ' + durationMins + 'm' : durationHours + ' hour' + (durationHours > 1 ? 's' : ''))
-        : durationMins + ' min';
-      label.textContent = durationStr + ' available';
+      label.textContent = 'Available';
       details.appendChild(label);
 
       const sublabel = document.createElement('div');
@@ -1017,6 +1018,45 @@
       }
     }
 
+    function calculateSlotPosition(slot, startHour, endHour) {
+      const ROW_HEIGHT = 48;
+      const gridStartMinutes = startHour * 60;
+      const gridEndMinutes = endHour * 60;
+
+      const clampedStart = Math.max(slot.startMinutes, gridStartMinutes);
+      const clampedEnd = Math.min(slot.endMinutes, gridEndMinutes);
+
+      const topOffset = ((clampedStart - gridStartMinutes) / 60) * ROW_HEIGHT;
+      const height = Math.max(((clampedEnd - clampedStart) / 60) * ROW_HEIGHT, 24);
+
+      return { top: `${topOffset}px`, height: `${height}px` };
+    }
+
+    function createTimeGridSlotElement(slot) {
+      const element = document.createElement('div');
+      element.className = 'time-grid-slot';
+      element.setAttribute('role', 'button');
+      element.setAttribute('tabindex', '0');
+      element.title = `Available: ${formatSlotTime(slot.startMinutes)} - ${formatSlotTime(slot.endMinutes)}\nClick to select`;
+
+      const label = document.createElement('div');
+      label.className = 'slot-grid-label';
+      label.textContent = 'Available';
+      element.appendChild(label);
+
+      const time = document.createElement('div');
+      time.className = 'slot-grid-time';
+      time.textContent = `${formatSlotTime(slot.startMinutes)} - ${formatSlotTime(slot.endMinutes)}`;
+      element.appendChild(time);
+
+      element.addEventListener('click', () => {
+        document.querySelectorAll('.time-grid-slot.selected').forEach(el => el.classList.remove('selected'));
+        element.classList.add('selected');
+      });
+
+      return element;
+    }
+
     function renderTimeGrid(context) {
       const { events, focusEventId, timeRange } = context;
       const { startHour, endHour } = timeRange;
@@ -1059,6 +1099,25 @@
         element.style.height = position.height;
         element.style.pointerEvents = 'auto';
         eventsContainer.appendChild(element);
+      }
+
+      // Add available slots if scheduling mode is enabled
+      if (window.isSchedulingMode()) {
+        const availableSlots = window.calculateAvailableSlots(events, window.getSlotDuration());
+
+        for (const slot of availableSlots) {
+          const slotElement = createTimeGridSlotElement(slot);
+          const position = calculateSlotPosition(slot, startHour, endHour);
+
+          slotElement.style.position = 'absolute';
+          slotElement.style.top = position.top;
+          slotElement.style.height = position.height;
+          slotElement.style.left = '0';
+          slotElement.style.right = '0';
+          slotElement.style.pointerEvents = 'auto';
+
+          eventsContainer.appendChild(slotElement);
+        }
       }
 
       timeGrid.style.position = 'relative';
@@ -1415,12 +1474,6 @@
           }
 
           secondRow.appendChild(barSecond);
-
-          // Show "continues until X" label
-          const continueLabel = document.createElement('div');
-          continueLabel.className = 'continuation-label';
-          continueLabel.textContent = `continues until ${formatTime(eventB.end)}`;
-          secondRow.appendChild(continueLabel);
 
           if (eventB.id === focusEventId) secondRow.classList.add('focused');
           group.appendChild(secondRow);

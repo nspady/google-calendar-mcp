@@ -3,9 +3,9 @@
  */
 
 import type { App } from '@modelcontextprotocol/ext-apps';
-import type { DayViewEvent, DayContext, MultiDayContext } from './types.js';
-import { formatHour, formatDateHeading, formatTimeRangeSubheading } from './formatting.js';
-import { openLink } from './utilities.js';
+import type { DayViewEvent, DayContext, MultiDayContext, AvailableSlot, SchedulingMode } from './types.js';
+import { formatHour, formatDateHeading, formatTimeRangeSubheading, formatSlotTime } from './formatting.js';
+import { openLink, calculateAvailableSlots } from './utilities.js';
 import { calculateEventPosition } from './positioning.js';
 import { createEventElement, createDateGroup } from './dom-builders.js';
 
@@ -101,12 +101,77 @@ export function renderAllDayEvents(
 }
 
 /**
+ * Calculate slot position on the time grid (same logic as events)
+ */
+function calculateSlotPosition(
+  slot: AvailableSlot,
+  startHour: number,
+  endHour: number
+): { top: string; height: string } {
+  const ROW_HEIGHT = 48;
+  const gridStartMinutes = startHour * 60;
+  const gridEndMinutes = endHour * 60;
+
+  const clampedStart = Math.max(slot.startMinutes, gridStartMinutes);
+  const clampedEnd = Math.min(slot.endMinutes, gridEndMinutes);
+
+  const topOffset = ((clampedStart - gridStartMinutes) / 60) * ROW_HEIGHT;
+  const height = Math.max(((clampedEnd - clampedStart) / 60) * ROW_HEIGHT, 24);
+
+  return { top: `${topOffset}px`, height: `${height}px` };
+}
+
+/**
+ * Create a slot element for the time grid (positioned block)
+ */
+function createTimeGridSlotElement(
+  slot: AvailableSlot,
+  onSelect?: (slot: AvailableSlot) => void
+): HTMLDivElement {
+  const element = document.createElement('div');
+  element.className = 'time-grid-slot';
+  element.setAttribute('role', 'button');
+  element.setAttribute('tabindex', '0');
+  element.title = `Available: ${formatSlotTime(slot.startMinutes)} - ${formatSlotTime(slot.endMinutes)}\nClick to select`;
+
+  const label = document.createElement('div');
+  label.className = 'slot-grid-label';
+  label.textContent = 'Available';
+  element.appendChild(label);
+
+  const time = document.createElement('div');
+  time.className = 'slot-grid-time';
+  time.textContent = `${formatSlotTime(slot.startMinutes)} - ${formatSlotTime(slot.endMinutes)}`;
+  element.appendChild(time);
+
+  const handleSelect = (): void => {
+    document.querySelectorAll('.time-grid-slot.selected').forEach(el => el.classList.remove('selected'));
+    element.classList.add('selected');
+    if (onSelect) {
+      onSelect(slot);
+    }
+  };
+
+  element.addEventListener('click', handleSelect);
+  element.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleSelect();
+    }
+  });
+
+  return element;
+}
+
+/**
  * Render time grid with events
  */
 export function renderTimeGrid(
   context: DayContext,
   appInstance: App | null,
-  domRefs: DOMRefs
+  domRefs: DOMRefs,
+  schedulingMode?: SchedulingMode,
+  onSlotSelect?: (slot: AvailableSlot) => void
 ): void {
   const { events, focusEventId, timeRange } = context;
   const { startHour, endHour } = timeRange;
@@ -158,6 +223,25 @@ export function renderTimeGrid(
     eventsContainer.appendChild(element);
   }
 
+  // Add available slots if scheduling mode is enabled
+  if (schedulingMode?.enabled) {
+    const availableSlots = calculateAvailableSlots(events, schedulingMode.durationMinutes, startHour, endHour);
+
+    for (const slot of availableSlots) {
+      const slotElement = createTimeGridSlotElement(slot, onSlotSelect);
+      const position = calculateSlotPosition(slot, startHour, endHour);
+
+      slotElement.style.position = 'absolute';
+      slotElement.style.top = position.top;
+      slotElement.style.height = position.height;
+      slotElement.style.left = '0';
+      slotElement.style.right = '0';
+      slotElement.style.pointerEvents = 'auto';
+
+      eventsContainer.appendChild(slotElement);
+    }
+  }
+
   // Make time grid position relative for absolute positioning of events
   domRefs.timeGrid.style.position = 'relative';
   domRefs.timeGrid.appendChild(eventsContainer);
@@ -171,7 +255,9 @@ export function renderDayView(
   appInstance: App | null,
   domRefs: DOMRefs,
   toggleExpanded: () => void,
-  stateRefs: { isExpanded: { value: boolean } }
+  stateRefs: { isExpanded: { value: boolean } },
+  schedulingMode?: SchedulingMode,
+  onSlotSelect?: (slot: AvailableSlot) => void
 ): void {
   // Show day view, hide multi-day view
   showDayView(domRefs);
@@ -190,8 +276,8 @@ export function renderDayView(
   // Render all-day events
   renderAllDayEvents(context.events, context.focusEventId, appInstance, domRefs);
 
-  // Render time grid
-  renderTimeGrid(context, appInstance, domRefs);
+  // Render time grid with optional scheduling mode
+  renderTimeGrid(context, appInstance, domRefs, schedulingMode, onSlotSelect);
 
   // Show expand toggle and set up handler
   domRefs.expandToggle.style.display = '';
@@ -220,7 +306,9 @@ export function renderMultiDayView(
   appInstance: App | null,
   domRefs: DOMRefs,
   toggleDayExpanded: (dateStr: string) => void,
-  stateRefs: { expandedDays: Set<string>; hostLocale?: string }
+  stateRefs: { expandedDays: Set<string>; hostLocale?: string },
+  schedulingMode?: SchedulingMode,
+  onSlotSelect?: (slot: AvailableSlot) => void
 ): void {
   // Reset expanded days state
   stateRefs.expandedDays.clear();
@@ -269,7 +357,11 @@ export function renderMultiDayView(
     for (const date of context.dates) {
       const events = context.eventsByDate[date] || [];
       if (events.length > 0) {
-        const dateGroup = createDateGroup(date, events, appInstance, toggleDayExpanded, context.focusEventId);
+        // Calculate available slots for this day if scheduling mode is enabled
+        const availableSlots = schedulingMode?.enabled
+          ? calculateAvailableSlots(events, schedulingMode.durationMinutes)
+          : undefined;
+        const dateGroup = createDateGroup(date, events, appInstance, toggleDayExpanded, context.focusEventId, availableSlots, onSlotSelect);
         domRefs.multiDayEventsList.appendChild(dateGroup);
       }
     }

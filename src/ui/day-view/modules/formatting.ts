@@ -211,3 +211,14 @@ export function formatTimeRangeSubheading(context: MultiDayContext): string {
 
   return parts.join(' · ');
 }
+
+/**
+ * Format slot time from minutes since midnight (e.g., 540 -> "9 AM", 810 -> "1:30 PM")
+ */
+export function formatSlotTime(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  const h = hours % 12 || 12;
+  const ampm = hours < 12 ? 'AM' : 'PM';
+  return mins === 0 ? `${h} ${ampm}` : `${h}:${String(mins).padStart(2, '0')} ${ampm}`;
+}

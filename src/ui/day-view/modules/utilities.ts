@@ -3,7 +3,7 @@
  */
 
 import type { App } from '@modelcontextprotocol/ext-apps';
-import type { MultiDayViewEvent, CalendarSummary } from './types.js';
+import type { MultiDayViewEvent, CalendarSummary, AvailableSlot, DayViewEvent } from './types.js';
 import { formatCalendarName } from './formatting.js';
 
 /**
@@ -69,4 +69,68 @@ export function computeCalendarSummary(events: MultiDayViewEvent[]): CalendarSum
   }
 
   return Array.from(byAccount.values());
+}
+
+/**
+ * Calculate available time slots from events for scheduling mode
+ * Finds gaps between events that can fit meetings of the specified duration
+ */
+export function calculateAvailableSlots(
+  events: DayViewEvent[] | MultiDayViewEvent[],
+  durationMinutes: number,
+  workStartHour: number = 9,
+  workEndHour: number = 17
+): AvailableSlot[] {
+  const workStart = workStartHour * 60;
+  const workEnd = workEndHour * 60;
+  const slots: AvailableSlot[] = [];
+
+  // Filter to timed events only and sort by start time
+  const timedEvents = events
+    .filter(e => !e.isAllDay)
+    .map(e => {
+      const startDate = new Date(e.start);
+      const endDate = new Date(e.end);
+      return {
+        start: startDate.getHours() * 60 + startDate.getMinutes(),
+        end: endDate.getHours() * 60 + endDate.getMinutes()
+      };
+    })
+    .sort((a, b) => a.start - b.start);
+
+  // Find gaps and split into meeting-duration slots
+  let currentTime = workStart;
+  for (const event of timedEvents) {
+    if (event.start > currentTime) {
+      const gapEnd = event.start;
+      if (gapEnd - currentTime >= durationMinutes) {
+        // Create multiple slots at meeting-duration intervals
+        let slotStart = currentTime;
+        while (slotStart + durationMinutes <= gapEnd) {
+          slots.push({
+            startMinutes: slotStart,
+            endMinutes: slotStart + durationMinutes,
+            duration: durationMinutes
+          });
+          slotStart += durationMinutes;
+        }
+      }
+    }
+    currentTime = Math.max(currentTime, event.end);
+  }
+
+  // Check gap after last event until end of work day
+  if (workEnd > currentTime && workEnd - currentTime >= durationMinutes) {
+    let slotStart = currentTime;
+    while (slotStart + durationMinutes <= workEnd) {
+      slots.push({
+        startMinutes: slotStart,
+        endMinutes: slotStart + durationMinutes,
+        duration: durationMinutes
+      });
+      slotStart += durationMinutes;
+    }
+  }
+
+  return slots;
 }
