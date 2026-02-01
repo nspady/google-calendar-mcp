@@ -37,6 +37,79 @@
       padding: 4px;
       font-size: 12px;
     }
+
+    /* Available slot styles for scheduling mode */
+    .available-slot-item {
+      display: flex;
+      align-items: stretch;
+      gap: 12px;
+      padding: 10px 8px;
+      background: rgba(52, 168, 83, 0.06);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+      border: 2px solid transparent;
+      margin-bottom: 6px;
+    }
+    .available-slot-item:hover {
+      background: rgba(52, 168, 83, 0.12);
+    }
+    .available-slot-item.selected {
+      border-color: var(--success-color, #34a853);
+      background: rgba(52, 168, 83, 0.15);
+    }
+    .slot-color-bar {
+      width: 4px;
+      border-radius: 2px;
+      background: var(--success-color, #34a853);
+      flex-shrink: 0;
+    }
+    .slot-time-col {
+      min-width: 65px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .slot-start-time {
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .slot-end-time {
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+    .slot-details {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .slot-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--success-color, #34a853);
+    }
+    .slot-sublabel {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-top: 1px;
+    }
+    /* Slots summary in day header */
+    .slots-summary {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--success-color, #34a853);
+      margin-left: 8px;
+    }
+    .slots-summary::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      background: var(--success-color, #34a853);
+      border-radius: 50%;
+    }
   </style>
 </head>
 <body>
@@ -66,6 +139,23 @@
       <input type="checkbox" id="show-colors" checked>
       Use event colors
     </label>
+    <hr style="margin: 8px 0; border: none; border-top: 1px solid var(--border-color);">
+    <label>
+      <input type="checkbox" id="scheduling-mode">
+      Scheduling mode
+    </label>
+    <div id="scheduling-options" style="display: none; margin-top: 8px; padding: 8px; background: var(--bg-tertiary); border-radius: 4px;">
+      <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">Finding times with:</div>
+      <div style="font-size: 11px; font-weight: 500;">Alice, Bob</div>
+      <label style="margin-top: 6px;">
+        Duration:
+        <select id="slot-duration" style="font-size: 11px;">
+          <option value="30">30 min</option>
+          <option value="60" selected>1 hour</option>
+          <option value="90">1.5 hours</option>
+        </select>
+      </label>
+    </div>
   </div>
 
   <!-- App container (same as day-view.html) -->
@@ -607,6 +697,135 @@
     document.getElementById('view-select')?.addEventListener('change', rerender);
     document.getElementById('show-all-day')?.addEventListener('change', rerender);
     document.getElementById('show-colors')?.addEventListener('change', rerender);
+
+    // Scheduling mode toggle
+    document.getElementById('scheduling-mode')?.addEventListener('change', (e) => {
+      const optionsPanel = document.getElementById('scheduling-options');
+      if (optionsPanel) {
+        optionsPanel.style.display = e.target.checked ? 'block' : 'none';
+      }
+      rerender();
+    });
+    document.getElementById('slot-duration')?.addEventListener('change', rerender);
+
+    // Calculate available slots from events
+    function calculateAvailableSlots(events, durationMinutes) {
+      const workStart = 9 * 60; // 9 AM in minutes
+      const workEnd = 17 * 60;  // 5 PM in minutes
+      const slots = [];
+
+      // Filter to timed events only and sort by start time
+      const timedEvents = events
+        .filter(e => !e.isAllDay)
+        .map(e => ({
+          start: new Date(e.start).getHours() * 60 + new Date(e.start).getMinutes(),
+          end: new Date(e.end).getHours() * 60 + new Date(e.end).getMinutes()
+        }))
+        .sort((a, b) => a.start - b.start);
+
+      // Find gaps
+      let currentTime = workStart;
+      for (const event of timedEvents) {
+        if (event.start > currentTime) {
+          const gapDuration = event.start - currentTime;
+          if (gapDuration >= durationMinutes) {
+            slots.push({
+              startMinutes: currentTime,
+              endMinutes: event.start,
+              duration: gapDuration
+            });
+          }
+        }
+        currentTime = Math.max(currentTime, event.end);
+      }
+
+      // Check gap after last event until end of work day
+      if (workEnd > currentTime) {
+        const gapDuration = workEnd - currentTime;
+        if (gapDuration >= durationMinutes) {
+          slots.push({
+            startMinutes: currentTime,
+            endMinutes: workEnd,
+            duration: gapDuration
+          });
+        }
+      }
+
+      return slots;
+    }
+
+    function formatSlotTime(minutes) {
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      const h = hours % 12 || 12;
+      const ampm = hours < 12 ? 'AM' : 'PM';
+      return mins === 0 ? h + ' ' + ampm : h + ':' + String(mins).padStart(2, '0') + ' ' + ampm;
+    }
+
+    function createAvailableSlotElement(slot, dateStr) {
+      const item = document.createElement('div');
+      item.className = 'available-slot-item';
+      item.setAttribute('role', 'button');
+      item.setAttribute('tabindex', '0');
+      item.title = 'Click to select this time slot';
+
+      const bar = document.createElement('div');
+      bar.className = 'slot-color-bar';
+
+      const timeCol = document.createElement('div');
+      timeCol.className = 'slot-time-col';
+
+      const startTime = document.createElement('div');
+      startTime.className = 'slot-start-time';
+      startTime.textContent = formatSlotTime(slot.startMinutes);
+      timeCol.appendChild(startTime);
+
+      const endTime = document.createElement('div');
+      endTime.className = 'slot-end-time';
+      endTime.textContent = formatSlotTime(slot.endMinutes);
+      timeCol.appendChild(endTime);
+
+      const details = document.createElement('div');
+      details.className = 'slot-details';
+
+      const label = document.createElement('div');
+      label.className = 'slot-label';
+      const durationHours = Math.floor(slot.duration / 60);
+      const durationMins = slot.duration % 60;
+      const durationStr = durationHours > 0
+        ? (durationMins > 0 ? durationHours + 'h ' + durationMins + 'm' : durationHours + ' hour' + (durationHours > 1 ? 's' : ''))
+        : durationMins + ' min';
+      label.textContent = durationStr + ' available';
+      details.appendChild(label);
+
+      const sublabel = document.createElement('div');
+      sublabel.className = 'slot-sublabel';
+      sublabel.textContent = 'Everyone is free';
+      details.appendChild(sublabel);
+
+      item.appendChild(bar);
+      item.appendChild(timeCol);
+      item.appendChild(details);
+
+      item.addEventListener('click', () => {
+        document.querySelectorAll('.available-slot-item.selected').forEach(el => el.classList.remove('selected'));
+        item.classList.add('selected');
+      });
+
+      return item;
+    }
+
+    // Check if scheduling mode is active - expose globally for module script
+    window.isSchedulingMode = function() {
+      return document.getElementById('scheduling-mode')?.checked ?? false;
+    };
+
+    window.getSlotDuration = function() {
+      return parseInt(document.getElementById('slot-duration')?.value || '60');
+    };
+
+    window.calculateAvailableSlots = calculateAvailableSlots;
+    window.createAvailableSlotElement = createAvailableSlotElement;
 
     // Override the MCP Apps module
     window.MockApp = MockApp;
@@ -1305,7 +1524,7 @@
       return { top: `${topOffset}px`, height: `${height}px` };
     }
 
-    function createDayEventList(events, focusEventId) {
+    function createDayEventList(events, focusEventId, availableSlots, dateStr) {
       const container = document.createElement('div');
       container.className = 'expanded-day-list';
 
@@ -1384,120 +1603,158 @@
         container.appendChild(allDaySection);
       }
 
-      // Timed events with overlap detection and proportional heights
+      // Build unified timeline of events and available slots
+      // Convert slots to timeline items with comparable start times
+      const slotItems = (availableSlots || []).map(slot => ({
+        type: 'slot',
+        startMinutes: slot.startMinutes,
+        slot: slot
+      }));
+
+      // Track rendered events for overlap handling
       const renderedEventIds = new Set();
 
-      for (let i = 0; i < timedEvents.length; i++) {
-        const event = timedEvents[i];
+      // Process events and slots in chronological order
+      let eventIndex = 0;
+      let slotIndex = 0;
 
-        // Skip if already rendered as part of an overlap group
-        if (renderedEventIds.has(event.id)) {
-          continue;
-        }
-
-        const nextEvent = i < timedEvents.length - 1 ? timedEvents[i + 1] : null;
-        const overlapWithNext = nextEvent ? eventsOverlap(event, nextEvent) : { overlaps: false, overlapMinutes: 0 };
-
-        // If overlapping with next, render as an overlap group
-        if (overlapWithNext.overlaps && nextEvent) {
-          const overlapGroup = createOverlapGroup(event, nextEvent, overlapWithNext.overlapMinutes, focusEventId);
-          container.appendChild(overlapGroup);
-          renderedEventIds.add(event.id);
-          renderedEventIds.add(nextEvent.id);
-          continue;
-        }
-
-        // Otherwise render as a regular event row
-        const durationMinutes = getEventDurationMinutes(event);
-        const { height, continues } = calculateEventHeight(durationMinutes);
-
-        const isFocused = event.id === focusEventId;
-        const item = document.createElement('div');
-
-        const classes = ['expanded-event-item'];
-        if (isFocused) classes.push('focused');
-        if (continues) classes.push('event-continues-row');
-        item.className = classes.join(' ');
-
-        item.style.minHeight = `${height}px`;
-        item.style.cursor = 'pointer';
-        item.setAttribute('role', 'button');
-        item.setAttribute('tabindex', '0');
-
-        const tooltipParts = [event.summary];
-        tooltipParts.push(`${formatTime(event.start)} - ${formatTime(event.end)} (${formatDuration(durationMinutes)})`);
-        if (event.location) tooltipParts.push(event.location);
-        tooltipParts.push('Click to open in Google Calendar');
-        item.title = tooltipParts.join('\n');
-
-        item.addEventListener('click', () => openLink(event.htmlLink));
-        item.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            openLink(event.htmlLink);
+      while (eventIndex < timedEvents.length || slotIndex < slotItems.length) {
+        // Get current event start time in minutes (if any remaining)
+        let eventStartMinutes = Infinity;
+        if (eventIndex < timedEvents.length) {
+          const event = timedEvents[eventIndex];
+          if (!renderedEventIds.has(event.id)) {
+            const eventDate = new Date(event.start);
+            eventStartMinutes = eventDate.getHours() * 60 + eventDate.getMinutes();
           }
-        });
+        }
 
-        const colorBar = document.createElement('div');
-        const eventColor = event.backgroundColor || 'var(--accent-color)';
-        colorBar.className = 'event-color-bar';
-        colorBar.style.backgroundColor = eventColor;
+        // Get current slot start time (if any remaining)
+        const slotStartMinutes = slotIndex < slotItems.length ? slotItems[slotIndex].startMinutes : Infinity;
 
-        if (continues) {
-          colorBar.classList.add('event-continues');
-          const dashes = document.createElement('div');
-          dashes.className = 'event-continues-dashes';
-          for (let d = 0; d < 2; d++) {
-            const dash = document.createElement('div');
-            dash.className = 'dash';
-            dash.style.backgroundColor = eventColor;
-            dashes.appendChild(dash);
+        // Render whichever comes first
+        if (slotStartMinutes < eventStartMinutes && slotIndex < slotItems.length) {
+          // Render available slot
+          const slotEl = window.createAvailableSlotElement(slotItems[slotIndex].slot, dateStr);
+          container.appendChild(slotEl);
+          slotIndex++;
+        } else if (eventIndex < timedEvents.length) {
+          const event = timedEvents[eventIndex];
+
+          // Skip if already rendered as part of an overlap group
+          if (renderedEventIds.has(event.id)) {
+            eventIndex++;
+            continue;
           }
-          colorBar.appendChild(dashes);
+
+          const nextEvent = eventIndex < timedEvents.length - 1 ? timedEvents[eventIndex + 1] : null;
+          const overlapWithNext = nextEvent ? eventsOverlap(event, nextEvent) : { overlaps: false, overlapMinutes: 0 };
+
+          // If overlapping with next, render as an overlap group
+          if (overlapWithNext.overlaps && nextEvent) {
+            const overlapGroup = createOverlapGroup(event, nextEvent, overlapWithNext.overlapMinutes, focusEventId);
+            container.appendChild(overlapGroup);
+            renderedEventIds.add(event.id);
+            renderedEventIds.add(nextEvent.id);
+            eventIndex++;
+            continue;
+          }
+
+          // Otherwise render as a regular event row
+          const durationMinutes = getEventDurationMinutes(event);
+          const { height, continues } = calculateEventHeight(durationMinutes);
+
+          const isFocused = event.id === focusEventId;
+          const item = document.createElement('div');
+
+          const classes = ['expanded-event-item'];
+          if (isFocused) classes.push('focused');
+          if (continues) classes.push('event-continues-row');
+          item.className = classes.join(' ');
+
+          item.style.minHeight = `${height}px`;
+          item.style.cursor = 'pointer';
+          item.setAttribute('role', 'button');
+          item.setAttribute('tabindex', '0');
+
+          const tooltipParts = [event.summary];
+          tooltipParts.push(`${formatTime(event.start)} - ${formatTime(event.end)} (${formatDuration(durationMinutes)})`);
+          if (event.location) tooltipParts.push(event.location);
+          tooltipParts.push('Click to open in Google Calendar');
+          item.title = tooltipParts.join('\n');
+
+          item.addEventListener('click', () => openLink(event.htmlLink));
+          item.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              openLink(event.htmlLink);
+            }
+          });
+
+          const colorBar = document.createElement('div');
+          const eventColor = event.backgroundColor || 'var(--accent-color)';
+          colorBar.className = 'event-color-bar';
+          colorBar.style.backgroundColor = eventColor;
+
+          if (continues) {
+            colorBar.classList.add('event-continues');
+            const dashes = document.createElement('div');
+            dashes.className = 'event-continues-dashes';
+            for (let d = 0; d < 2; d++) {
+              const dash = document.createElement('div');
+              dash.className = 'dash';
+              dash.style.backgroundColor = eventColor;
+              dashes.appendChild(dash);
+            }
+            colorBar.appendChild(dashes);
+          }
+
+          item.appendChild(colorBar);
+
+          const timeCol = document.createElement('div');
+          timeCol.className = 'event-time-col';
+          const startTime = document.createElement('div');
+          startTime.textContent = formatTime(event.start);
+          timeCol.appendChild(startTime);
+          const endTime = document.createElement('div');
+          endTime.className = 'event-end-time';
+          endTime.textContent = formatTime(event.end);
+          timeCol.appendChild(endTime);
+          if (continues) {
+            const durationLabel = document.createElement('div');
+            durationLabel.className = 'event-duration-label';
+            durationLabel.textContent = formatDuration(durationMinutes);
+            timeCol.appendChild(durationLabel);
+          }
+          item.appendChild(timeCol);
+
+          const details = document.createElement('div');
+          details.className = 'event-details';
+
+          const titleRow = document.createElement('div');
+          titleRow.className = 'event-item-title-row';
+          const title = document.createElement('div');
+          title.className = 'event-item-title';
+          title.textContent = event.summary;
+          titleRow.appendChild(title);
+          const calendarLabel = document.createElement('div');
+          calendarLabel.className = 'event-item-calendar';
+          calendarLabel.textContent = formatCalendarName(event.calendarId, event.calendarName);
+          titleRow.appendChild(calendarLabel);
+          details.appendChild(titleRow);
+
+          if (event.location) {
+            const location = document.createElement('div');
+            location.className = 'event-item-location';
+            location.textContent = event.location;
+            details.appendChild(location);
+          }
+          item.appendChild(details);
+          container.appendChild(item);
+          eventIndex++;
+        } else {
+          break;
         }
-
-        item.appendChild(colorBar);
-
-        const timeCol = document.createElement('div');
-        timeCol.className = 'event-time-col';
-        const startTime = document.createElement('div');
-        startTime.textContent = formatTime(event.start);
-        timeCol.appendChild(startTime);
-        const endTime = document.createElement('div');
-        endTime.className = 'event-end-time';
-        endTime.textContent = formatTime(event.end);
-        timeCol.appendChild(endTime);
-        if (continues) {
-          const durationLabel = document.createElement('div');
-          durationLabel.className = 'event-duration-label';
-          durationLabel.textContent = formatDuration(durationMinutes);
-          timeCol.appendChild(durationLabel);
-        }
-        item.appendChild(timeCol);
-
-        const details = document.createElement('div');
-        details.className = 'event-details';
-
-        const titleRow = document.createElement('div');
-        titleRow.className = 'event-item-title-row';
-        const title = document.createElement('div');
-        title.className = 'event-item-title';
-        title.textContent = event.summary;
-        titleRow.appendChild(title);
-        const calendarLabel = document.createElement('div');
-        calendarLabel.className = 'event-item-calendar';
-        calendarLabel.textContent = formatCalendarName(event.calendarId, event.calendarName);
-        titleRow.appendChild(calendarLabel);
-        details.appendChild(titleRow);
-
-        if (event.location) {
-          const location = document.createElement('div');
-          location.className = 'event-item-location';
-          location.textContent = event.location;
-          details.appendChild(location);
-        }
-        item.appendChild(details);
-        container.appendChild(item);
       }
 
       return container;
@@ -1581,6 +1838,12 @@
       group.className = 'date-group';
       group.setAttribute('data-date', dateStr);
 
+      // Calculate available slots if in scheduling mode
+      const schedulingActive = window.isSchedulingMode();
+      const availableSlots = schedulingActive
+        ? window.calculateAvailableSlots(events, window.getSlotDuration())
+        : [];
+
       const header = document.createElement('div');
       header.className = 'date-header';
       header.setAttribute('role', 'button');
@@ -1602,6 +1865,14 @@
       // Calendar summary (inline in header)
       const calendarSummary = createCalendarSummary(events);
       header.appendChild(calendarSummary);
+
+      // Available slots summary (when in scheduling mode)
+      if (schedulingActive && availableSlots.length > 0) {
+        const slotsSummary = document.createElement('div');
+        slotsSummary.className = 'slots-summary';
+        slotsSummary.textContent = availableSlots.length + ' slot' + (availableSlots.length > 1 ? 's' : '') + ' available';
+        header.appendChild(slotsSummary);
+      }
 
       // Expand icon (SVG chevron)
       const expandIcon = document.createElement('div');
@@ -1630,7 +1901,7 @@
       group.appendChild(header);
 
       // Day event list (starts collapsed)
-      const dayEventList = createDayEventList(events, focusEventId);
+      const dayEventList = createDayEventList(events, focusEventId, availableSlots, dateStr);
       dayEventList.className = 'date-events collapsed';
 
       group.appendChild(dayEventList);

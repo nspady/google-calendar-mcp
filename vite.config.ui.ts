@@ -4,7 +4,7 @@ import { resolve } from 'path';
 
 export default defineConfig({
   plugins: [viteSingleFile()],
-  root: 'src/ui/day-view',
+  root: 'src/ui',
   build: {
     outDir: resolve(__dirname, 'build/ui'),
     emptyOutDir: true,

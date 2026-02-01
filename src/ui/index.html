@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UI Previews</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 { margin-bottom: 24px; }
+    .preview-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    a {
+      display: block;
+      padding: 16px 20px;
+      background: white;
+      border-radius: 8px;
+      text-decoration: none;
+      color: #1a73e8;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      transition: box-shadow 0.15s ease;
+    }
+    a:hover {
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .desc {
+      font-size: 13px;
+      color: #666;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <h1>UI Previews</h1>
+  <div class="preview-list">
+    <a href="/day-view/preview.html">
+      <strong>Day View</strong>
+      <div class="desc">Calendar day/multi-day event display (includes scheduling mode)</div>
+    </a>
+    <a href="/scheduler/preview.html">
+      <strong>Scheduler (standalone)</strong>
+      <div class="desc">Simplified available times view prototype</div>
+    </a>
+  </div>
+</body>
+</html>
