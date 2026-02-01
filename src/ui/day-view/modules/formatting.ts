@@ -159,14 +159,14 @@ export function formatCalendarName(calendarId: string, calendarName?: string): s
  */
 export function formatOverlapDuration(minutes: number): string {
   if (minutes < 60) {
-    return `${minutes}m overlap`;
+    return `${minutes} min`;
   }
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
   if (mins === 0) {
-    return `${hours}h overlap`;
+    return `${hours} hr`;
   }
-  return `${hours}h ${mins}m overlap`;
+  return `${hours} hr ${mins} min`;
 }
 
 /**

@@ -220,6 +220,12 @@ export function createOverlapGroup(
 
   overlapRow.appendChild(overlapBars);
 
+  // Overlap duration label (positioned after bars for prominence)
+  const overlapLabel = document.createElement('div');
+  overlapLabel.className = 'overlap-label';
+  overlapLabel.textContent = formatOverlapDuration(overlapMinutes);
+  overlapRow.appendChild(overlapLabel);
+
   // Event B time column
   const timeColB = document.createElement('div');
   timeColB.className = 'event-time-col';
@@ -255,12 +261,6 @@ export function createOverlapGroup(
     detailsB.appendChild(locB);
   }
   overlapRow.appendChild(detailsB);
-
-  // Overlap duration label
-  const overlapLabel = document.createElement('div');
-  overlapLabel.className = 'overlap-label';
-  overlapLabel.textContent = formatOverlapDuration(overlapMinutes);
-  overlapRow.appendChild(overlapLabel);
 
   if (eventB.id === focusEventId) {
     overlapRow.classList.add('focused');

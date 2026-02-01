@@ -749,8 +749,8 @@ body {
 }
 
 .overlap-region.overlap-region-with-event .overlap-label {
-  margin-left: auto;
   flex-shrink: 0;
+  min-width: 75px;
 }
 
 /* When Event A continues after Event B ends */
