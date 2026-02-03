@@ -162,9 +162,12 @@
   <div id="app">
     <!-- Single-day view (time grid) -->
     <div id="day-view-container">
-      <div class="day-view-header">
-        <h2 id="date-heading">Loading...</h2>
-        <a id="day-link" href="#" target="_blank" class="open-calendar-btn" style="display: none;">Open in Calendar</a>
+      <div id="day-view-header" class="day-view-header">
+        <div class="day-view-title-row">
+          <h2 id="date-heading">Loading...</h2>
+          <a id="day-link" href="#" target="_blank" class="open-calendar-btn" style="display: none;">Open in Calendar</a>
+        </div>
+        <div id="calendar-legend-container"></div>
       </div>
       <div id="all-day-section" class="all-day-section" style="display: none;">
         <div class="all-day-label">All day</div>
@@ -207,91 +210,177 @@
 
       const events = [];
 
-      // All-day event
+      // All-day event (work calendar)
       if (options.showAllDay !== false) {
         events.push({
           id: 'all-day-1',
-          summary: 'Team offsite - Planning day',
+          summary: 'Home',
           start: dateStr,
           end: dateStr,
           isAllDay: true,
           htmlLink: 'https://calendar.google.com',
-          colorId: options.useColors ? '4' : undefined, // Flamingo
-          calendarId: 'primary'
+          backgroundColor: options.useColors ? '#f6bf26' : undefined, // Banana
+          calendarId: 'primary',
+          accountId: 'work'
         });
       }
 
-      // Morning meeting
+      // === OVERLAPPING EVENTS - Same Calendar (Family) ===
+      // Bandits ride: 6:00 AM - 10:00 AM
       events.push({
-        id: 'event-1',
-        summary: 'Daily standup',
-        start: `${dateStr}T09:00:00`,
-        end: `${dateStr}T09:30:00`,
+        id: 'overlap-bandits',
+        summary: 'Bandits ride',
+        start: `${dateStr}T06:00:00`,
+        end: `${dateStr}T10:00:00`,
         isAllDay: false,
-        location: 'Zoom',
         htmlLink: 'https://calendar.google.com',
-        colorId: options.useColors ? '7' : undefined, // Peacock
-        calendarId: 'primary'
+        backgroundColor: options.useColors ? '#33b679' : undefined, // Sage
+        calendarId: 'family@group.calendar.google.com',
+        accountId: 'personal'
       });
 
-      // Design review
+      // School Drop Off: 8:00 AM - 8:30 AM (overlaps with Bandits ride)
       events.push({
-        id: 'event-2',
-        summary: 'Design review - Day View UI',
+        id: 'overlap-school',
+        summary: 'School Drop Off',
+        start: `${dateStr}T08:00:00`,
+        end: `${dateStr}T08:30:00`,
+        isAllDay: false,
+        htmlLink: 'https://calendar.google.com',
+        backgroundColor: options.useColors ? '#7986cb' : undefined, // Lavender
+        calendarId: 'family@group.calendar.google.com',
+        accountId: 'personal'
+      });
+
+      // Meeting with Emily: 10:00 AM - 10:25 AM
+      events.push({
+        id: 'event-meeting-emily',
+        summary: 'Meeting with Emily Spady and Stephanie Moulton-Peters',
         start: `${dateStr}T10:00:00`,
-        end: `${dateStr}T11:00:00`,
+        end: `${dateStr}T10:25:00`,
         isAllDay: false,
-        location: 'Conference Room A',
         htmlLink: 'https://calendar.google.com',
-        colorId: options.useColors ? '9' : undefined, // Blueberry
-        calendarId: 'primary'
+        backgroundColor: options.useColors ? '#7986cb' : undefined, // Lavender
+        calendarId: 'primary',
+        accountId: 'work'
       });
 
-      // Lunch
+      // === OVERLAPPING EVENTS - Different Calendars ===
+      // Block: 12:00 PM - 2:30 PM (work calendar)
       events.push({
-        id: 'event-3',
-        summary: 'Lunch with team',
+        id: 'overlap-block',
+        summary: 'block',
         start: `${dateStr}T12:00:00`,
+        end: `${dateStr}T14:30:00`,
+        isAllDay: false,
+        htmlLink: 'https://calendar.google.com',
+        backgroundColor: options.useColors ? '#e1bee7' : undefined, // Light purple
+        calendarId: 'primary',
+        accountId: 'work'
+      });
+
+      // PTA Check-in: 12:30 PM - 1:00 PM (family calendar, overlaps with block)
+      events.push({
+        id: 'overlap-pta',
+        summary: 'PTA Check-in',
+        start: `${dateStr}T12:30:00`,
         end: `${dateStr}T13:00:00`,
         isAllDay: false,
-        location: 'Cafe downstairs',
         htmlLink: 'https://calendar.google.com',
-        colorId: options.useColors ? '5' : undefined, // Banana
-        calendarId: 'primary'
+        backgroundColor: options.useColors ? '#e1bee7' : undefined, // Light purple
+        calendarId: 'family@group.calendar.google.com',
+        accountId: 'personal'
       });
 
-      // Afternoon meeting
+      // Meet with Jen: 1:30 PM - 2:30 PM (work, overlaps with block)
       events.push({
-        id: 'event-4',
-        summary: 'Sprint planning',
+        id: 'overlap-jen',
+        summary: 'Meet with Jen at DO',
+        start: `${dateStr}T13:30:00`,
+        end: `${dateStr}T14:30:00`,
+        isAllDay: false,
+        htmlLink: 'https://calendar.google.com',
+        backgroundColor: options.useColors ? '#e1bee7' : undefined, // Light purple
+        calendarId: 'primary',
+        accountId: 'work'
+      });
+
+      // Monthly AI Cost Reconciliation: 2:00 PM - 2:30 PM (overlaps with block and Jen)
+      events.push({
+        id: 'overlap-ai-cost',
+        summary: 'Monthly AI Cost Reconciliation',
         start: `${dateStr}T14:00:00`,
-        end: `${dateStr}T15:30:00`,
+        end: `${dateStr}T14:30:00`,
         isAllDay: false,
         htmlLink: 'https://calendar.google.com',
-        colorId: options.useColors ? '2' : undefined, // Sage
-        calendarId: 'primary'
+        backgroundColor: options.useColors ? '#f6bf26' : undefined, // Banana
+        calendarId: 'primary',
+        accountId: 'work'
       });
 
-      // Focus time
+      // School Pick Up: 2:25 PM - 2:55 PM (family, overlaps with AI Cost)
       events.push({
-        id: 'event-5',
-        summary: 'Focus time - Deep work',
-        start: `${dateStr}T16:00:00`,
-        end: `${dateStr}T17:30:00`,
+        id: 'overlap-pickup',
+        summary: 'School Pick Up - 2:35',
+        start: `${dateStr}T14:25:00`,
+        end: `${dateStr}T14:55:00`,
         isAllDay: false,
         htmlLink: 'https://calendar.google.com',
-        colorId: options.useColors ? '3' : undefined, // Grape
-        calendarId: 'primary'
+        backgroundColor: options.useColors ? '#33b679' : undefined, // Sage
+        calendarId: 'family@group.calendar.google.com',
+        accountId: 'personal'
+      });
+
+      // Parkour: 3:30 PM - 4:30 PM
+      events.push({
+        id: 'event-parkour',
+        summary: 'Parkour',
+        start: `${dateStr}T15:30:00`,
+        end: `${dateStr}T16:30:00`,
+        isAllDay: false,
+        location: 'The Cave, 405 Tamal Plaza, Corte Madera, CA 94925, USA',
+        htmlLink: 'https://calendar.google.com',
+        backgroundColor: options.useColors ? '#f6bf26' : undefined, // Banana
+        calendarId: 'family@group.calendar.google.com',
+        accountId: 'personal'
+      });
+
+      // === MORE OVERLAPPING - Same Calendar ===
+      // Family time: 5:30 PM - 8:45 PM
+      events.push({
+        id: 'overlap-family',
+        summary: 'Family time',
+        start: `${dateStr}T17:30:00`,
+        end: `${dateStr}T20:45:00`,
+        isAllDay: false,
+        htmlLink: 'https://calendar.google.com',
+        backgroundColor: options.useColors ? '#7986cb' : undefined, // Lavender
+        calendarId: 'family@group.calendar.google.com',
+        accountId: 'personal'
+      });
+
+      // Dinner at Roaming Goat: 6:30 PM - 8:30 PM (overlaps with Family time)
+      events.push({
+        id: 'overlap-dinner',
+        summary: 'Dinner at Roaming Goat',
+        start: `${dateStr}T18:30:00`,
+        end: `${dateStr}T20:30:00`,
+        isAllDay: false,
+        location: '1830 Union St, San Francisco, CA 94123, USA',
+        htmlLink: 'https://calendar.google.com',
+        backgroundColor: options.useColors ? '#33b679' : undefined, // Sage
+        calendarId: 'family@group.calendar.google.com',
+        accountId: 'personal'
       });
 
       return {
         date: dateStr,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         events,
-        focusEventId: 'event-2', // Focus on design review
+        focusEventId: 'event-meeting-emily', // Focus on meeting
         timeRange: {
-          startHour: 8,
-          endHour: 18
+          startHour: 5,
+          endHour: 21
         },
         dayLink: 'https://calendar.google.com'
       };
@@ -847,8 +936,10 @@
     // Copy the day-view initialization logic with mock
     // Day view elements
     const dayViewContainer = document.getElementById('day-view-container');
+    const dayViewHeader = document.getElementById('day-view-header');
     const dateHeading = document.getElementById('date-heading');
     const dayLink = document.getElementById('day-link');
+    const calendarLegendContainer = document.getElementById('calendar-legend-container');
     const allDaySection = document.getElementById('all-day-section');
     const allDayEvents = document.getElementById('all-day-events');
     const timeGrid = document.getElementById('time-grid');
@@ -938,6 +1029,156 @@
       window.open(url, '_blank', 'noopener,noreferrer');
     }
 
+    // Check if two events overlap in time
+    function eventsOverlapInTime(eventA, eventB) {
+      if (eventA.isAllDay || eventB.isAllDay) return false;
+      const startA = new Date(eventA.start).getTime();
+      const endA = new Date(eventA.end).getTime();
+      const startB = new Date(eventB.start).getTime();
+      const endB = new Date(eventB.end).getTime();
+      return startA < endB && startB < endA;
+    }
+
+    // Calculate overlap columns for side-by-side stacking
+    function calculateOverlapColumns(events) {
+      const positions = new Map();
+      const timedEvents = events.filter(e => !e.isAllDay);
+      if (timedEvents.length === 0) return positions;
+
+      // Sort by start time
+      const sortedEvents = [...timedEvents].sort((a, b) => {
+        const startDiff = new Date(a.start).getTime() - new Date(b.start).getTime();
+        if (startDiff !== 0) return startDiff;
+        return new Date(a.end).getTime() - new Date(b.end).getTime();
+      });
+
+      // Find overlap groups
+      const overlapGroups = [];
+      const visited = new Set();
+
+      for (const event of sortedEvents) {
+        if (visited.has(event.id)) continue;
+        const group = [];
+        const queue = [event];
+        while (queue.length > 0) {
+          const current = queue.shift();
+          if (visited.has(current.id)) continue;
+          visited.add(current.id);
+          group.push(current);
+          for (const other of sortedEvents) {
+            if (!visited.has(other.id) && eventsOverlapInTime(current, other)) {
+              queue.push(other);
+            }
+          }
+        }
+        if (group.length > 0) overlapGroups.push(group);
+      }
+
+      // Assign columns within each group
+      for (const group of overlapGroups) {
+        if (group.length === 1) {
+          positions.set(group[0].id, { columnIndex: 0, totalColumns: 1 });
+          continue;
+        }
+        group.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+        const columns = [];
+        for (const event of group) {
+          const eventStart = new Date(event.start).getTime();
+          let columnIndex = 0;
+          while (columnIndex < columns.length && columns[columnIndex] > eventStart) {
+            columnIndex++;
+          }
+          columns[columnIndex] = new Date(event.end).getTime();
+          positions.set(event.id, { columnIndex, totalColumns: 0 });
+        }
+        const maxColumns = columns.length;
+        for (const event of group) {
+          const pos = positions.get(event.id);
+          positions.set(event.id, { ...pos, totalColumns: maxColumns });
+        }
+      }
+      return positions;
+    }
+
+    // Compute calendar filters for legend
+    function computeCalendarFilters(events) {
+      const filterMap = new Map();
+      for (const event of events) {
+        const key = event.accountId ? `${event.accountId}:${event.calendarId}` : event.calendarId;
+        const existing = filterMap.get(key);
+        if (existing) {
+          existing.eventCount++;
+        } else {
+          filterMap.set(key, {
+            calendarId: event.calendarId,
+            accountId: event.accountId,
+            displayName: event.accountId || formatCalendarName(event.calendarId),
+            backgroundColor: event.backgroundColor || 'var(--accent-color)',
+            eventCount: 1,
+            visible: true
+          });
+        }
+      }
+      return Array.from(filterMap.values());
+    }
+
+    // Filter events based on visibility
+    function filterVisibleEvents(events, filters) {
+      const hidden = new Set();
+      for (const f of filters) {
+        if (!f.visible) {
+          hidden.add(f.accountId ? `${f.accountId}:${f.calendarId}` : f.calendarId);
+        }
+      }
+      if (hidden.size === 0) return events;
+      return events.filter(e => {
+        const key = e.accountId ? `${e.accountId}:${e.calendarId}` : e.calendarId;
+        return !hidden.has(key);
+      });
+    }
+
+    // Create calendar legend
+    function createCalendarLegend(filters, onToggle) {
+      const container = document.createElement('div');
+      container.className = 'calendar-legend';
+      for (const filter of filters) {
+        const item = document.createElement('button');
+        item.className = `calendar-legend-item${filter.visible ? '' : ' hidden'}`;
+        item.setAttribute('role', 'checkbox');
+        item.setAttribute('aria-checked', filter.visible ? 'true' : 'false');
+        item.title = filter.visible ? `Click to hide ${filter.displayName} events` : `Click to show ${filter.displayName} events`;
+
+        const dot = document.createElement('span');
+        dot.className = 'legend-dot';
+        dot.style.backgroundColor = filter.backgroundColor;
+        item.appendChild(dot);
+
+        const name = document.createElement('span');
+        name.className = 'legend-name';
+        name.textContent = filter.displayName;
+        item.appendChild(name);
+
+        const count = document.createElement('span');
+        count.className = 'legend-count';
+        count.textContent = `(${filter.eventCount})`;
+        item.appendChild(count);
+
+        item.addEventListener('click', () => {
+          filter.visible = !filter.visible;
+          item.classList.toggle('hidden', !filter.visible);
+          item.setAttribute('aria-checked', filter.visible ? 'true' : 'false');
+          item.title = filter.visible ? `Click to hide ${filter.displayName} events` : `Click to show ${filter.displayName} events`;
+          onToggle(filter);
+        });
+        container.appendChild(item);
+      }
+      return container;
+    }
+
+    // Current calendar filters state
+    let currentCalendarFilters = [];
+    let currentContext = null;
+
     function toggleExpanded() {
       isExpanded = !isExpanded;
       if (isExpanded) {
@@ -966,13 +1207,20 @@
       element.title = tooltipParts.join('\n');
       element.addEventListener('click', () => openLink(event.htmlLink));
 
-      const colorClass = getEventColorClass(event.colorId);
+      // Use backgroundColor directly if available, otherwise fall back to colorId class
+      const colorClass = event.backgroundColor ? '' : getEventColorClass(event.colorId);
 
       if (isAllDay) {
         element.className = `all-day-event ${colorClass} ${isFocused ? 'focused' : ''}`.trim();
+        if (event.backgroundColor) {
+          element.style.backgroundColor = event.backgroundColor;
+        }
         element.textContent = event.summary;
       } else {
         element.className = `event-block ${colorClass} ${isFocused ? 'focused' : ''}`.trim();
+        if (event.backgroundColor) {
+          element.style.backgroundColor = event.backgroundColor;
+        }
 
         // Content wrapper for horizontal layout
         const contentDiv = document.createElement('div');
@@ -1003,14 +1251,14 @@
 
     function renderAllDayEvents(events, focusEventId) {
       const allDayEvts = events.filter(e => e.isAllDay);
+      while (allDayEvents.firstChild) {
+        allDayEvents.removeChild(allDayEvents.firstChild);
+      }
       if (allDayEvts.length === 0) {
         allDaySection.style.display = 'none';
         return;
       }
       allDaySection.style.display = 'flex';
-      while (allDayEvents.firstChild) {
-        allDayEvents.removeChild(allDayEvents.firstChild);
-      }
       for (const event of allDayEvts) {
         const isFocused = event.id === focusEventId;
         const element = createEventElement(event, isFocused, true);
@@ -1057,8 +1305,9 @@
       return element;
     }
 
-    function renderTimeGrid(context) {
-      const { events, focusEventId, timeRange } = context;
+    function renderTimeGrid(context, visibleEvents) {
+      const { focusEventId, timeRange } = context;
+      const events = visibleEvents || context.events;
       const { startHour, endHour } = timeRange;
 
       while (timeGrid.firstChild) {
@@ -1066,6 +1315,9 @@
       }
 
       const timedEvents = events.filter(e => !e.isAllDay);
+
+      // Calculate overlap columns for side-by-side stacking
+      const overlapColumns = calculateOverlapColumns(timedEvents);
 
       for (let hour = startHour; hour < endHour; hour++) {
         const row = document.createElement('div');
@@ -1091,17 +1343,7 @@
       eventsContainer.style.bottom = '0';
       eventsContainer.style.pointerEvents = 'none';
 
-      for (const event of timedEvents) {
-        const isFocused = event.id === focusEventId;
-        const element = createEventElement(event, isFocused);
-        const position = calculateEventPosition(event, startHour, endHour);
-        element.style.top = position.top;
-        element.style.height = position.height;
-        element.style.pointerEvents = 'auto';
-        eventsContainer.appendChild(element);
-      }
-
-      // Add available slots if scheduling mode is enabled
+      // Add available slots FIRST (behind events) if scheduling mode is enabled
       if (window.isSchedulingMode()) {
         const availableSlots = window.calculateAvailableSlots(events, window.getSlotDuration());
 
@@ -1115,9 +1357,44 @@
           slotElement.style.left = '0';
           slotElement.style.right = '0';
           slotElement.style.pointerEvents = 'auto';
+          slotElement.style.zIndex = '0';
 
           eventsContainer.appendChild(slotElement);
         }
+      }
+
+      // Add events AFTER slots (on top)
+      // Apply overlap positioning for side-by-side stacking
+      const PADDING = 4;
+      const GAP = 2;
+
+      for (const event of timedEvents) {
+        const isFocused = event.id === focusEventId;
+        const element = createEventElement(event, isFocused);
+        const position = calculateEventPosition(event, startHour, endHour);
+        const overlapPos = overlapColumns.get(event.id);
+
+        element.style.top = position.top;
+        element.style.height = position.height;
+        element.style.pointerEvents = 'auto';
+
+        // Apply horizontal positioning for overlapping events
+        if (overlapPos && overlapPos.totalColumns > 1) {
+          const totalColumns = overlapPos.totalColumns;
+          const columnIndex = overlapPos.columnIndex;
+          const columnWidth = (100 - (GAP * (totalColumns - 1))) / totalColumns;
+          const leftPercent = columnIndex * (columnWidth + GAP);
+
+          element.style.left = `calc(${leftPercent}% + ${PADDING}px)`;
+          element.style.width = `calc(${columnWidth}% - ${PADDING * 2}px)`;
+          element.style.right = 'auto';
+        } else {
+          element.style.left = `${PADDING}px`;
+          element.style.right = `${PADDING}px`;
+        }
+
+        element.style.zIndex = String(1 + (overlapPos?.columnIndex || 0));
+        eventsContainer.appendChild(element);
       }
 
       timeGrid.style.position = 'relative';
@@ -1130,6 +1407,7 @@
     }
 
     function renderDayView(context) {
+      currentContext = context;
       showDayView();
       dateHeading.textContent = formatDateHeading(context.date);
       dayLink.style.display = '';
@@ -1138,8 +1416,24 @@
         e.preventDefault();
         openLink(context.dayLink);
       };
+
+      // Compute and render calendar legend
+      currentCalendarFilters = computeCalendarFilters(context.events);
+      while (calendarLegendContainer.firstChild) {
+        calendarLegendContainer.removeChild(calendarLegendContainer.firstChild);
+      }
+      if (currentCalendarFilters.length > 1) {
+        const legend = createCalendarLegend(currentCalendarFilters, () => {
+          // Re-render events when a calendar is toggled
+          const visibleEvents = filterVisibleEvents(context.events, currentCalendarFilters);
+          renderAllDayEvents(visibleEvents, context.focusEventId);
+          renderTimeGrid(context, visibleEvents);
+        });
+        calendarLegendContainer.appendChild(legend);
+      }
+
       renderAllDayEvents(context.events, context.focusEventId);
-      renderTimeGrid(context);
+      renderTimeGrid(context, context.events);
       expandToggle.style.display = '';
       expandToggle.onclick = toggleExpanded;
       isExpanded = false;

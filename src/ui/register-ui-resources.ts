@@ -14,11 +14,11 @@ export const DAY_VIEW_RESOURCE_URI = 'ui://calendar/day-view.html';
  */
 async function loadDayViewHtml(): Promise<string> {
   // Possible locations for the UI file:
-  // 1. build/ui/day-view.html (when running bundled build/index.js, __dirname is "build/")
+  // 1. build/ui/day-view/day-view.html (when running bundled build/index.js, __dirname is "build/")
   // 2. src/ui/ relative path (source mode, though typically we run built code)
   const locations = [
-    join(__dirname, 'ui', 'day-view.html'),      // build/ui/day-view.html (bundled)
-    join(__dirname, '../build/ui/day-view.html'), // From src/ui/ to build/ui/ (source)
+    join(__dirname, 'ui', 'day-view', 'day-view.html'),      // build/ui/day-view/day-view.html (bundled)
+    join(__dirname, '../build/ui/day-view/day-view.html'),   // From src/ui/ to build/ui/ (source)
   ];
 
   for (const filePath of locations) {

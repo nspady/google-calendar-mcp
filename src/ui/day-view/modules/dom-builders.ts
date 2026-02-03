@@ -3,7 +3,7 @@
  */
 
 import type { App } from '@modelcontextprotocol/ext-apps';
-import type { DayViewEvent, MultiDayViewEvent, AvailableSlot } from './types.js';
+import type { DayViewEvent, MultiDayViewEvent, AvailableSlot, CalendarFilter } from './types.js';
 import {
   formatTime,
   formatDuration,
@@ -60,13 +60,25 @@ export function createEventElement(
     }
   });
 
-  const colorClass = getEventColorClass(event.colorId);
+  // Use backgroundColor directly if available, otherwise fall back to colorId class
+  const colorClass = event.backgroundColor ? '' : getEventColorClass(event.colorId);
+
+  // Check if event has ended (for past event styling)
+  const now = new Date();
+  const eventEnd = new Date(event.end);
+  const isPast = eventEnd < now;
 
   if (isAllDay) {
-    element.className = `all-day-event ${colorClass} ${isFocused ? 'focused' : ''}`.trim();
+    element.className = `all-day-event ${colorClass} ${isFocused ? 'focused' : ''} ${isPast ? 'event-past' : ''}`.trim();
+    if (event.backgroundColor) {
+      element.style.backgroundColor = event.backgroundColor;
+    }
     element.textContent = event.summary;
   } else {
-    element.className = `event-block ${colorClass} ${isFocused ? 'focused' : ''}`.trim();
+    element.className = `event-block ${colorClass} ${isFocused ? 'focused' : ''} ${isPast ? 'event-past' : ''}`.trim();
+    if (event.backgroundColor) {
+      element.style.backgroundColor = event.backgroundColor;
+    }
 
     // Content wrapper for horizontal layout
     const contentDiv = document.createElement('div');
@@ -93,6 +105,57 @@ export function createEventElement(
   }
 
   return element;
+}
+
+/**
+ * Create the calendar legend for the day view header
+ * Shows all calendars with color dots, names, event counts, and toggle visibility
+ */
+export function createCalendarLegend(
+  filters: CalendarFilter[],
+  onToggle: (filter: CalendarFilter) => void
+): HTMLDivElement {
+  const container = document.createElement('div');
+  container.className = 'calendar-legend';
+
+  for (const filter of filters) {
+    const item = document.createElement('button');
+    item.className = `calendar-legend-item${filter.visible ? '' : ' hidden'}`;
+    item.setAttribute('role', 'checkbox');
+    item.setAttribute('aria-checked', filter.visible ? 'true' : 'false');
+    item.title = filter.visible
+      ? `Click to hide ${filter.displayName} events`
+      : `Click to show ${filter.displayName} events`;
+
+    const dot = document.createElement('span');
+    dot.className = 'legend-dot';
+    dot.style.backgroundColor = filter.backgroundColor;
+    item.appendChild(dot);
+
+    const name = document.createElement('span');
+    name.className = 'legend-name';
+    name.textContent = filter.displayName;
+    item.appendChild(name);
+
+    const count = document.createElement('span');
+    count.className = 'legend-count';
+    count.textContent = `(${filter.eventCount})`;
+    item.appendChild(count);
+
+    item.addEventListener('click', () => {
+      filter.visible = !filter.visible;
+      item.classList.toggle('hidden', !filter.visible);
+      item.setAttribute('aria-checked', filter.visible ? 'true' : 'false');
+      item.title = filter.visible
+        ? `Click to hide ${filter.displayName} events`
+        : `Click to show ${filter.displayName} events`;
+      onToggle(filter);
+    });
+
+    container.appendChild(item);
+  }
+
+  return container;
 }
 
 /**

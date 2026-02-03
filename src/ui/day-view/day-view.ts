@@ -20,8 +20,10 @@ import { extractDayContext, extractMultiDayContext } from './modules/context-ext
 
 // DOM element references - Day view
 const dayViewContainer = document.getElementById('day-view-container') as HTMLDivElement;
+const dayViewHeader = document.getElementById('day-view-header') as HTMLDivElement;
 const dateHeading = document.getElementById('date-heading') as HTMLHeadingElement;
 const dayLink = document.getElementById('day-link') as HTMLAnchorElement;
+const calendarLegendContainer = document.getElementById('calendar-legend-container') as HTMLDivElement;
 const allDaySection = document.getElementById('all-day-section') as HTMLDivElement;
 const allDayEvents = document.getElementById('all-day-events') as HTMLDivElement;
 const timeGrid = document.getElementById('time-grid') as HTMLDivElement;
@@ -53,8 +55,10 @@ let hostTimeZone: string | undefined;
 const domRefs: DOMRefs = {
   // Day view
   dayViewContainer,
+  dayViewHeader,
   dateHeading,
   dayLink,
+  calendarLegendContainer,
   allDaySection,
   allDayEvents,
   timeGrid,

@@ -10,9 +10,12 @@
   <div id="app">
     <!-- Single-day view (time grid) -->
     <div id="day-view-container">
-      <div class="day-view-header">
-        <h2 id="date-heading">Loading...</h2>
-        <a id="day-link" href="#" target="_blank" class="open-calendar-btn" style="display: none;">Open in Calendar</a>
+      <div id="day-view-header" class="day-view-header">
+        <div class="day-view-title-row">
+          <h2 id="date-heading">Loading...</h2>
+          <a id="day-link" href="#" target="_blank" class="open-calendar-btn" style="display: none;">Open in Calendar</a>
+        </div>
+        <div id="calendar-legend-container"></div>
       </div>
       <div id="all-day-section" class="all-day-section" style="display: none;">
         <div class="all-day-label">All day</div>
