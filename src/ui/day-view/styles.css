@@ -55,11 +55,17 @@ body {
 /* Header styles */
 .day-view-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 12px;
   margin-bottom: 16px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--border-color);
+}
+
+.day-view-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 #date-heading {
@@ -90,6 +96,62 @@ body {
 .open-calendar-btn:focus {
   outline: none;
   box-shadow: 0 0 0 3px var(--focus-ring-color);
+}
+
+/* Calendar Legend */
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.calendar-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: var(--font-text-xs-size, 12px);
+  color: var(--text-primary);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.calendar-legend-item:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.calendar-legend-item:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--focus-ring-color);
+}
+
+.calendar-legend-item.hidden {
+  opacity: 0.5;
+  background-color: transparent;
+}
+
+.calendar-legend-item.hidden .legend-dot {
+  opacity: 0.4;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legend-name {
+  font-weight: 500;
+}
+
+.legend-count {
+  color: var(--text-tertiary);
+  font-weight: 400;
 }
 
 /* All-day events section */
@@ -125,6 +187,8 @@ body {
   color: var(--color-text-inverse, #ffffff);
   background-color: var(--accent-color);
   border-radius: var(--border-radius-sm, 4px);
+  border-left: 3px solid rgba(0, 0, 0, 0.15);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
   text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
@@ -186,17 +250,19 @@ body {
   color: var(--color-text-inverse, #ffffff);
   background-color: var(--accent-color);
   border-radius: var(--border-radius-sm, 4px);
+  border-left: 3px solid rgba(0, 0, 0, 0.15);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
   text-decoration: none;
   overflow: hidden;
   z-index: 1;
-  transition: opacity 0.2s, box-shadow 0.2s, min-height 0.15s ease-out;
+  transition: opacity 0.2s, box-shadow 0.2s, min-height 0.15s ease-out, z-index 0s;
 }
 
 .event-block:hover {
   opacity: 0.95;
   z-index: 10;
   min-height: auto;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
 
 .event-block.focused {
@@ -275,13 +341,25 @@ body {
 .event-color-10 { background-color: #0b8043; } /* Basil */
 .event-color-11 { background-color: #d50000; } /* Tomato */
 
+/* Past event styling - muted appearance */
+.event-block.event-past,
+.all-day-event.event-past {
+  opacity: 0.65;
+  filter: grayscale(30%);
+}
+
+.event-block.event-past:hover,
+.all-day-event.event-past:hover {
+  opacity: 0.75;
+}
+
 /* Current time indicator */
 .current-time-line {
   position: absolute;
-  left: var(--hour-width);
+  left: 0;
   right: 0;
   height: 2px;
-  background-color: #ea4335;
+  background: linear-gradient(90deg, var(--accent-color) 0%, var(--accent-color) 40%, transparent 100%);
   z-index: 5;
   pointer-events: none;
 }
@@ -289,12 +367,13 @@ body {
 .current-time-line::before {
   content: '';
   position: absolute;
-  left: -6px;
+  left: -5px;
   top: -4px;
   width: 10px;
   height: 10px;
-  background-color: #ea4335;
+  background-color: var(--accent-color);
   border-radius: 50%;
+  box-shadow: 0 0 8px var(--accent-color), 0 0 16px rgba(26, 115, 232, 0.3);
 }
 
 /* Loading and empty states */
@@ -306,6 +385,31 @@ body {
   min-height: 200px;
   color: var(--text-secondary);
   font-size: 14px;
+}
+
+/* Loading text shimmer effect */
+.loading-shimmer {
+  color: var(--text-tertiary);
+  background: linear-gradient(
+    90deg,
+    var(--text-tertiary) 0%,
+    var(--text-secondary) 50%,
+    var(--text-tertiary) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
 }
 
 /* Compact/Expanded view toggle */
@@ -1089,6 +1193,7 @@ body {
   flex-direction: column;
   justify-content: center;
   overflow: hidden;
+  z-index: 0;
 }
 
 .time-grid-slot:hover {

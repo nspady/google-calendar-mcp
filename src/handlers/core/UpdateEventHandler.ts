@@ -14,7 +14,8 @@ import {
 } from "../../utils/response-builder.js";
 import {
     UpdateEventResponse,
-    convertGoogleEventToStructured
+    convertGoogleEventToStructured,
+    EventColorContext
 } from "../../types/structured-responses.js";
 
 export class UpdateEventHandler extends BaseToolHandler {
@@ -94,8 +95,19 @@ export class UpdateEventHandler extends BaseToolHandler {
         // Update the event with resolved calendar ID and merged attendees
         const updatedEvent = await this.updateEventWithScope(oauth2Client, argsWithMergedAttendees);
 
+        // Fetch color context for proper event display
+        const [eventPalette, calendarData] = await Promise.all([
+            this.getEventColorPalette(oauth2Client),
+            this.getCalendarColors(oauth2Client, [resolvedCalendarId])
+        ]);
+        const colorContext: EventColorContext = {
+            eventPalette,
+            calendarColors: calendarData.colors,
+            calendarNames: calendarData.names
+        };
+
         // Convert updated event to structured format
-        const structuredEvent = convertGoogleEventToStructured(updatedEvent, resolvedCalendarId, selectedAccountId);
+        const structuredEvent = convertGoogleEventToStructured(updatedEvent, resolvedCalendarId, selectedAccountId, colorContext);
 
         // Fetch surrounding events for day view
         let dayContext = undefined;
@@ -117,7 +129,7 @@ export class UpdateEventHandler extends BaseToolHandler {
 
             const dayEvents = (dayEventsResponse.data.items || [])
                 .filter(e => e.id !== updatedEvent.id)
-                .map(e => convertGoogleEventToStructured(e, resolvedCalendarId, selectedAccountId));
+                .map(e => convertGoogleEventToStructured(e, resolvedCalendarId, selectedAccountId, colorContext));
 
             dayContext = this.dayContextService.buildDayContext(
                 structuredEvent,

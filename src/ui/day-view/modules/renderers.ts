@@ -3,11 +3,11 @@
  */
 
 import type { App } from '@modelcontextprotocol/ext-apps';
-import type { DayViewEvent, DayContext, MultiDayContext, AvailableSlot, SchedulingMode } from './types.js';
+import type { DayViewEvent, DayContext, MultiDayContext, AvailableSlot, SchedulingMode, CalendarFilter } from './types.js';
 import { formatHour, formatDateHeading, formatTimeRangeSubheading, formatSlotTime } from './formatting.js';
-import { openLink, calculateAvailableSlots } from './utilities.js';
-import { calculateEventPosition } from './positioning.js';
-import { createEventElement, createDateGroup } from './dom-builders.js';
+import { openLink, calculateAvailableSlots, computeCalendarFilters, filterVisibleEvents, isToday } from './utilities.js';
+import { calculateEventPosition, calculateOverlapColumns } from './positioning.js';
+import { createEventElement, createDateGroup, createCalendarLegend } from './dom-builders.js';
 
 /**
  * DOM References interface
@@ -15,8 +15,10 @@ import { createEventElement, createDateGroup } from './dom-builders.js';
 export interface DOMRefs {
   // Day view
   dayViewContainer: HTMLDivElement;
+  dayViewHeader: HTMLDivElement;
   dateHeading: HTMLHeadingElement;
   dayLink: HTMLAnchorElement;
+  calendarLegendContainer: HTMLDivElement;
   allDaySection: HTMLDivElement;
   allDayEvents: HTMLDivElement;
   timeGrid: HTMLDivElement;
@@ -46,6 +48,7 @@ export function showLoadingState(domRefs: DOMRefs): void {
   // Show day view container for loading message, hide multi-day
   showDayView(domRefs);
   domRefs.dateHeading.textContent = 'Loading...';
+  domRefs.dateHeading.classList.add('loading-shimmer');
   domRefs.allDaySection.style.display = 'none';
   while (domRefs.timeGrid.firstChild) {
     domRefs.timeGrid.removeChild(domRefs.timeGrid.firstChild);
@@ -60,6 +63,7 @@ export function showLoadingState(domRefs: DOMRefs): void {
 export function showCancelledState(domRefs: DOMRefs, reason?: string): void {
   // Show day view container for cancelled message, hide multi-day
   showDayView(domRefs);
+  domRefs.dateHeading.classList.remove('loading-shimmer');
   domRefs.dateHeading.textContent = reason ? `Cancelled: ${reason}` : 'Cancelled';
   domRefs.allDaySection.style.display = 'none';
   while (domRefs.timeGrid.firstChild) {
@@ -80,6 +84,11 @@ export function renderAllDayEvents(
 ): void {
   const allDayEvts = events.filter(e => e.isAllDay);
 
+  // Clear existing events
+  while (domRefs.allDayEvents.firstChild) {
+    domRefs.allDayEvents.removeChild(domRefs.allDayEvents.firstChild);
+  }
+
   if (allDayEvts.length === 0) {
     domRefs.allDaySection.style.display = 'none';
     return;
@@ -87,12 +96,7 @@ export function renderAllDayEvents(
 
   domRefs.allDaySection.style.display = 'flex';
 
-  // Clear existing events
-  while (domRefs.allDayEvents.firstChild) {
-    domRefs.allDayEvents.removeChild(domRefs.allDayEvents.firstChild);
-  }
-
-  // Add events
+  // Add events with borders matching the event color
   for (const event of allDayEvts) {
     const isFocused = event.id === focusEventId;
     const element = createEventElement(event, isFocused, appInstance, true);
@@ -170,10 +174,12 @@ export function renderTimeGrid(
   context: DayContext,
   appInstance: App | null,
   domRefs: DOMRefs,
+  visibleEvents?: DayViewEvent[],
   schedulingMode?: SchedulingMode,
   onSlotSelect?: (slot: AvailableSlot) => void
 ): void {
-  const { events, focusEventId, timeRange } = context;
+  const { focusEventId, timeRange } = context;
+  const events = visibleEvents || context.events;
   const { startHour, endHour } = timeRange;
 
   // Clear existing content
@@ -183,6 +189,9 @@ export function renderTimeGrid(
 
   // Filter timed events (not all-day)
   const timedEvents = events.filter(e => !e.isAllDay);
+
+  // Calculate overlap columns for side-by-side stacking
+  const overlapColumns = calculateOverlapColumns(timedEvents);
 
   // Create time rows
   for (let hour = startHour; hour < endHour; hour++) {
@@ -210,20 +219,7 @@ export function renderTimeGrid(
   eventsContainer.style.bottom = '0';
   eventsContainer.style.pointerEvents = 'none';
 
-  // Position and add events
-  for (const event of timedEvents) {
-    const isFocused = event.id === focusEventId;
-    const element = createEventElement(event, isFocused, appInstance);
-    const position = calculateEventPosition(event, startHour, endHour);
-
-    element.style.top = position.top;
-    element.style.height = position.height;
-    element.style.pointerEvents = 'auto';
-
-    eventsContainer.appendChild(element);
-  }
-
-  // Add available slots if scheduling mode is enabled
+  // Add available slots FIRST (behind events) if scheduling mode is enabled
   if (schedulingMode?.enabled) {
     const availableSlots = calculateAvailableSlots(events, schedulingMode.durationMinutes, startHour, endHour);
 
@@ -237,14 +233,67 @@ export function renderTimeGrid(
       slotElement.style.left = '0';
       slotElement.style.right = '0';
       slotElement.style.pointerEvents = 'auto';
+      slotElement.style.zIndex = '0';
 
       eventsContainer.appendChild(slotElement);
     }
   }
 
+  // Position and add events AFTER slots (on top)
+  // Apply overlap positioning for side-by-side stacking
+  const PADDING = 4; // px padding between events and edges
+  const GAP = 2; // px gap between overlapping events
+
+  for (const event of timedEvents) {
+    const isFocused = event.id === focusEventId;
+    const element = createEventElement(event, isFocused, appInstance);
+    const position = calculateEventPosition(event, startHour, endHour);
+    const overlapPos = overlapColumns.get(event.id);
+
+    element.style.top = position.top;
+    element.style.height = position.height;
+    element.style.pointerEvents = 'auto';
+
+    // Apply horizontal positioning for overlapping events
+    if (overlapPos && overlapPos.totalColumns > 1) {
+      const totalColumns = overlapPos.totalColumns;
+      const columnIndex = overlapPos.columnIndex;
+      const columnWidth = (100 - (GAP * (totalColumns - 1))) / totalColumns;
+      const leftPercent = columnIndex * (columnWidth + GAP);
+
+      element.style.left = `calc(${leftPercent}% + ${PADDING}px)`;
+      element.style.width = `calc(${columnWidth}% - ${PADDING * 2}px)`;
+      element.style.right = 'auto';
+    } else {
+      element.style.left = `${PADDING}px`;
+      element.style.right = `${PADDING}px`;
+    }
+
+    element.style.zIndex = String(1 + (overlapPos?.columnIndex || 0));
+
+    eventsContainer.appendChild(element);
+  }
+
   // Make time grid position relative for absolute positioning of events
   domRefs.timeGrid.style.position = 'relative';
   domRefs.timeGrid.appendChild(eventsContainer);
+
+  // Add current time indicator if viewing today
+  if (isToday(context.date)) {
+    const now = new Date();
+    const currentHour = now.getHours() + now.getMinutes() / 60;
+
+    // Only show if current time is within visible time range
+    if (currentHour >= startHour && currentHour <= endHour) {
+      const ROW_HEIGHT = 48;
+      const topPosition = (currentHour - startHour) * ROW_HEIGHT;
+
+      const timeLine = document.createElement('div');
+      timeLine.className = 'current-time-line';
+      timeLine.style.top = `${topPosition}px`;
+      eventsContainer.appendChild(timeLine);
+    }
+  }
 }
 
 /**
@@ -255,7 +304,7 @@ export function renderDayView(
   appInstance: App | null,
   domRefs: DOMRefs,
   toggleExpanded: () => void,
-  stateRefs: { isExpanded: { value: boolean } },
+  stateRefs: { isExpanded: { value: boolean }; calendarFilters?: CalendarFilter[] },
   schedulingMode?: SchedulingMode,
   onSlotSelect?: (slot: AvailableSlot) => void
 ): void {
@@ -263,6 +312,7 @@ export function renderDayView(
   showDayView(domRefs);
 
   // Update header
+  domRefs.dateHeading.classList.remove('loading-shimmer');
   domRefs.dateHeading.textContent = formatDateHeading(context.date);
 
   // Show and set up "Open in Calendar" button with click handler (sandboxed iframe)
@@ -273,11 +323,32 @@ export function renderDayView(
     openLink(context.dayLink, appInstance);
   };
 
+  // Compute calendar filters for legend
+  const filters = computeCalendarFilters(context.events);
+  stateRefs.calendarFilters = filters;
+
+  // Create and add calendar legend if we have multiple calendars
+  if (domRefs.calendarLegendContainer) {
+    while (domRefs.calendarLegendContainer.firstChild) {
+      domRefs.calendarLegendContainer.removeChild(domRefs.calendarLegendContainer.firstChild);
+    }
+
+    if (filters.length > 1) {
+      const legend = createCalendarLegend(filters, () => {
+        // Re-render events when a calendar is toggled
+        const visibleEvents = filterVisibleEvents(context.events, filters);
+        renderAllDayEvents(visibleEvents, context.focusEventId, appInstance, domRefs);
+        renderTimeGrid(context, appInstance, domRefs, visibleEvents, schedulingMode, onSlotSelect);
+      });
+      domRefs.calendarLegendContainer.appendChild(legend);
+    }
+  }
+
   // Render all-day events
   renderAllDayEvents(context.events, context.focusEventId, appInstance, domRefs);
 
   // Render time grid with optional scheduling mode
-  renderTimeGrid(context, appInstance, domRefs, schedulingMode, onSlotSelect);
+  renderTimeGrid(context, appInstance, domRefs, context.events, schedulingMode, onSlotSelect);
 
   // Show expand toggle and set up handler
   domRefs.expandToggle.style.display = '';

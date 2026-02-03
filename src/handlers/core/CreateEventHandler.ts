@@ -8,7 +8,7 @@ import { validateEventId } from "../../utils/event-id-validator.js";
 import { ConflictDetectionService } from "../../services/conflict-detection/index.js";
 import { CONFLICT_DETECTION_CONFIG } from "../../services/conflict-detection/config.js";
 import { createStructuredResponse, convertConflictsToStructured, createWarningsArray } from "../../utils/response-builder.js";
-import { CreateEventResponse, convertGoogleEventToStructured } from "../../types/structured-responses.js";
+import { CreateEventResponse, convertGoogleEventToStructured, EventColorContext } from "../../types/structured-responses.js";
 import { DayContextService } from "../../services/day-context/index.js";
 
 export class CreateEventHandler extends BaseToolHandler {
@@ -86,8 +86,19 @@ export class CreateEventHandler extends BaseToolHandler {
         const argsWithResolvedCalendar = { ...validArgs, calendarId: resolvedCalendarId };
         const event = await this.createEvent(oauth2Client, argsWithResolvedCalendar);
 
+        // Fetch color context for proper event display
+        const [eventPalette, calendarData] = await Promise.all([
+            this.getEventColorPalette(oauth2Client),
+            this.getCalendarColors(oauth2Client, [resolvedCalendarId])
+        ]);
+        const colorContext: EventColorContext = {
+            eventPalette,
+            calendarColors: calendarData.colors,
+            calendarNames: calendarData.names
+        };
+
         // Convert created event to structured format
-        const structuredEvent = convertGoogleEventToStructured(event, resolvedCalendarId, selectedAccountId);
+        const structuredEvent = convertGoogleEventToStructured(event, resolvedCalendarId, selectedAccountId, colorContext);
 
         // Fetch surrounding events for day view
         let dayContext = undefined;
@@ -109,7 +120,7 @@ export class CreateEventHandler extends BaseToolHandler {
 
             const dayEvents = (dayEventsResponse.data.items || [])
                 .filter(e => e.id !== event.id)
-                .map(e => convertGoogleEventToStructured(e, resolvedCalendarId, selectedAccountId));
+                .map(e => convertGoogleEventToStructured(e, resolvedCalendarId, selectedAccountId, colorContext));
 
             dayContext = this.dayContextService.buildDayContext(
                 structuredEvent,
