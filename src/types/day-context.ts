@@ -12,7 +12,11 @@ export interface DayViewEvent {
   location?: string;
   htmlLink: string;
   colorId?: string;
+  /** Resolved background color (hex, e.g., "#7986cb") - from event colorId or calendar default */
+  backgroundColor?: string;
   calendarId: string;
+  /** Calendar display name (user's summaryOverride or calendar's summary) */
+  calendarName?: string;
   accountId?: string;
 }
 
@@ -53,7 +57,9 @@ export function toDayViewEvent(event: StructuredEvent): DayViewEvent {
     location: event.location,
     htmlLink: event.htmlLink || '',
     colorId: event.colorId,
+    backgroundColor: event.backgroundColor,
     calendarId: event.calendarId || '',
+    calendarName: event.calendarName,
     accountId: event.accountId,
   };
 }

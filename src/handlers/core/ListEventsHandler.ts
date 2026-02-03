@@ -344,7 +344,7 @@ export class ListEventsHandler extends BaseToolHandler {
 
     /**
      * Builds color context for multi-account event queries.
-     * Fetches event palette once (global) and collects calendar colors from all accounts.
+     * Fetches event palette once (global) and collects calendar colors/names from all accounts.
      */
     private async buildMultiAccountColorContext(
         eventsPerAccount: Array<{ accountId: string; calendarIds: string[]; events: ExtendedEvent[] }>,
@@ -356,8 +356,9 @@ export class ListEventsHandler extends BaseToolHandler {
         const firstClient = selectedAccounts.get(firstAccountId)!;
         const eventPalette = await this.getEventColorPalette(firstClient);
 
-        // Collect calendar colors from each account that has those calendars
+        // Collect calendar colors and names from each account that has those calendars
         const calendarColors: Record<string, { background: string; foreground: string }> = {};
+        const calendarNames: Record<string, string> = {};
 
         await Promise.all(
             eventsPerAccount
@@ -365,12 +366,13 @@ export class ListEventsHandler extends BaseToolHandler {
                 .map(async (result) => {
                     const client = selectedAccounts.get(result.accountId);
                     if (client) {
-                        const colors = await this.getCalendarColors(client, result.calendarIds);
-                        Object.assign(calendarColors, colors);
+                        const calendarData = await this.getCalendarColors(client, result.calendarIds);
+                        Object.assign(calendarColors, calendarData.colors);
+                        Object.assign(calendarNames, calendarData.names);
                     }
                 })
         );
 
-        return { eventPalette, calendarColors };
+        return { eventPalette, calendarColors, calendarNames };
     }
 }

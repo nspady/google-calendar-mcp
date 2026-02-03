@@ -3,7 +3,7 @@
  */
 
 import type { App } from '@modelcontextprotocol/ext-apps';
-import type { MultiDayViewEvent, CalendarSummary, AvailableSlot, DayViewEvent } from './types.js';
+import type { MultiDayViewEvent, CalendarSummary, AvailableSlot, DayViewEvent, CalendarFilter } from './types.js';
 import { formatCalendarName } from './formatting.js';
 
 /**
@@ -47,28 +47,28 @@ export function isToday(dateStr: string): boolean {
 
 /**
  * Compute calendar summary for a day's events (for collapsed view)
- * Groups by account nickname (accountId) for cleaner display
+ * Groups by calendar (calendarId) and shows the actual calendar name
  */
 export function computeCalendarSummary(events: MultiDayViewEvent[]): CalendarSummary[] {
-  const byAccount = new Map<string, CalendarSummary>();
+  const byCalendar = new Map<string, CalendarSummary>();
 
   for (const event of events) {
-    // Use accountId as the grouping key, fall back to calendarId if no account
-    const key = event.accountId || event.calendarId;
-    const existing = byAccount.get(key);
+    // Use calendarId as the grouping key
+    const key = event.calendarId;
+    const existing = byCalendar.get(key);
     if (existing) {
       existing.count++;
     } else {
-      byAccount.set(key, {
+      byCalendar.set(key, {
         calendarId: event.calendarId,
-        calendarName: event.accountId || formatCalendarName(event.calendarId),
+        calendarName: event.calendarName || formatCalendarName(event.calendarId, event.calendarName),
         backgroundColor: event.backgroundColor || 'var(--accent-color)',
         count: 1
       });
     }
   }
 
-  return Array.from(byAccount.values());
+  return Array.from(byCalendar.values());
 }
 
 /**
@@ -133,4 +133,63 @@ export function calculateAvailableSlots(
   }
 
   return slots;
+}
+
+/**
+ * Compute calendar filters for the day view legend
+ * Groups events by calendarId and shows actual calendar names
+ */
+export function computeCalendarFilters(events: DayViewEvent[]): CalendarFilter[] {
+  const filterMap = new Map<string, CalendarFilter>();
+
+  for (const event of events) {
+    // Use calendarId as the grouping key
+    const key = event.calendarId;
+
+    const existing = filterMap.get(key);
+    if (existing) {
+      existing.eventCount++;
+    } else {
+      // Use calendar name if available, otherwise format calendar ID
+      const displayName = (event as any).calendarName || formatCalendarName(event.calendarId);
+      filterMap.set(key, {
+        calendarId: event.calendarId,
+        accountId: event.accountId,
+        displayName,
+        backgroundColor: event.backgroundColor || 'var(--accent-color)',
+        eventCount: 1,
+        visible: true
+      });
+    }
+  }
+
+  return Array.from(filterMap.values());
+}
+
+/**
+ * Filter events based on calendar visibility
+ */
+export function filterVisibleEvents<T extends DayViewEvent | MultiDayViewEvent>(
+  events: T[],
+  filters: CalendarFilter[]
+): T[] {
+  const hiddenCalendars = new Set<string>();
+
+  for (const filter of filters) {
+    if (!filter.visible) {
+      const key = filter.accountId
+        ? `${filter.accountId}:${filter.calendarId}`
+        : filter.calendarId;
+      hiddenCalendars.add(key);
+    }
+  }
+
+  if (hiddenCalendars.size === 0) return events;
+
+  return events.filter(event => {
+    const key = event.accountId
+      ? `${event.accountId}:${event.calendarId}`
+      : event.calendarId;
+    return !hiddenCalendars.has(key);
+  });
 }

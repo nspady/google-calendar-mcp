@@ -58,6 +58,7 @@ export function toMultiDayViewEvent(event: StructuredEvent): MultiDayViewEvent {
     backgroundColor: event.backgroundColor,
     foregroundColor: event.foregroundColor,
     calendarId: event.calendarId || '',
+    calendarName: event.calendarName,
     accountId: event.accountId,
   };
 }

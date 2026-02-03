@@ -856,8 +856,12 @@ Original error: ${errorMessage}`
     protected async getCalendarColors(
         client: OAuth2Client,
         calendarIds: string[]
-    ): Promise<Record<string, { background: string; foreground: string }>> {
+    ): Promise<{
+        colors: Record<string, { background: string; foreground: string }>;
+        names: Record<string, string>;
+    }> {
         const colors: Record<string, { background: string; foreground: string }> = {};
+        const names: Record<string, string> = {};
 
         try {
             const calendarApi = this.getCalendar(client);
@@ -906,27 +910,33 @@ Original error: ${errorMessage}`
                     colorEntry = calendarPalette[cal.colorId];
                 }
 
-                if (!colorEntry) {
-                    continue;
-                }
+                // Calendar display name: user's override takes precedence over calendar title
+                const displayName = cal.summaryOverride || cal.summary || cal.id;
 
                 // If this calendar ID was explicitly requested, add it
                 if (requestedIds.has(cal.id)) {
-                    colors[cal.id] = colorEntry;
+                    if (colorEntry) {
+                        colors[cal.id] = colorEntry;
+                    }
+                    names[cal.id] = displayName;
                 }
 
                 // If "primary" was requested and this is the primary calendar,
-                // add colors for both "primary" alias and the actual calendar ID
+                // add for both "primary" alias and the actual calendar ID
                 if (wantsPrimary && cal.primary) {
-                    colors['primary'] = colorEntry;
-                    colors[cal.id] = colorEntry;
+                    if (colorEntry) {
+                        colors['primary'] = colorEntry;
+                        colors[cal.id] = colorEntry;
+                    }
+                    names['primary'] = displayName;
+                    names[cal.id] = displayName;
                 }
             }
         } catch {
-            // If we can't get calendar colors, return empty map (non-fatal)
+            // If we can't get calendar data, return empty maps (non-fatal)
         }
 
-        return colors;
+        return { colors, names };
     }
 
     /**
@@ -942,14 +952,15 @@ Original error: ${errorMessage}`
         calendarIds: string[]
     ): Promise<EventColorContext> {
         // Fetch both in parallel for efficiency
-        const [eventPalette, calendarColors] = await Promise.all([
+        const [eventPalette, calendarData] = await Promise.all([
             this.getEventColorPalette(client),
             this.getCalendarColors(client, calendarIds)
         ]);
 
         return {
             eventPalette,
-            calendarColors
+            calendarColors: calendarData.colors,
+            calendarNames: calendarData.names
         };
     }
 

@@ -125,6 +125,8 @@ export interface EventColorContext {
   eventPalette: Record<string, { background: string; foreground: string }>;
   /** Calendar default colors keyed by calendarId */
   calendarColors: Record<string, { background: string; foreground: string }>;
+  /** Calendar display names keyed by calendarId (summaryOverride or summary) */
+  calendarNames: Record<string, string>;
 }
 
 /**
@@ -150,6 +152,8 @@ export interface StructuredEvent {
   backgroundColor?: string;
   /** Resolved foreground/text color (hex, e.g., "#ffffff") - from event colorId override or calendar default */
   foregroundColor?: string;
+  /** Calendar display name (user's summaryOverride or calendar's summary) */
+  calendarName?: string;
   creator?: {
     email?: string;
     displayName?: string;
@@ -668,6 +672,7 @@ export function convertGoogleEventToStructured(
     privateCopy: event.privateCopy ?? undefined,
     locked: event.locked ?? undefined,
     calendarId: calendarId,
+    calendarName: calendarId && colorContext?.calendarNames?.[calendarId],
     accountId: accountId,
   };
 }

@@ -190,6 +190,24 @@ npm run dev test:integration:direct
 - `BaseToolHandler.handleGoogleApiError()` for consistent Google API error handling
 - Maps HTTP status codes to appropriate MCP error codes
 
+### Logging
+
+**stdio transport constraint**: Server MUST NOT write to stdout (breaks JSON-RPC protocol). Use stderr instead.
+
+```typescript
+// Debug logging (appears in Claude Desktop logs)
+console.error('[DEBUG] my message', someData);
+process.stderr.write('Debug info\n');
+
+// Protocol-compliant logging (visible to client)
+server.sendLoggingMessage({ level: "info", data: "message" });
+```
+
+**View Claude Desktop logs** (macOS):
+```bash
+tail -n 20 -F ~/Library/Logs/Claude/mcp*.log
+```
+
 ### Structured Output Migration
 
 The codebase uses a structured response format for tool outputs. Recent commits (see git status) show migration to structured outputs using types from `src/types/structured-responses.ts`. When updating handlers, ensure responses conform to these structured formats.

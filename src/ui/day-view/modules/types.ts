@@ -14,7 +14,11 @@ export interface DayViewEvent {
   location?: string;
   htmlLink: string;
   colorId?: string;
+  /** Resolved background color (hex, e.g., "#7986cb") - from event colorId or calendar default */
+  backgroundColor?: string;
   calendarId: string;
+  /** Calendar display name (user's summaryOverride or calendar's summary) */
+  calendarName?: string;
   accountId?: string;
 }
 
@@ -90,4 +94,24 @@ export interface AvailableSlot {
 export interface SchedulingMode {
   enabled: boolean;
   durationMinutes: number;
+}
+
+/**
+ * Calendar filter item for legend toggle
+ */
+export interface CalendarFilter {
+  calendarId: string;
+  accountId?: string;
+  displayName: string;
+  backgroundColor: string;
+  eventCount: number;
+  visible: boolean;
+}
+
+/**
+ * Overlap positioning info for stacking events side-by-side
+ */
+export interface OverlapPosition {
+  columnIndex: number;
+  totalColumns: number;
 }
