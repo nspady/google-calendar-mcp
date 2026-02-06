@@ -54,7 +54,9 @@ export async function registerUIResources(server: McpServer): Promise<void> {
           }],
         };
       } catch (error) {
-        // Return placeholder if UI not built
+        // Return placeholder if UI not built - log for debugging
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[registerUIResources] Failed to load day view HTML: ${message}`);
         return {
           contents: [{
             uri: DAY_VIEW_RESOURCE_URI,

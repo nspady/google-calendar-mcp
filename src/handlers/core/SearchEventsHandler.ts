@@ -203,19 +203,21 @@ export class SearchEventsHandler extends BaseToolHandler {
         const firstClient = selectedAccounts.get(firstAccountId)!;
         const eventPalette = await this.getEventColorPalette(firstClient);
 
-        // Collect calendar colors from each account that has those calendars
+        // Collect calendar colors and names from each account that has those calendars
         const calendarColors: Record<string, { background: string; foreground: string }> = {};
+        const calendarNames: Record<string, string> = {};
 
         await Promise.all(
             Array.from(accountCalendarMap.entries()).map(async ([accountId, calendarIds]) => {
                 const client = selectedAccounts.get(accountId);
                 if (client && calendarIds.length > 0) {
-                    const colors = await this.getCalendarColors(client, calendarIds);
-                    Object.assign(calendarColors, colors);
+                    const calendarData = await this.getCalendarColors(client, calendarIds);
+                    Object.assign(calendarColors, calendarData.colors);
+                    Object.assign(calendarNames, calendarData.names);
                 }
             })
         );
 
-        return { eventPalette, calendarColors };
+        return { eventPalette, calendarColors, calendarNames };
     }
 }

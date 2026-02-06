@@ -52,8 +52,9 @@ export class ListEventsHandler extends BaseToolHandler {
                 // Extract date from timeMin (the start of the range)
                 return timeMin.split('T')[0];
             }
-        } catch {
-            // Invalid date format
+        } catch (error) {
+            // Invalid date format - log for debugging
+            console.error(`[isSingleDayQuery] Failed to parse time range: ${error}`);
         }
 
         return null;
@@ -194,7 +195,7 @@ export class ListEventsHandler extends BaseToolHandler {
                 singleDayDate,
                 timezone
             );
-        } else if (!singleDayDate) {
+        } else {
             // Multi-day query (span > 24 hours): use multi-day context (list view)
             // Always include context even when empty so UI can show "no events" state
             multiDayContext = this.multiDayContextService.buildMultiDayContext(

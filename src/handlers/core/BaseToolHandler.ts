@@ -837,7 +837,9 @@ Original error: ${errorMessage}`
             }
             return palette;
         } catch (error) {
-            // If we can't get colors, return empty palette (non-fatal)
+            // Non-fatal: return empty palette, but log for debugging
+            const message = error instanceof Error ? error.message : String(error);
+            console.error(`[getEventColorPalette] Failed to fetch event color palette: ${message}`);
             return {};
         }
     }
@@ -932,8 +934,10 @@ Original error: ${errorMessage}`
                     names[cal.id] = displayName;
                 }
             }
-        } catch {
-            // If we can't get calendar data, return empty maps (non-fatal)
+        } catch (error) {
+            // Non-fatal: return empty maps, but log for debugging
+            const message = error instanceof Error ? error.message : String(error);
+            console.error(`[getCalendarColors] Failed to fetch calendar colors: ${message}`);
         }
 
         return { colors, names };

@@ -151,7 +151,7 @@ export function computeCalendarFilters(events: DayViewEvent[]): CalendarFilter[]
       existing.eventCount++;
     } else {
       // Use calendar name if available, otherwise format calendar ID
-      const displayName = (event as any).calendarName || formatCalendarName(event.calendarId);
+      const displayName = event.calendarName || formatCalendarName(event.calendarId);
       filterMap.set(key, {
         calendarId: event.calendarId,
         accountId: event.accountId,

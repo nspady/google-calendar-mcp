@@ -136,8 +136,10 @@ export class UpdateEventHandler extends BaseToolHandler {
                 dayEvents,
                 timezone
             );
-        } catch {
+        } catch (error) {
             // Day context is optional - don't fail if we can't fetch it
+            const message = error instanceof Error ? error.message : String(error);
+            console.error(`[UpdateEventHandler] Failed to build day context: ${message}`);
         }
 
         // Create structured response
