@@ -20,6 +20,11 @@ export interface DayViewEvent {
   /** Calendar display name (user's summaryOverride or calendar's summary) */
   calendarName?: string;
   accountId?: string;
+  attendeeCount?: number;
+  selfResponseStatus?: string;
+  hasConferenceLink?: boolean;
+  eventType?: string;
+  isRecurring?: boolean;
 }
 
 /**
@@ -53,6 +58,11 @@ export interface MultiDayViewEvent {
   calendarId: string;
   calendarName?: string;
   accountId?: string;
+  attendeeCount?: number;
+  selfResponseStatus?: string;
+  hasConferenceLink?: boolean;
+  eventType?: string;
+  isRecurring?: boolean;
 }
 
 /**

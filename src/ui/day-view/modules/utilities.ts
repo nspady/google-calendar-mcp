@@ -139,7 +139,8 @@ export function calculateAvailableSlots(
  * Compute calendar filters for the day view legend
  * Groups events by calendarId and shows actual calendar names
  */
-export function computeCalendarFilters(events: DayViewEvent[]): CalendarFilter[] {
+export function computeCalendarFilters(events: DayViewEvent[], hiddenCalendarIds?: string[]): CalendarFilter[] {
+  const hiddenSet = hiddenCalendarIds ? new Set(hiddenCalendarIds) : null;
   const filterMap = new Map<string, CalendarFilter>();
 
   for (const event of events) {
@@ -152,13 +153,14 @@ export function computeCalendarFilters(events: DayViewEvent[]): CalendarFilter[]
     } else {
       // Use calendar name if available, otherwise format calendar ID
       const displayName = event.calendarName || formatCalendarName(event.calendarId);
+      const compositeKey = event.accountId ? `${event.accountId}:${event.calendarId}` : event.calendarId;
       filterMap.set(key, {
         calendarId: event.calendarId,
         accountId: event.accountId,
         displayName,
         backgroundColor: event.backgroundColor || 'var(--accent-color)',
         eventCount: 1,
-        visible: true
+        visible: hiddenSet ? !hiddenSet.has(compositeKey) : true
       });
     }
   }

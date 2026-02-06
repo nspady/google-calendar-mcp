@@ -141,6 +141,32 @@ body {
   transform: rotate(180deg);
 }
 
+/* Display mode toggle button */
+.display-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: var(--border-width-regular, 1px) solid var(--border-color);
+  border-radius: var(--border-radius-sm, 4px);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.display-mode-btn:hover {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.display-mode-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring-color);
+}
+
 /* Calendar Legend */
 .calendar-legend {
   display: flex;
@@ -373,6 +399,64 @@ body {
   content: '·';
   margin-right: 8px;
   opacity: 0.7;
+}
+
+/* Event metadata icons */
+.event-icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 4px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.event-icon {
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.event-type-label {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.event-badge-needs-response {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.25);
+  white-space: nowrap;
+  line-height: 1.2;
+}
+
+/* Multi-day list event icons */
+.event-details .event-icons,
+.expanded-event-item .event-icons {
+  margin-left: 0;
+  margin-top: 2px;
+}
+
+.event-details .event-icon,
+.expanded-event-item .event-icon {
+  color: var(--text-tertiary);
+}
+
+.event-details .event-type-label,
+.expanded-event-item .event-type-label {
+  color: var(--text-tertiary);
+}
+
+.event-details .event-badge-needs-response,
+.expanded-event-item .event-badge-needs-response {
+  background: var(--accent-color);
+  color: var(--color-text-inverse, #ffffff);
 }
 
 /* Google Calendar color mappings */
@@ -1465,4 +1549,64 @@ body {
 .event-detail-conference:hover {
   background: var(--accent-color);
   color: #ffffff;
+}
+
+/* Model action buttons (Edit, Delete, RSVP) */
+.event-detail-model-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.event-action-btn {
+  padding: 6px 14px;
+  font-size: var(--font-text-sm-size, 13px);
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm, 4px);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.event-action-btn:hover {
+  background: var(--bg-tertiary);
+}
+
+.event-action-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--focus-ring-color);
+}
+
+.event-action-danger {
+  color: #d93025;
+}
+
+.event-action-danger:hover {
+  background: rgba(217, 48, 37, 0.08);
+}
+
+.event-detail-rsvp-actions {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+}
+
+.event-detail-rsvp-actions .event-action-btn {
+  flex: 1;
+  text-align: center;
+}
+
+.event-action-rsvp.active {
+  background: var(--accent-color);
+  color: var(--color-text-inverse, #ffffff);
+  border-color: var(--accent-color);
+}
+
+.event-action-rsvp.active:hover {
+  opacity: 0.9;
 }

@@ -359,7 +359,7 @@ export function renderDayView(
   appInstance: App | null,
   domRefs: DOMRefs,
   toggleExpanded: () => void,
-  stateRefs: { isExpanded: { value: boolean }; calendarFilters?: CalendarFilter[] },
+  stateRefs: { isExpanded: { value: boolean }; calendarFilters?: CalendarFilter[]; hiddenCalendarIds?: string[] },
   schedulingMode?: SchedulingMode,
   onSlotSelect?: (slot: AvailableSlot) => void,
   onFilterChange?: () => void,
@@ -380,8 +380,8 @@ export function renderDayView(
     openLink(context.dayLink, appInstance);
   };
 
-  // Compute calendar filters for legend
-  const filters = computeCalendarFilters(context.events);
+  // Compute calendar filters for legend (restore hidden state from persistence)
+  const filters = computeCalendarFilters(context.events, stateRefs.hiddenCalendarIds);
   stateRefs.calendarFilters = filters;
 
   // Create and add calendar legend if we have multiple calendars
@@ -402,11 +402,14 @@ export function renderDayView(
     }
   }
 
+  // Apply persisted filter visibility on initial render
+  const initialEvents = filterVisibleEvents(context.events, filters);
+
   // Render all-day events
-  renderAllDayEvents(context.events, context.focusEventId, appInstance, domRefs, onEventClick);
+  renderAllDayEvents(initialEvents, context.focusEventId, appInstance, domRefs, onEventClick);
 
   // Render time grid with optional scheduling mode
-  renderTimeGrid(context, appInstance, domRefs, context.events, schedulingMode, onSlotSelect, onEventClick);
+  renderTimeGrid(context, appInstance, domRefs, initialEvents, schedulingMode, onSlotSelect, onEventClick);
 
   // Show expand toggle and set up handler
   domRefs.expandToggle.style.display = '';

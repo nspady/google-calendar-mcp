@@ -18,6 +18,11 @@ export interface DayViewEvent {
   /** Calendar display name (user's summaryOverride or calendar's summary) */
   calendarName?: string;
   accountId?: string;
+  attendeeCount?: number;
+  selfResponseStatus?: string;
+  hasConferenceLink?: boolean;
+  eventType?: string;
+  isRecurring?: boolean;
 }
 
 /**
@@ -61,5 +66,10 @@ export function toDayViewEvent(event: StructuredEvent): DayViewEvent {
     calendarId: event.calendarId || '',
     calendarName: event.calendarName,
     accountId: event.accountId,
+    attendeeCount: event.attendees?.length,
+    selfResponseStatus: event.attendees?.find(a => a.self)?.responseStatus,
+    hasConferenceLink: !!event.conferenceData?.entryPoints?.some(ep => ep.entryPointType === 'video'),
+    eventType: event.eventType !== 'default' ? event.eventType : undefined,
+    isRecurring: !!event.recurringEventId,
   };
 }

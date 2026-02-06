@@ -26,6 +26,77 @@ import {
 import { eventsOverlap } from './overlap-detection.js';
 
 /**
+ * Create small inline SVG icons for event metadata (conference, attendees, recurring, event type, RSVP)
+ */
+function createEventIcons(event: DayViewEvent | MultiDayViewEvent): HTMLSpanElement | null {
+  const hasIcons = event.hasConferenceLink || (event.attendeeCount && event.attendeeCount > 1) ||
+    event.isRecurring || event.eventType || event.selfResponseStatus === 'needsAction';
+  if (!hasIcons) return null;
+
+  const container = document.createElement('span');
+  container.className = 'event-icons';
+
+  const makeSvg = (path: string, title: string): SVGSVGElement => {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', '12');
+    svg.setAttribute('height', '12');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    svg.classList.add('event-icon');
+    const titleEl = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+    titleEl.textContent = title;
+    svg.appendChild(titleEl);
+    const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    pathEl.setAttribute('d', path);
+    svg.appendChild(pathEl);
+    return svg;
+  };
+
+  if (event.hasConferenceLink) {
+    container.appendChild(makeSvg(
+      'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z',
+      'Video meeting'
+    ));
+  }
+
+  if (event.attendeeCount && event.attendeeCount > 1) {
+    container.appendChild(makeSvg(
+      'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75',
+      `${event.attendeeCount} attendees`
+    ));
+  }
+
+  if (event.isRecurring) {
+    container.appendChild(makeSvg(
+      'M17 1l4 4-4 4M3 11V9a4 4 0 014-4h14M7 23l-4-4 4-4M21 13v2a4 4 0 01-4 4H3',
+      'Recurring event'
+    ));
+  }
+
+  if (event.eventType) {
+    const label = document.createElement('span');
+    label.className = 'event-type-label';
+    label.textContent = event.eventType === 'focusTime' ? 'Focus' :
+      event.eventType === 'outOfOffice' ? 'OOO' :
+      event.eventType === 'workingLocation' ? 'WFH' : event.eventType;
+    container.appendChild(label);
+  }
+
+  if (event.selfResponseStatus === 'needsAction') {
+    const badge = document.createElement('span');
+    badge.className = 'event-badge-needs-response';
+    badge.textContent = 'RSVP';
+    container.appendChild(badge);
+  }
+
+  return container;
+}
+
+/**
  * Create an event element (safe DOM methods, no innerHTML)
  * Uses click handlers with app.openLink() for sandboxed iframe compatibility
  */
@@ -81,7 +152,13 @@ export function createEventElement(
     if (event.backgroundColor) {
       element.style.backgroundColor = event.backgroundColor;
     }
-    element.textContent = event.summary;
+    const allDayText = document.createElement('span');
+    allDayText.textContent = event.summary;
+    element.appendChild(allDayText);
+
+    // Add metadata icons for all-day events
+    const allDayIcons = createEventIcons(event);
+    if (allDayIcons) element.appendChild(allDayIcons);
   } else {
     element.className = `event-block ${colorClass} ${isFocused ? 'focused' : ''} ${isPast ? 'event-past' : ''}`.trim();
     if (event.backgroundColor) {
@@ -101,6 +178,10 @@ export function createEventElement(
     timeDiv.className = 'event-time';
     timeDiv.textContent = `${formatTime(event.start)} - ${formatTime(event.end)}`;
     contentDiv.appendChild(timeDiv);
+
+    // Add metadata icons
+    const icons = createEventIcons(event);
+    if (icons) contentDiv.appendChild(icons);
 
     element.appendChild(contentDiv);
 
@@ -691,6 +772,10 @@ export function createDayEventList(
       title.textContent = event.summary;
       details.appendChild(title);
 
+      // Add metadata icons
+      const allDayItemIcons = createEventIcons(event);
+      if (allDayItemIcons) details.appendChild(allDayItemIcons);
+
       if (event.location) {
         const location = document.createElement('div');
         location.className = 'event-item-location';
@@ -867,6 +952,10 @@ export function createDayEventList(
       titleRow.appendChild(calendarLabel);
 
       details.appendChild(titleRow);
+
+      // Add metadata icons
+      const timedIcons = createEventIcons(event);
+      if (timedIcons) details.appendChild(timedIcons);
 
       if (event.location) {
         const location = document.createElement('div');
