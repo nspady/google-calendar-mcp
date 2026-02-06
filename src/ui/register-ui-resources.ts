@@ -51,6 +51,16 @@ export async function registerUIResources(server: McpServer): Promise<void> {
             uri: DAY_VIEW_RESOURCE_URI,
             mimeType: RESOURCE_MIME_TYPE,
             text: html,
+            _meta: {
+              ui: {
+                csp: {
+                  connectDomains: [],
+                  resourceDomains: [],
+                  frameDomains: [],
+                  baseUriDomains: [],
+                }
+              }
+            }
           }],
         };
       } catch (error) {
@@ -62,6 +72,16 @@ export async function registerUIResources(server: McpServer): Promise<void> {
             uri: DAY_VIEW_RESOURCE_URI,
             mimeType: RESOURCE_MIME_TYPE,
             text: '<html><body>Day view UI not available. Run npm run build:ui</body></html>',
+            _meta: {
+              ui: {
+                csp: {
+                  connectDomains: [],
+                  resourceDomains: [],
+                  frameDomains: [],
+                  baseUriDomains: [],
+                }
+              }
+            }
           }],
         };
       }

@@ -104,6 +104,15 @@ function applyHostStyles(app: App): void {
   if (context.theme) {
     applyDocumentTheme(context.theme);
   }
+
+  // Apply safe area insets from host (overrides CSS env() defaults)
+  if (context.safeAreaInsets) {
+    const root = document.documentElement;
+    root.style.setProperty('--safe-area-top', `${context.safeAreaInsets.top}px`);
+    root.style.setProperty('--safe-area-right', `${context.safeAreaInsets.right}px`);
+    root.style.setProperty('--safe-area-bottom', `${context.safeAreaInsets.bottom}px`);
+    root.style.setProperty('--safe-area-left', `${context.safeAreaInsets.left}px`);
+  }
 }
 
 /**
