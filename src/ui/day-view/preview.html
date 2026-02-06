@@ -139,6 +139,10 @@
       <input type="checkbox" id="show-colors" checked>
       Use event colors
     </label>
+    <label>
+      <input type="checkbox" id="show-loading">
+      Loading state
+    </label>
     <hr style="margin: 8px 0; border: none; border-top: 1px solid var(--border-color);">
     <label>
       <input type="checkbox" id="scheduling-mode">
@@ -786,6 +790,20 @@
     document.getElementById('view-select')?.addEventListener('change', rerender);
     document.getElementById('show-all-day')?.addEventListener('change', rerender);
     document.getElementById('show-colors')?.addEventListener('change', rerender);
+
+    // Loading state toggle
+    document.getElementById('show-loading')?.addEventListener('change', (e) => {
+      const dateHeading = document.getElementById('date-heading');
+      if (dateHeading) {
+        if (e.target.checked) {
+          dateHeading.textContent = 'Loading...';
+          dateHeading.classList.add('loading-shimmer');
+        } else {
+          dateHeading.classList.remove('loading-shimmer');
+          rerender();
+        }
+      }
+    });
 
     // Scheduling mode toggle
     document.getElementById('scheduling-mode')?.addEventListener('change', (e) => {
