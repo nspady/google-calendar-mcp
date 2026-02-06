@@ -45,10 +45,15 @@ const multiDayRefreshBtn = document.getElementById('multi-day-refresh-btn') as H
 
 // DOM element references - Event detail overlay
 const eventDetailOverlay = document.getElementById('event-detail-overlay') as HTMLDivElement;
+const eventDetailCard = eventDetailOverlay.querySelector('.event-detail-card') as HTMLDivElement;
 const eventDetailContent = document.getElementById('event-detail-content') as HTMLDivElement;
 
 // Global app instance for opening links (sandboxed iframe requires app.openLink)
 let appInstance: App | null = null;
+
+// Track last click Y position for popup positioning (captured in click phase)
+let lastClickY = window.innerHeight / 2;
+document.addEventListener('click', (e) => { lastClickY = e.clientY; }, true);
 
 // Skeleton rendering flag: render skeleton only once per tool call cycle
 let skeletonRendered = false;
@@ -281,6 +286,21 @@ function hideEventDetails(): void {
   eventDetailOverlay.style.display = 'none';
 }
 
+function sanitizeDescription(html: string): string {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  for (const el of doc.querySelectorAll('script, style, iframe, object, embed, form, input, textarea, select')) {
+    el.remove();
+  }
+  for (const el of doc.querySelectorAll('*')) {
+    for (const attr of Array.from(el.attributes)) {
+      if (attr.name.startsWith('on')) {
+        el.removeAttribute(attr.name);
+      }
+    }
+  }
+  return doc.body.innerHTML;
+}
+
 function showEventDetails(event: DayViewEvent): void {
   // Clear previous content
   while (eventDetailContent.firstChild) {
@@ -362,6 +382,11 @@ function showEventDetails(event: DayViewEvent): void {
   actions.appendChild(openBtn);
   eventDetailContent.appendChild(actions);
 
+  // Position card near the clicked event
+  const targetTop = Math.max(32, lastClickY - 80);
+  const maxTop = Math.max(32, window.innerHeight - 300);
+  eventDetailCard.style.top = `${Math.min(targetTop, maxTop)}px`;
+
   // Show the overlay
   eventDetailOverlay.style.display = '';
 
@@ -395,7 +420,22 @@ function showEventDetails(event: DayViewEvent): void {
         if (fullEvent.description) {
           const desc = document.createElement('div');
           desc.className = 'event-detail-description';
-          desc.textContent = fullEvent.description;
+          // Render HTML from Google Calendar descriptions (sanitized to remove dangerous elements)
+          desc.innerHTML = sanitizeDescription(fullEvent.description);
+          // Make links work in sandboxed iframe
+          for (const link of desc.querySelectorAll('a')) {
+            const href = link.getAttribute('href');
+            if (href) {
+              link.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (appInstance) {
+                  appInstance.openLink({ url: href }).catch(() => {
+                    window.open(href, '_blank');
+                  });
+                }
+              });
+            }
+          }
           // Insert before actions
           eventDetailContent.insertBefore(desc, actions);
         }

@@ -53,7 +53,6 @@ export function showLoadingState(domRefs: DOMRefs): void {
   while (domRefs.timeGrid.firstChild) {
     domRefs.timeGrid.removeChild(domRefs.timeGrid.firstChild);
   }
-  domRefs.dayLink.style.display = 'none';
   domRefs.expandToggle.style.display = 'none';
 }
 
@@ -427,10 +426,22 @@ export function renderDayView(
 
   // Scroll focused event into view (after a short delay for render)
   setTimeout(() => {
-    const focusedElement = document.querySelector('.focused');
-    if (focusedElement) {
-      focusedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const focusedInGrid = domRefs.timeGrid.querySelector('.focused') as HTMLElement | null;
+    const focusedInAllDay = domRefs.allDayEvents.querySelector('.focused') as HTMLElement | null;
+    const focusedElement = focusedInGrid || focusedInAllDay;
+
+    if (!focusedElement) return;
+
+    // In compact mode, scroll the time grid internally to center the focused event
+    if (focusedInGrid && !stateRefs.isExpanded.value) {
+      const gridRect = domRefs.timeGrid.getBoundingClientRect();
+      const focusedRect = focusedInGrid.getBoundingClientRect();
+      const scrollOffset = focusedRect.top - gridRect.top + domRefs.timeGrid.scrollTop;
+      const gridVisibleHeight = gridRect.height;
+      domRefs.timeGrid.scrollTop = Math.max(0, scrollOffset - gridVisibleHeight / 2 + focusedRect.height / 2);
     }
+
+    focusedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, 100);
 }
 

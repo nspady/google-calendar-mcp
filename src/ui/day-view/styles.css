@@ -1290,9 +1290,6 @@ body {
   right: 0;
   bottom: 0;
   z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .event-detail-backdrop {
@@ -1305,7 +1302,9 @@ body {
 }
 
 .event-detail-card {
-  position: relative;
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-md, 8px);
@@ -1315,7 +1314,7 @@ body {
   width: calc(100% - 32px);
   max-height: calc(100vh - 64px);
   overflow-y: auto;
-  z-index: 1;
+  z-index: 101;
 }
 
 .event-detail-close {
@@ -1384,8 +1383,30 @@ body {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--border-color);
-  white-space: pre-wrap;
   word-break: break-word;
+}
+
+.event-detail-description p {
+  margin: 0 0 8px 0;
+}
+
+.event-detail-description p:last-child {
+  margin-bottom: 0;
+}
+
+.event-detail-description ul,
+.event-detail-description ol {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+.event-detail-description a {
+  color: var(--accent-color);
+  text-decoration: none;
+}
+
+.event-detail-description a:hover {
+  text-decoration: underline;
 }
 
 .event-detail-attendees {
