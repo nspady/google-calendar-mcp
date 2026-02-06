@@ -13,7 +13,16 @@
       <div id="day-view-header" class="day-view-header">
         <div class="day-view-title-row">
           <h2 id="date-heading" class="loading-shimmer">Loading...</h2>
-          <a id="day-link" href="#" target="_blank" class="open-calendar-btn" style="display: none;">Open in Calendar</a>
+          <div class="header-actions">
+            <button id="day-refresh-btn" class="refresh-btn" title="Refresh events" style="display: none;" aria-label="Refresh events">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+            </button>
+            <a id="day-link" href="#" target="_blank" class="open-calendar-btn" style="display: none;">Open in Calendar</a>
+          </div>
         </div>
         <div id="calendar-legend-container"></div>
       </div>
@@ -37,7 +46,16 @@
       <div class="multi-day-header">
         <div class="multi-day-title-row">
           <h2 id="multi-day-heading">Events</h2>
-          <a id="multi-day-link" href="#" target="_blank" class="open-calendar-btn">Open in Calendar</a>
+          <div class="header-actions">
+            <button id="multi-day-refresh-btn" class="refresh-btn" title="Refresh events" style="display: none;" aria-label="Refresh events">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+            </button>
+            <a id="multi-day-link" href="#" target="_blank" class="open-calendar-btn">Open in Calendar</a>
+          </div>
         </div>
         <div id="multi-day-subheading" class="multi-day-subheading"></div>
       </div>
@@ -46,6 +64,16 @@
       </div>
     </div>
   </div>
+
+  <!-- Event detail overlay -->
+  <div id="event-detail-overlay" class="event-detail-overlay" style="display: none;">
+    <div class="event-detail-backdrop"></div>
+    <div class="event-detail-card" role="dialog" aria-modal="true" aria-label="Event details">
+      <button class="event-detail-close" aria-label="Close">&times;</button>
+      <div id="event-detail-content"></div>
+    </div>
+  </div>
+
   <script type="module" src="./day-view.ts"></script>
 </body>
 </html>

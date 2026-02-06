@@ -16,7 +16,8 @@ export const MAX_EXPANDED_DAYS = 50;
 export function toggleExpanded(
   appInstance: App | null,
   domRefs: DOMRefs,
-  stateRefs: { isExpanded: { value: boolean } }
+  stateRefs: { isExpanded: { value: boolean } },
+  onStateChange?: () => void
 ): void {
   stateRefs.isExpanded.value = !stateRefs.isExpanded.value;
 
@@ -38,6 +39,8 @@ export function toggleExpanded(
       // Ignore errors - host may not support this
     });
   }
+
+  onStateChange?.();
 }
 
 /**
@@ -46,7 +49,8 @@ export function toggleExpanded(
 export function toggleDayExpanded(
   dateStr: string,
   appInstance: App | null,
-  expandedDays: Set<string>
+  expandedDays: Set<string>,
+  onStateChange?: () => void
 ): void {
   const group = document.querySelector(`[data-date="${dateStr}"]`) as HTMLDivElement | null;
   if (!group) return;
@@ -96,4 +100,6 @@ export function toggleDayExpanded(
       appInstance?.sendSizeChanged({ height }).catch(() => {});
     }, 50);
   }
+
+  onStateChange?.();
 }

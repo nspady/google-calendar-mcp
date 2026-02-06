@@ -279,6 +279,12 @@ export const ToolSchemas = {
     )
   }),
 
+  'ui-get-event-details': z.object({
+    account: singleAccountSchema,
+    calendarId: z.string().describe("ID of the calendar"),
+    eventId: z.string().describe("ID of the event to retrieve"),
+  }),
+
   'list-colors': z.object({
     account: singleAccountSchema,
   }),
@@ -642,6 +648,8 @@ interface ToolDefinition {
   annotations?: ToolAnnotations;
   /** Whether this tool has an associated UI (MCP Apps) */
   hasUI?: boolean;
+  /** UI visibility scope — controls who can invoke the tool. Default: both model and app. */
+  uiVisibility?: ('model' | 'app')[];
 }
 
 
@@ -759,6 +767,15 @@ export class ToolRegistry {
       schema: ToolSchemas['get-event'],
       handler: GetEventHandler,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
+    },
+    {
+      name: "ui-get-event-details",
+      description: "Get event details for UI display (app-only).",
+      schema: ToolSchemas['ui-get-event-details'],
+      handler: GetEventHandler,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      hasUI: true,
+      uiVisibility: ['app']
     },
     {
       name: "list-colors",
@@ -943,6 +960,10 @@ export class ToolRegistry {
     // For tools with UI, use registerAppTool from ext-apps
     // This adds _meta.ui.resourceUri to the tool definition, which the host uses to render UI
     if (tool.hasUI) {
+      const uiMeta: Record<string, unknown> = { resourceUri: DAY_VIEW_RESOURCE_URI };
+      if (tool.uiVisibility) {
+        uiMeta.visibility = tool.uiVisibility;
+      }
       registerAppTool(
         server,
         tool.name,
@@ -950,7 +971,7 @@ export class ToolRegistry {
           description: tool.description,
           inputSchema,
           annotations: tool.annotations,
-          _meta: { ui: { resourceUri: DAY_VIEW_RESOURCE_URI } }
+          _meta: { ui: uiMeta }
         },
         handlerFn
       );

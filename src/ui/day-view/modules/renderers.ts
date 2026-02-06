@@ -58,6 +58,60 @@ export function showLoadingState(domRefs: DOMRefs): void {
 }
 
 /**
+ * Show skeleton preview from partial tool input arguments.
+ * Renders empty time grid with hour labels and date heading if available.
+ */
+export function renderSkeletonView(
+  domRefs: DOMRefs,
+  hints: { date?: string; timeZone?: string; query?: string }
+): void {
+  showDayView(domRefs);
+
+  // Show date heading if we extracted a date, otherwise generic loading
+  if (hints.query) {
+    domRefs.dateHeading.textContent = `Searching for "${hints.query}"...`;
+  } else if (hints.date) {
+    domRefs.dateHeading.textContent = formatDateHeading(hints.date);
+  } else {
+    domRefs.dateHeading.textContent = 'Loading...';
+  }
+  domRefs.dateHeading.classList.add('loading-shimmer');
+
+  domRefs.allDaySection.style.display = 'none';
+  domRefs.dayLink.style.display = 'none';
+  domRefs.expandToggle.style.display = 'none';
+
+  // Clear legend safely
+  while (domRefs.calendarLegendContainer.firstChild) {
+    domRefs.calendarLegendContainer.removeChild(domRefs.calendarLegendContainer.firstChild);
+  }
+
+  // Clear and render skeleton time grid (business hours 8-18)
+  while (domRefs.timeGrid.firstChild) {
+    domRefs.timeGrid.removeChild(domRefs.timeGrid.firstChild);
+  }
+
+  for (let hour = 8; hour < 18; hour++) {
+    const row = document.createElement('div');
+    row.className = 'time-row skeleton';
+
+    const hourLabel = document.createElement('div');
+    hourLabel.className = 'hour-label';
+    hourLabel.textContent = formatHour(hour);
+    row.appendChild(hourLabel);
+
+    const timeSlot = document.createElement('div');
+    timeSlot.className = 'time-slot';
+    row.appendChild(timeSlot);
+
+    domRefs.timeGrid.appendChild(row);
+  }
+
+  domRefs.timeGrid.classList.add('compact');
+  domRefs.timeGrid.style.position = 'relative';
+}
+
+/**
  * Show cancelled state when tool is cancelled
  */
 export function showCancelledState(domRefs: DOMRefs, reason?: string): void {
@@ -80,7 +134,8 @@ export function renderAllDayEvents(
   events: DayViewEvent[],
   focusEventId: string,
   appInstance: App | null,
-  domRefs: DOMRefs
+  domRefs: DOMRefs,
+  onEventClick?: (event: DayViewEvent) => void
 ): void {
   const allDayEvts = events.filter(e => e.isAllDay);
 
@@ -99,7 +154,7 @@ export function renderAllDayEvents(
   // Add events with borders matching the event color
   for (const event of allDayEvts) {
     const isFocused = event.id === focusEventId;
-    const element = createEventElement(event, isFocused, appInstance, true);
+    const element = createEventElement(event, isFocused, appInstance, true, onEventClick);
     domRefs.allDayEvents.appendChild(element);
   }
 }
@@ -176,7 +231,8 @@ export function renderTimeGrid(
   domRefs: DOMRefs,
   visibleEvents?: DayViewEvent[],
   schedulingMode?: SchedulingMode,
-  onSlotSelect?: (slot: AvailableSlot) => void
+  onSlotSelect?: (slot: AvailableSlot) => void,
+  onEventClick?: (event: DayViewEvent) => void
 ): void {
   const { focusEventId, timeRange } = context;
   const events = visibleEvents || context.events;
@@ -246,7 +302,7 @@ export function renderTimeGrid(
 
   for (const event of timedEvents) {
     const isFocused = event.id === focusEventId;
-    const element = createEventElement(event, isFocused, appInstance);
+    const element = createEventElement(event, isFocused, appInstance, false, onEventClick);
     const position = calculateEventPosition(event, startHour, endHour);
     const overlapPos = overlapColumns.get(event.id);
 
@@ -306,7 +362,9 @@ export function renderDayView(
   toggleExpanded: () => void,
   stateRefs: { isExpanded: { value: boolean }; calendarFilters?: CalendarFilter[] },
   schedulingMode?: SchedulingMode,
-  onSlotSelect?: (slot: AvailableSlot) => void
+  onSlotSelect?: (slot: AvailableSlot) => void,
+  onFilterChange?: () => void,
+  onEventClick?: (event: DayViewEvent) => void
 ): void {
   // Show day view, hide multi-day view
   showDayView(domRefs);
@@ -337,28 +395,35 @@ export function renderDayView(
       const legend = createCalendarLegend(filters, () => {
         // Re-render events when a calendar is toggled
         const visibleEvents = filterVisibleEvents(context.events, filters);
-        renderAllDayEvents(visibleEvents, context.focusEventId, appInstance, domRefs);
-        renderTimeGrid(context, appInstance, domRefs, visibleEvents, schedulingMode, onSlotSelect);
+        renderAllDayEvents(visibleEvents, context.focusEventId, appInstance, domRefs, onEventClick);
+        renderTimeGrid(context, appInstance, domRefs, visibleEvents, schedulingMode, onSlotSelect, onEventClick);
+        onFilterChange?.();
       });
       domRefs.calendarLegendContainer.appendChild(legend);
     }
   }
 
   // Render all-day events
-  renderAllDayEvents(context.events, context.focusEventId, appInstance, domRefs);
+  renderAllDayEvents(context.events, context.focusEventId, appInstance, domRefs, onEventClick);
 
   // Render time grid with optional scheduling mode
-  renderTimeGrid(context, appInstance, domRefs, context.events, schedulingMode, onSlotSelect);
+  renderTimeGrid(context, appInstance, domRefs, context.events, schedulingMode, onSlotSelect, onEventClick);
 
   // Show expand toggle and set up handler
   domRefs.expandToggle.style.display = '';
   domRefs.expandToggle.onclick = toggleExpanded;
 
-  // Reset to compact state on new data
-  stateRefs.isExpanded.value = false;
-  domRefs.timeGrid.classList.add('compact');
-  domRefs.expandToggle.classList.remove('expanded');
-  domRefs.toggleText.textContent = 'Show more';
+  // Apply persisted expand state, or default to compact
+  if (stateRefs.isExpanded.value) {
+    domRefs.timeGrid.classList.remove('compact');
+    domRefs.expandToggle.classList.add('expanded');
+    domRefs.toggleText.textContent = 'Show less';
+  } else {
+    stateRefs.isExpanded.value = false;
+    domRefs.timeGrid.classList.add('compact');
+    domRefs.expandToggle.classList.remove('expanded');
+    domRefs.toggleText.textContent = 'Show more';
+  }
 
   // Scroll focused event into view (after a short delay for render)
   setTimeout(() => {
@@ -379,10 +444,14 @@ export function renderMultiDayView(
   toggleDayExpanded: (dateStr: string) => void,
   stateRefs: { expandedDays: Set<string>; hostLocale?: string },
   schedulingMode?: SchedulingMode,
-  onSlotSelect?: (slot: AvailableSlot) => void
+  onSlotSelect?: (slot: AvailableSlot) => void,
+  onEventClick?: (event: DayViewEvent) => void
 ): void {
-  // Reset expanded days state
-  stateRefs.expandedDays.clear();
+  // Only clear expanded days if no persisted state was loaded
+  // (persisted state is pre-loaded into stateRefs before this call)
+  if (stateRefs.expandedDays.size === 0) {
+    stateRefs.expandedDays.clear();
+  }
 
   // Hide day view, show multi-day view
   domRefs.dayViewContainer.style.display = 'none';
@@ -432,7 +501,8 @@ export function renderMultiDayView(
         const availableSlots = schedulingMode?.enabled
           ? calculateAvailableSlots(events, schedulingMode.durationMinutes)
           : undefined;
-        const dateGroup = createDateGroup(date, events, appInstance, toggleDayExpanded, context.focusEventId, availableSlots, onSlotSelect);
+        const isExpanded = stateRefs.expandedDays.has(date);
+        const dateGroup = createDateGroup(date, events, appInstance, toggleDayExpanded, context.focusEventId, availableSlots, onSlotSelect, isExpanded, onEventClick);
         domRefs.multiDayEventsList.appendChild(dateGroup);
       }
     }

@@ -33,7 +33,8 @@ export function createEventElement(
   event: DayViewEvent,
   isFocused: boolean,
   appInstance: App | null,
-  isAllDay: boolean = false
+  isAllDay: boolean = false,
+  onEventClick?: (event: DayViewEvent) => void
 ): HTMLDivElement {
   const element = document.createElement('div');
   element.style.cursor = 'pointer';
@@ -48,15 +49,22 @@ export function createEventElement(
   if (event.location) {
     tooltipParts.push(event.location);
   }
-  tooltipParts.push('Click to open in Google Calendar');
+  tooltipParts.push(onEventClick ? 'Click for details' : 'Click to open in Google Calendar');
   element.title = tooltipParts.join('\n');
 
-  // Handle click to open in Google Calendar
-  element.addEventListener('click', () => openLink(event.htmlLink, appInstance));
+  // Handle click: show detail overlay if callback provided, otherwise open in calendar
+  const handleClick = () => {
+    if (onEventClick) {
+      onEventClick(event);
+    } else {
+      openLink(event.htmlLink, appInstance);
+    }
+  };
+  element.addEventListener('click', handleClick);
   element.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      openLink(event.htmlLink, appInstance);
+      handleClick();
     }
   });
 
@@ -609,7 +617,8 @@ export function createDayEventList(
   appInstance: App | null,
   focusEventId?: string,
   availableSlots?: AvailableSlot[],
-  onSlotSelect?: (slot: AvailableSlot) => void
+  onSlotSelect?: (slot: AvailableSlot) => void,
+  onEventClick?: (event: MultiDayViewEvent) => void
 ): HTMLDivElement {
   const container = document.createElement('div');
   container.className = 'expanded-day-list';
@@ -646,11 +655,18 @@ export function createDayEventList(
       tooltipParts.push('Click to open in Google Calendar');
       item.title = tooltipParts.join('\n');
 
-      item.addEventListener('click', () => openLink(event.htmlLink, appInstance));
+      const handleAllDayClick = () => {
+        if (onEventClick) {
+          onEventClick(event);
+        } else {
+          openLink(event.htmlLink, appInstance);
+        }
+      };
+      item.addEventListener('click', handleAllDayClick);
       item.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          openLink(event.htmlLink, appInstance);
+          handleAllDayClick();
         }
       });
 
@@ -774,14 +790,21 @@ export function createDayEventList(
       const tooltipParts = [event.summary];
       tooltipParts.push(`${formatTime(event.start)} - ${formatTime(event.end)} (${formatDuration(durationMinutes)})`);
       if (event.location) tooltipParts.push(event.location);
-      tooltipParts.push('Click to open in Google Calendar');
+      tooltipParts.push(onEventClick ? 'Click for details' : 'Click to open in Google Calendar');
       item.title = tooltipParts.join('\n');
 
-      item.addEventListener('click', () => openLink(event.htmlLink, appInstance));
+      const handleTimedClick = () => {
+        if (onEventClick) {
+          onEventClick(event);
+        } else {
+          openLink(event.htmlLink, appInstance);
+        }
+      };
+      item.addEventListener('click', handleTimedClick);
       item.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          openLink(event.htmlLink, appInstance);
+          handleTimedClick();
         }
       });
 
@@ -873,7 +896,9 @@ export function createDateGroup(
   toggleDayExpanded: (dateStr: string) => void,
   focusEventId?: string,
   availableSlots?: AvailableSlot[],
-  onSlotSelect?: (slot: AvailableSlot) => void
+  onSlotSelect?: (slot: AvailableSlot) => void,
+  initiallyExpanded?: boolean,
+  onEventClick?: (event: MultiDayViewEvent) => void
 ): HTMLDivElement {
   const group = document.createElement('div');
   group.className = 'date-group';
@@ -884,7 +909,10 @@ export function createDateGroup(
   header.className = 'date-header';
   header.setAttribute('role', 'button');
   header.setAttribute('tabindex', '0');
-  header.setAttribute('aria-expanded', 'false');
+  header.setAttribute('aria-expanded', initiallyExpanded ? 'true' : 'false');
+  if (initiallyExpanded) {
+    header.classList.add('expanded');
+  }
 
   const { day, monthYearDay } = formatMultiDayDate(dateStr);
 
@@ -944,9 +972,9 @@ export function createDateGroup(
 
   group.appendChild(header);
 
-  // Day event list (starts collapsed)
-  const eventsList = createDayEventList(events, appInstance, focusEventId, slots, onSlotSelect);
-  eventsList.className = 'date-events collapsed';
+  // Day event list (collapsed unless persisted as expanded)
+  const eventsList = createDayEventList(events, appInstance, focusEventId, slots, onSlotSelect, onEventClick);
+  eventsList.className = initiallyExpanded ? 'date-events' : 'date-events collapsed';
   group.appendChild(eventsList);
 
   return group;

@@ -104,6 +104,43 @@ body {
   box-shadow: 0 0 0 3px var(--focus-ring-color);
 }
 
+/* Header actions container */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Refresh button */
+.refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: var(--border-width-regular, 1px) solid var(--border-color);
+  border-radius: var(--border-radius-sm, 4px);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s, transform 0.3s;
+}
+
+.refresh-btn:hover {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.refresh-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring-color);
+}
+
+.refresh-btn:active {
+  transform: rotate(180deg);
+}
+
 /* Calendar Legend */
 .calendar-legend {
   display: flex;
@@ -243,6 +280,10 @@ body {
 
 .time-row:last-child .time-slot {
   border-bottom: 1px solid var(--border-color);
+}
+
+.time-row.skeleton .time-slot {
+  opacity: 0.4;
 }
 
 /* Event blocks */
@@ -1236,4 +1277,171 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ============================================================================
+   Event Detail Overlay
+   ============================================================================ */
+
+.event-detail-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.event-detail-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.event-detail-card {
+  position: relative;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md, 8px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  padding: 20px;
+  max-width: 420px;
+  width: calc(100% - 32px);
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  z-index: 1;
+}
+
+.event-detail-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--border-radius-sm, 4px);
+  line-height: 1;
+}
+
+.event-detail-close:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.event-detail-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  padding-right: 32px;
+}
+
+.event-detail-color-bar {
+  width: 4px;
+  border-radius: 2px;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.event-detail-header {
+  display: flex;
+  align-items: stretch;
+  margin-bottom: 16px;
+}
+
+.event-detail-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.event-detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: var(--font-text-sm-size, 13px);
+  color: var(--text-secondary);
+}
+
+.event-detail-row svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.event-detail-description {
+  font-size: var(--font-text-sm-size, 13px);
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.event-detail-attendees {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.event-detail-attendees-label {
+  font-size: var(--font-text-xs-size, 12px);
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.event-detail-attendee {
+  font-size: var(--font-text-sm-size, 13px);
+  color: var(--text-primary);
+  padding: 3px 0;
+}
+
+.event-detail-attendee-status {
+  color: var(--text-tertiary);
+  font-size: var(--font-text-xs-size, 12px);
+}
+
+.event-detail-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.event-detail-loading {
+  text-align: center;
+  padding: 8px 0;
+  color: var(--text-tertiary);
+  font-size: var(--font-text-sm-size, 13px);
+}
+
+.event-detail-conference {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: var(--font-text-sm-size, 13px);
+  color: var(--accent-color);
+  background: transparent;
+  border: 1px solid var(--accent-color);
+  border-radius: var(--border-radius-sm, 4px);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.event-detail-conference:hover {
+  background: var(--accent-color);
+  color: #ffffff;
 }
