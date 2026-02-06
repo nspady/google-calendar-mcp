@@ -19,6 +19,7 @@ import { DeleteEventHandler } from "../handlers/core/DeleteEventHandler.js";
 import { FreeBusyEventHandler } from "../handlers/core/FreeBusyEventHandler.js";
 import { GetCurrentTimeHandler } from "../handlers/core/GetCurrentTimeHandler.js";
 import { RespondToEventHandler } from "../handlers/core/RespondToEventHandler.js";
+import { GetDayEventsHandler } from "../handlers/core/GetDayEventsHandler.js";
 
 // ============================================================================
 // SHARED VALIDATION PATTERNS
@@ -283,6 +284,12 @@ export const ToolSchemas = {
     account: singleAccountSchema,
     calendarId: z.string().describe("ID of the calendar"),
     eventId: z.string().describe("ID of the event to retrieve"),
+  }),
+
+  'ui-get-day-events': z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("Date to fetch events for (YYYY-MM-DD)"),
+    timeZone: z.string().optional().describe("IANA timezone (e.g., 'America/Los_Angeles')"),
+    focusEventId: z.string().optional().describe("Event ID to highlight in the day view"),
   }),
 
   'list-colors': z.object({
@@ -773,6 +780,15 @@ export class ToolRegistry {
       description: "Get event details for UI display (app-only).",
       schema: ToolSchemas['ui-get-event-details'],
       handler: GetEventHandler,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      hasUI: true,
+      uiVisibility: ['app']
+    },
+    {
+      name: "ui-get-day-events",
+      description: "Get all events across all calendars for a single day (app-only).",
+      schema: ToolSchemas['ui-get-day-events'],
+      handler: GetDayEventsHandler,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
       hasUI: true,
       uiVisibility: ['app']

@@ -17,7 +17,7 @@ import {
 import { toggleExpanded, toggleDayExpanded } from './modules/state-management.js';
 
 // Import context extraction
-import { extractDayContext, extractMultiDayContext } from './modules/context-extraction.js';
+import { extractDayContext, extractMultiDayContext, isCreateUpdateResponse } from './modules/context-extraction.js';
 
 // Import types for context tracking
 import type { DayContext, MultiDayContext, CalendarFilter, DayViewEvent } from './modules/types.js';
@@ -128,8 +128,95 @@ function onStateChange(): void {
 
 let refreshInProgress = false;
 
+// --- Cross-calendar background fetch for create/update responses ---
+
+let crossCalendarFetchInProgress = false;
+let lastCrossCalendarArgs: { date: string; timeZone: string; focusEventId: string } | null = null;
+
+async function fetchCrossCalendarDayEvents(
+  date: string, timezone: string, focusEventId: string
+): Promise<void> {
+  if (!appInstance || crossCalendarFetchInProgress) return;
+
+  crossCalendarFetchInProgress = true;
+  lastCrossCalendarArgs = { date, timeZone: timezone, focusEventId };
+
+  try {
+    const result = await appInstance.callServerTool({
+      name: 'ui-get-day-events',
+      arguments: { date, timeZone: timezone, focusEventId }
+    });
+
+    if (result.isError) return;
+
+    // Stale check: user may have triggered another tool
+    if (currentDayContext?.date !== date) return;
+
+    const dayContext = extractDayContext(result);
+    if (dayContext) {
+      currentDayContext = dayContext;
+      renderDayView(
+        dayContext,
+        appInstance,
+        domRefs,
+        () => toggleExpanded(appInstance, domRefs, stateRefs, onStateChange),
+        stateRefs,
+        undefined,
+        undefined,
+        sendModelContextUpdate,
+        showEventDetails
+      );
+      sendModelContextUpdate();
+    }
+  } catch {
+    // Silent failure — single-calendar view is already displayed
+  } finally {
+    crossCalendarFetchInProgress = false;
+  }
+}
+
 async function refreshEvents(): Promise<void> {
-  if (!appInstance || !lastToolInputArgs || !lastToolName || refreshInProgress) return;
+  if (!appInstance || refreshInProgress) return;
+
+  // If the current view originated from a cross-calendar fetch, use ui-get-day-events for refresh
+  if (lastCrossCalendarArgs) {
+    refreshInProgress = true;
+    showLoadingState(domRefs);
+    try {
+      const result = await appInstance.callServerTool({
+        name: 'ui-get-day-events',
+        arguments: lastCrossCalendarArgs
+      });
+      if (result.isError) {
+        showCancelledState(domRefs, 'Refresh failed');
+        return;
+      }
+      const dayContext = extractDayContext(result);
+      if (dayContext) {
+        currentDayContext = dayContext;
+        currentMultiDayContext = null;
+        renderDayView(
+          dayContext,
+          appInstance,
+          domRefs,
+          () => toggleExpanded(appInstance, domRefs, stateRefs, onStateChange),
+          stateRefs,
+          undefined,
+          undefined,
+          sendModelContextUpdate,
+          showEventDetails
+        );
+        sendModelContextUpdate();
+      }
+    } catch {
+      showCancelledState(domRefs, 'Refresh failed');
+    } finally {
+      refreshInProgress = false;
+    }
+    return;
+  }
+
+  if (!lastToolInputArgs || !lastToolName) return;
 
   refreshInProgress = true;
   showLoadingState(domRefs);
@@ -625,6 +712,17 @@ async function init(): Promise<void> {
       );
       dayRefreshBtn.style.display = lastToolInputArgs ? '' : 'none';
       sendModelContextUpdate();
+
+      // For create/update responses, trigger background cross-calendar fetch
+      const createUpdateInfo = isCreateUpdateResponse(params);
+      if (createUpdateInfo) {
+        fetchCrossCalendarDayEvents(
+          createUpdateInfo.date, createUpdateInfo.timezone, createUpdateInfo.focusEventId
+        );
+      } else {
+        // Reset cross-calendar args when view comes from list-events/search-events
+        lastCrossCalendarArgs = null;
+      }
     }
   };
 
