@@ -3,6 +3,9 @@ import { App, applyHostStyleVariables, applyHostFonts, applyDocumentTheme } from
 // Import formatting functions
 import { setHostContext, formatTime, formatSlotTime } from './modules/formatting.js';
 
+// Import prompt builders
+import { buildRsvpPrompt, buildSlotSelectPrompt } from './modules/prompt-builders.js';
+
 // Import renderers
 import {
   renderDayView,
@@ -299,9 +302,15 @@ function handleSlotSelect(slot: AvailableSlot): void {
 
   const startStr = formatSlotTime(slot.startMinutes);
   const endStr = formatSlotTime(slot.endMinutes);
+  const prompt = buildSlotSelectPrompt({
+    startTime: startStr,
+    endTime: endStr,
+    date: currentDayContext?.date,
+    locale: stateRefs.hostLocale
+  });
   appInstance.sendMessage({
     role: 'user',
-    content: [{ type: 'text', text: `Schedule at ${startStr} – ${endStr}` }]
+    content: [{ type: 'text', text: prompt }]
   }).catch(() => {});
 }
 
@@ -509,7 +518,25 @@ function showEventDetails(event: DayViewEvent): void {
 
   const secondaryActions = document.createElement('div');
   secondaryActions.className = 'event-detail-secondary-actions';
-  secondaryActions.hidden = true;
+  const secondaryMenu = document.createElement('div');
+  secondaryMenu.className = 'event-detail-secondary-menu';
+  secondaryMenu.hidden = true;
+  secondaryMenu.appendChild(secondaryActions);
+
+  const secondaryToggle = document.createElement('button');
+  secondaryToggle.className = 'event-detail-secondary-toggle';
+  secondaryToggle.type = 'button';
+  const collapsedSecondaryLabel = 'Change your response';
+  const expandedSecondaryLabel = 'Hide response options';
+  secondaryToggle.textContent = collapsedSecondaryLabel;
+  secondaryToggle.setAttribute('aria-expanded', 'false');
+  secondaryToggle.hidden = true;
+  secondaryToggle.onclick = () => {
+    const isOpening = secondaryMenu.hidden;
+    secondaryMenu.hidden = !isOpening;
+    secondaryToggle.setAttribute('aria-expanded', isOpening ? 'true' : 'false');
+    secondaryToggle.textContent = isOpening ? expandedSecondaryLabel : collapsedSecondaryLabel;
+  };
 
   const actionStatus = document.createElement('div');
   actionStatus.className = 'event-detail-action-status';
@@ -517,7 +544,13 @@ function showEventDetails(event: DayViewEvent): void {
   actionStatus.setAttribute('aria-live', 'polite');
 
   const updateSecondaryActionsVisibility = (): void => {
-    secondaryActions.hidden = secondaryActions.childElementCount === 0;
+    const hasSecondaryActions = secondaryActions.childElementCount > 0;
+    secondaryToggle.hidden = !hasSecondaryActions;
+    if (!hasSecondaryActions) {
+      secondaryMenu.hidden = true;
+      secondaryToggle.textContent = collapsedSecondaryLabel;
+      secondaryToggle.setAttribute('aria-expanded', 'false');
+    }
   };
 
   const setActionBusy = (busy: boolean): void => {
@@ -566,9 +599,10 @@ function showEventDetails(event: DayViewEvent): void {
     }
   };
   actions.appendChild(openBtn);
+  actions.appendChild(secondaryToggle);
 
   actionFooter.appendChild(actions);
-  actionFooter.appendChild(secondaryActions);
+  actionFooter.appendChild(secondaryMenu);
   actionFooter.appendChild(actionStatus);
   eventDetailContent.appendChild(actionFooter);
 
@@ -726,12 +760,11 @@ function showEventDetails(event: DayViewEvent): void {
           body.appendChild(attendeesSection);
         }
 
-        // Model action buttons (Edit, Delete, RSVP) if host supports sendMessage
+        // Model action buttons (RSVP) if host supports sendMessage
         const caps = appInstance?.getHostCapabilities?.();
         if (caps?.message && appInstance) {
           const eventSummary = event.summary || '(No title)';
           const dateStr = event.start.split('T')[0] || '';
-          const timeStr = !event.isAllDay ? formatTime(event.start) : '';
 
           // RSVP section
           const selfStatus = fullEvent.attendees?.find(
@@ -740,7 +773,7 @@ function showEventDetails(event: DayViewEvent): void {
 
           if (selfStatus) {
             const rsvpSection = document.createElement('div');
-            rsvpSection.className = 'event-detail-rsvp-section event-detail-section';
+            rsvpSection.className = 'event-detail-rsvp-section';
 
             const rsvpLabel = document.createElement('div');
             rsvpLabel.className = 'event-detail-rsvp-label';
@@ -750,12 +783,26 @@ function showEventDetails(event: DayViewEvent): void {
             const rsvpRow = document.createElement('div');
             rsvpRow.className = 'event-detail-rsvp-actions';
 
-            for (const [rsvpText, status] of [['Accept', 'accepted'], ['Maybe', 'tentative'], ['Decline', 'declined']] as const) {
+            const rsvpActions: Array<[string, 'accepted' | 'tentative' | 'declined', 'accept' | 'tentative' | 'decline']> = [
+              ['Accept', 'accepted', 'accept'],
+              ['Maybe', 'tentative', 'tentative'],
+              ['Decline', 'declined', 'decline']
+            ];
+            for (const [rsvpText, status, action] of rsvpActions) {
               const btn = document.createElement('button');
               btn.className = `event-action-btn event-action-rsvp${selfStatus === status ? ' active' : ''}`;
               btn.textContent = rsvpText;
               btn.onclick = () => {
-                sendMessageAction(btn, `${rsvpText} the event "${eventSummary}" on ${dateStr}`);
+                const prompt = buildRsvpPrompt({
+                  action,
+                  summary: eventSummary,
+                  date: dateStr,
+                  eventId: event.id,
+                  calendarId: event.calendarId,
+                  accountId: event.accountId,
+                  locale: stateRefs.hostLocale
+                });
+                sendMessageAction(btn, prompt);
               };
               rsvpRow.appendChild(btn);
             }
@@ -763,37 +810,6 @@ function showEventDetails(event: DayViewEvent): void {
             secondaryActions.appendChild(rsvpSection);
             updateSecondaryActionsVisibility();
           }
-
-          // Edit & delete row (kept secondary to reduce accidental destructive clicks)
-          const modelActions = document.createElement('div');
-          modelActions.className = 'event-detail-model-actions';
-
-          const btnRow = document.createElement('div');
-          btnRow.className = 'event-detail-model-actions-row';
-
-          const editBtn = document.createElement('button');
-          editBtn.className = 'event-action-btn';
-          editBtn.textContent = 'Edit event';
-          editBtn.onclick = () => {
-            sendMessageAction(
-              editBtn,
-              `Edit the event "${eventSummary}"${timeStr ? ` at ${timeStr}` : ''} on ${dateStr}`
-            );
-          };
-          btnRow.appendChild(editBtn);
-
-          const deleteBtn = document.createElement('button');
-          deleteBtn.className = 'event-action-btn event-action-danger event-action-quiet';
-          deleteBtn.textContent = 'Delete...';
-          deleteBtn.onclick = () => {
-            if (!window.confirm(`Delete "${eventSummary}"?`)) return;
-            sendMessageAction(deleteBtn, `Delete the event "${eventSummary}" on ${dateStr}`, 'Deleting...');
-          };
-          btnRow.appendChild(deleteBtn);
-
-          modelActions.appendChild(btnRow);
-          secondaryActions.appendChild(modelActions);
-          updateSecondaryActionsVisibility();
         }
       } catch {
         showDetailsError();

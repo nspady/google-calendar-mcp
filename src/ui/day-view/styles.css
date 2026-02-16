@@ -1531,7 +1531,7 @@ body {
 
 /* Content body area with consistent padding */
 .event-detail-body {
-  padding: 0 20px;
+  padding: 0 20px 14px;
 }
 
 /* Section dividers */
@@ -1580,6 +1580,7 @@ body {
 /* Attendees list */
 .event-detail-attendees {
   /* Uses .event-detail-section for top border */
+  padding-bottom: 8px;
 }
 
 .event-detail-attendees-label {
@@ -1683,7 +1684,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px 0 calc(12px + var(--safe-area-bottom, 0px));
+  padding: 14px 0 calc(12px + var(--safe-area-bottom, 0px));
   background: var(--bg-primary);
   border-top: 1px solid var(--border-color);
   box-shadow: 0 -8px 18px rgba(0, 0, 0, 0.06);
@@ -1693,6 +1694,12 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.event-detail-secondary-menu {
+  margin-top: 2px;
+  padding: 12px 20px 0;
+  border-top: 1px solid var(--border-color);
 }
 
 .event-detail-action-status {
@@ -1783,19 +1790,36 @@ body {
   transform: scale(0.98);
 }
 
-/* Model action buttons (Edit, Delete, RSVP) */
-.event-detail-model-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 0 20px;
-  margin-bottom: 4px;
+.event-detail-secondary-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 14px;
+  font-size: var(--font-text-sm-size, 13px);
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md, 8px);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
 }
 
-.event-detail-model-actions-row {
-  display: flex;
-  gap: 8px;
-  width: 100%;
+.event-detail-secondary-toggle:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--text-tertiary);
+}
+
+.event-detail-secondary-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--focus-ring-color);
+}
+
+.event-detail-secondary-toggle[aria-expanded="true"] {
+  color: var(--text-primary);
+  border-color: var(--text-tertiary);
 }
 
 .event-action-btn {
@@ -1824,25 +1848,9 @@ body {
   box-shadow: 0 0 0 2px var(--focus-ring-color);
 }
 
-.event-action-danger {
-  color: #d93025;
-  border-color: rgba(217, 48, 37, 0.2);
-}
-
-.event-action-danger:hover {
-  background: rgba(217, 48, 37, 0.06);
-  border-color: rgba(217, 48, 37, 0.35);
-  color: #c5221f;
-}
-
-.event-action-quiet {
-  background: transparent;
-  border-color: rgba(217, 48, 37, 0.12);
-}
-
 /* RSVP button group */
 .event-detail-rsvp-section {
-  padding: 0 20px;
+  padding: 2px 0 0;
 }
 
 .event-detail-rsvp-label {
@@ -1883,14 +1891,13 @@ body {
   }
 
   .event-detail-actions,
-  .event-detail-model-actions-row,
   .event-detail-rsvp-actions {
     flex-direction: column;
   }
 
   .event-detail-conference,
   .event-detail-actions .open-calendar-btn,
-  .event-detail-model-actions-row .event-action-btn,
+  .event-detail-secondary-toggle,
   .event-detail-rsvp-actions .event-action-btn {
     width: 100%;
   }
