@@ -987,7 +987,8 @@ export function createDateGroup(
   availableSlots?: AvailableSlot[],
   onSlotSelect?: (slot: AvailableSlot) => void,
   initiallyExpanded?: boolean,
-  onEventClick?: (event: MultiDayViewEvent) => void
+  onEventClick?: (event: MultiDayViewEvent) => void,
+  timeZone?: string
 ): HTMLDivElement {
   const group = document.createElement('div');
   group.className = 'date-group';
@@ -1007,7 +1008,7 @@ export function createDateGroup(
 
   // Day number (circled if today)
   const dayNumber = document.createElement('div');
-  dayNumber.className = `date-number ${isToday(dateStr) ? 'today' : ''}`.trim();
+  dayNumber.className = `date-number ${isToday(dateStr, timeZone) ? 'today' : ''}`.trim();
   dayNumber.textContent = day;
   header.appendChild(dayNumber);
 

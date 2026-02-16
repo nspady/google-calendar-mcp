@@ -276,7 +276,13 @@ export function renderTimeGrid(
 
   // Add available slots FIRST (behind events) if scheduling mode is enabled
   if (schedulingMode?.enabled) {
-    const availableSlots = calculateAvailableSlots(events, schedulingMode.durationMinutes, startHour, endHour);
+    const availableSlots = calculateAvailableSlots(
+      events,
+      schedulingMode.durationMinutes,
+      startHour,
+      endHour,
+      context.timezone
+    );
 
     for (const slot of availableSlots) {
       const slotElement = createTimeGridSlotElement(slot, onSlotSelect);
@@ -302,7 +308,7 @@ export function renderTimeGrid(
   for (const event of timedEvents) {
     const isFocused = event.id === focusEventId;
     const element = createEventElement(event, isFocused, appInstance, false, onEventClick);
-    const position = calculateEventPosition(event, startHour, endHour);
+    const position = calculateEventPosition(event, startHour, endHour, context.timezone);
     const overlapPos = overlapColumns.get(event.id);
 
     element.style.top = position.top;
@@ -334,9 +340,22 @@ export function renderTimeGrid(
   domRefs.timeGrid.appendChild(eventsContainer);
 
   // Add current time indicator if viewing today
-  if (isToday(context.date)) {
+  if (isToday(context.date, context.timezone)) {
     const now = new Date();
-    const currentHour = now.getHours() + now.getMinutes() / 60;
+    let currentHour = now.getHours() + now.getMinutes() / 60;
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: context.timezone,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      }).formatToParts(now);
+      const hour = Number(parts.find(p => p.type === 'hour')?.value ?? 0);
+      const minute = Number(parts.find(p => p.type === 'minute')?.value ?? 0);
+      currentHour = hour + minute / 60;
+    } catch {
+      // Fall back to local time.
+    }
 
     // Only show if current time is within visible time range
     if (currentHour >= startHour && currentHour <= endHour) {
@@ -513,10 +532,21 @@ export function renderMultiDayView(
       if (events.length > 0) {
         // Calculate available slots for this day if scheduling mode is enabled
         const availableSlots = schedulingMode?.enabled
-          ? calculateAvailableSlots(events, schedulingMode.durationMinutes)
+          ? calculateAvailableSlots(events, schedulingMode.durationMinutes, 9, 17, context.timezone)
           : undefined;
         const isExpanded = stateRefs.expandedDays.has(date);
-        const dateGroup = createDateGroup(date, events, appInstance, toggleDayExpanded, context.focusEventId, availableSlots, onSlotSelect, isExpanded, onEventClick);
+        const dateGroup = createDateGroup(
+          date,
+          events,
+          appInstance,
+          toggleDayExpanded,
+          context.focusEventId,
+          availableSlots,
+          onSlotSelect,
+          isExpanded,
+          onEventClick,
+          context.timezone
+        );
         domRefs.multiDayEventsList.appendChild(dateGroup);
       }
     }

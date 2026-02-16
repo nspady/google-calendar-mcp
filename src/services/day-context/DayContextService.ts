@@ -26,14 +26,31 @@ export class DayContextService {
 
     for (const event of timedEvents) {
       if (event.start.dateTime) {
-        const startHour = new Date(event.start.dateTime).getHours();
+        const start = new Date(event.start.dateTime);
+        const startHour = start.getHours();
         minHour = Math.min(minHour, startHour);
       }
       if (event.end.dateTime) {
-        const endHour = new Date(event.end.dateTime).getHours();
-        const endMinutes = new Date(event.end.dateTime).getMinutes();
-        // If event ends with minutes past the hour, we need to show that hour
-        maxHour = Math.max(maxHour, endMinutes > 0 ? endHour + 1 : endHour);
+        const start = event.start.dateTime ? new Date(event.start.dateTime) : null;
+        const end = new Date(event.end.dateTime);
+        const endHour = end.getHours();
+        const endMinutes = end.getMinutes();
+
+        const spansIntoNextDay = start
+          ? (
+              end.getFullYear() !== start.getFullYear() ||
+              end.getMonth() !== start.getMonth() ||
+              end.getDate() !== start.getDate()
+            )
+          : false;
+
+        // If an event extends past midnight, clamp to end-of-day for this day view.
+        if (spansIntoNextDay) {
+          maxHour = Math.max(maxHour, 24);
+        } else {
+          // If event ends with minutes past the hour, we need to show that hour
+          maxHour = Math.max(maxHour, endMinutes > 0 ? endHour + 1 : endHour);
+        }
       }
     }
 

@@ -51,6 +51,18 @@ describe('DayContextService', () => {
       expect(range.endHour).toBe(18);
     });
 
+    it('should clamp cross-midnight events to end-of-day range', () => {
+      const events: StructuredEvent[] = [
+        createEvent('overnight', '2026-01-27T23:00:00', '2026-01-28T01:00:00'),
+      ];
+
+      const range = service.calculateTimeRange(events);
+
+      // Overnight events should keep a valid same-day range for the day grid
+      expect(range.startHour).toBe(22);
+      expect(range.endHour).toBe(24);
+    });
+
     it('should handle events ending exactly on the hour', () => {
       const events: StructuredEvent[] = [
         createEvent('1', '2026-01-27T10:00:00', '2026-01-27T11:00:00'),

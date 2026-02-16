@@ -710,10 +710,10 @@ describe('CalendarRegistry', () => {
 
   describe('concurrent access', () => {
     it('should prevent duplicate API calls during concurrent requests', async () => {
+      const pendingResolvers: Array<(value: { data: { items: [] } }) => void> = [];
       const mockCalendar = vi.fn().mockImplementation(() =>
-        new Promise(resolve => {
-          // Simulate API latency
-          setTimeout(() => resolve({ data: { items: [] } }), 50);
+        new Promise<{ data: { items: [] } }>(resolve => {
+          pendingResolvers.push(resolve);
         })
       );
 
@@ -722,18 +722,24 @@ describe('CalendarRegistry', () => {
       } as any));
 
       // Make concurrent requests
-      const [result1, result2, result3] = await Promise.all([
-        registry.getUnifiedCalendars(accounts),
-        registry.getUnifiedCalendars(accounts),
-        registry.getUnifiedCalendars(accounts)
-      ]);
+      const request1 = registry.getUnifiedCalendars(accounts);
+      const request2 = registry.getUnifiedCalendars(accounts);
+      const request3 = registry.getUnifiedCalendars(accounts);
+
+      // API should only be called once per account (2 total), not 6 times.
+      expect(mockCalendar).toHaveBeenCalledTimes(2);
+      expect(pendingResolvers).toHaveLength(2);
+
+      // Resolve all pending API calls.
+      for (const resolve of pendingResolvers) {
+        resolve({ data: { items: [] } });
+      }
+
+      const [result1, result2, result3] = await Promise.all([request1, request2, request3]);
 
       // All should return the same result
       expect(result1).toEqual(result2);
       expect(result2).toEqual(result3);
-
-      // API should only be called once per account (2 total), not 6 times
-      expect(mockCalendar).toHaveBeenCalledTimes(2);
     });
 
     it('should allow new API calls after in-flight request completes', async () => {
