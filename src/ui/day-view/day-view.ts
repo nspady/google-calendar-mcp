@@ -499,9 +499,60 @@ function showEventDetails(event: DayViewEvent): void {
     body.appendChild(error);
   };
 
-  // Actions row (Open in Calendar + optionally Join meeting)
+  // Sticky footer actions
+  const actionFooter = document.createElement('div');
+  actionFooter.className = 'event-detail-footer';
+
+  // Primary actions row (Join meeting + Open in Calendar)
   const actions = document.createElement('div');
   actions.className = 'event-detail-actions';
+
+  const secondaryActions = document.createElement('div');
+  secondaryActions.className = 'event-detail-secondary-actions';
+  secondaryActions.hidden = true;
+
+  const actionStatus = document.createElement('div');
+  actionStatus.className = 'event-detail-action-status';
+  actionStatus.setAttribute('role', 'status');
+  actionStatus.setAttribute('aria-live', 'polite');
+
+  const updateSecondaryActionsVisibility = (): void => {
+    secondaryActions.hidden = secondaryActions.childElementCount === 0;
+  };
+
+  const setActionBusy = (busy: boolean): void => {
+    actionFooter.classList.toggle('is-busy', busy);
+    for (const button of actionFooter.querySelectorAll('button')) {
+      (button as HTMLButtonElement).disabled = busy;
+    }
+  };
+
+  const setActionStatus = (message: string): void => {
+    actionStatus.textContent = message;
+  };
+
+  const sendMessageAction = (
+    button: HTMLButtonElement,
+    messageText: string,
+    pendingLabel = 'Sending...'
+  ): void => {
+    if (!appInstance || actionFooter.classList.contains('is-busy')) return;
+    const originalLabel = button.textContent || '';
+    setActionStatus('');
+    setActionBusy(true);
+    button.textContent = pendingLabel;
+    appInstance.sendMessage({
+      role: 'user',
+      content: [{ type: 'text', text: messageText }]
+    }).then(() => {
+      hideEventDetails();
+    }).catch(() => {
+      setActionBusy(false);
+      button.textContent = originalLabel;
+      setActionStatus('Could not send action. Try again.');
+    });
+  };
+
   const openBtn = document.createElement('a');
   openBtn.className = 'open-calendar-btn';
   openBtn.textContent = 'Open in Calendar';
@@ -515,7 +566,11 @@ function showEventDetails(event: DayViewEvent): void {
     }
   };
   actions.appendChild(openBtn);
-  eventDetailContent.appendChild(actions);
+
+  actionFooter.appendChild(actions);
+  actionFooter.appendChild(secondaryActions);
+  actionFooter.appendChild(actionStatus);
+  eventDetailContent.appendChild(actionFooter);
 
   // Position card near the clicked event, ensuring it stays fully within viewport
   const MARGIN = 16;
@@ -674,10 +729,11 @@ function showEventDetails(event: DayViewEvent): void {
         // Model action buttons (Edit, Delete, RSVP) if host supports sendMessage
         const caps = appInstance?.getHostCapabilities?.();
         if (caps?.message && appInstance) {
+          const eventSummary = event.summary || '(No title)';
           const dateStr = event.start.split('T')[0] || '';
           const timeStr = !event.isAllDay ? formatTime(event.start) : '';
 
-          // RSVP section (shown above Edit/Delete when applicable)
+          // RSVP section
           const selfStatus = fullEvent.attendees?.find(
             (a: { self?: boolean }) => a.self
           )?.responseStatus as string | undefined;
@@ -699,24 +755,16 @@ function showEventDetails(event: DayViewEvent): void {
               btn.className = `event-action-btn event-action-rsvp${selfStatus === status ? ' active' : ''}`;
               btn.textContent = rsvpText;
               btn.onclick = () => {
-                hideEventDetails();
-                appInstance!.sendMessage({
-                  role: 'user',
-                  content: [{ type: 'text', text: `${rsvpText} the event "${event.summary}" on ${dateStr}` }]
-                }).catch(() => {});
+                sendMessageAction(btn, `${rsvpText} the event "${eventSummary}" on ${dateStr}`);
               };
               rsvpRow.appendChild(btn);
             }
             rsvpSection.appendChild(rsvpRow);
-            eventDetailContent.insertBefore(rsvpSection, actions);
+            secondaryActions.appendChild(rsvpSection);
+            updateSecondaryActionsVisibility();
           }
 
-          // Separator before actions
-          const separator = document.createElement('div');
-          separator.className = 'event-detail-separator';
-          eventDetailContent.insertBefore(separator, actions);
-
-          // Edit & Delete row
+          // Edit & delete row (kept secondary to reduce accidental destructive clicks)
           const modelActions = document.createElement('div');
           modelActions.className = 'event-detail-model-actions';
 
@@ -727,28 +775,25 @@ function showEventDetails(event: DayViewEvent): void {
           editBtn.className = 'event-action-btn';
           editBtn.textContent = 'Edit event';
           editBtn.onclick = () => {
-            hideEventDetails();
-            appInstance!.sendMessage({
-              role: 'user',
-              content: [{ type: 'text', text: `Edit the event "${event.summary}"${timeStr ? ` at ${timeStr}` : ''} on ${dateStr}` }]
-            }).catch(() => {});
+            sendMessageAction(
+              editBtn,
+              `Edit the event "${eventSummary}"${timeStr ? ` at ${timeStr}` : ''} on ${dateStr}`
+            );
           };
           btnRow.appendChild(editBtn);
 
           const deleteBtn = document.createElement('button');
-          deleteBtn.className = 'event-action-btn event-action-danger';
-          deleteBtn.textContent = 'Delete';
+          deleteBtn.className = 'event-action-btn event-action-danger event-action-quiet';
+          deleteBtn.textContent = 'Delete...';
           deleteBtn.onclick = () => {
-            hideEventDetails();
-            appInstance!.sendMessage({
-              role: 'user',
-              content: [{ type: 'text', text: `Delete the event "${event.summary}" on ${dateStr}` }]
-            }).catch(() => {});
+            if (!window.confirm(`Delete "${eventSummary}"?`)) return;
+            sendMessageAction(deleteBtn, `Delete the event "${eventSummary}" on ${dateStr}`, 'Deleting...');
           };
           btnRow.appendChild(deleteBtn);
 
           modelActions.appendChild(btnRow);
-          eventDetailContent.insertBefore(modelActions, actions);
+          secondaryActions.appendChild(modelActions);
+          updateSecondaryActionsVisibility();
         }
       } catch {
         showDetailsError();

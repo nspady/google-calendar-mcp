@@ -1675,11 +1675,47 @@ body {
   padding-bottom: 4px;
 }
 
+/* Sticky footer actions */
+.event-detail-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 0 calc(12px + var(--safe-area-bottom, 0px));
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-color);
+  box-shadow: 0 -8px 18px rgba(0, 0, 0, 0.06);
+}
+
+.event-detail-secondary-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.event-detail-action-status {
+  min-height: 18px;
+  padding: 0 20px;
+  font-size: var(--font-text-xs-size, 12px);
+  color: var(--text-secondary);
+}
+
+.event-detail-action-status:empty {
+  min-height: 0;
+}
+
+.event-detail-footer.is-busy a {
+  pointer-events: none;
+  opacity: 0.65;
+}
+
 /* Primary action row (Join meeting + Open in Calendar) */
 .event-detail-actions {
   display: flex;
   gap: 8px;
-  padding: 16px 20px;
+  padding: 0 20px;
 }
 
 /* Conference / Join meeting button — prominent primary CTA */
@@ -1799,9 +1835,14 @@ body {
   color: #c5221f;
 }
 
+.event-action-quiet {
+  background: transparent;
+  border-color: rgba(217, 48, 37, 0.12);
+}
+
 /* RSVP button group */
 .event-detail-rsvp-section {
-  padding: 0 20px 4px;
+  padding: 0 20px;
 }
 
 .event-detail-rsvp-label {
@@ -1836,9 +1877,21 @@ body {
   opacity: 0.92;
 }
 
-/* Section separator used between model actions and primary actions */
-.event-detail-separator {
-  height: 1px;
-  background: var(--border-color);
-  margin: 12px 20px;
+@media (max-width: 600px) {
+  .event-detail-footer {
+    padding-bottom: calc(12px + var(--safe-area-bottom, 0px));
+  }
+
+  .event-detail-actions,
+  .event-detail-model-actions-row,
+  .event-detail-rsvp-actions {
+    flex-direction: column;
+  }
+
+  .event-detail-conference,
+  .event-detail-actions .open-calendar-btn,
+  .event-detail-model-actions-row .event-action-btn,
+  .event-detail-rsvp-actions .event-action-btn {
+    width: 100%;
+  }
 }
