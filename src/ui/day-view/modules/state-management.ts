@@ -28,7 +28,14 @@ export function toggleExpanded(
   } else {
     domRefs.timeGrid.classList.add('compact');
     domRefs.expandToggle.classList.remove('expanded');
-    domRefs.toggleText.textContent = 'Show more';
+    const hidden = Number(domRefs.expandToggle.dataset.hiddenCount || 0);
+    domRefs.toggleText.textContent = hidden > 0 ? `Show more (${hidden})` : 'Show more';
+    // Restore scroll position for compact mode
+    const target = domRefs.expandToggle.dataset.scrollTarget;
+    if (target) {
+      void domRefs.timeGrid.offsetHeight;
+      domRefs.timeGrid.scrollTop = parseFloat(target);
+    }
   }
 
   // Notify host of size change

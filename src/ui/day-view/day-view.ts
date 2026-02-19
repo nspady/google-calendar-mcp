@@ -771,7 +771,10 @@ function showEventDetails(event: DayViewEvent): void {
             (a: { self?: boolean }) => a.self
           )?.responseStatus as string | undefined;
 
-          if (selfStatus) {
+          const otherAttendees = fullEvent.attendees?.filter(
+            (a: { self?: boolean }) => !a.self
+          );
+          if (selfStatus && otherAttendees && otherAttendees.length > 0) {
             const rsvpSection = document.createElement('div');
             rsvpSection.className = 'event-detail-rsvp-section';
 

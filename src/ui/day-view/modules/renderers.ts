@@ -371,6 +371,94 @@ export function renderTimeGrid(
 }
 
 /**
+ * Animate scrollTop from current position to target using ease-out cubic.
+ */
+function smoothScrollTop(element: HTMLElement, target: number, duration = 250): void {
+  const start = element.scrollTop;
+  const distance = target - start;
+  if (Math.abs(distance) < 1) return;
+
+  const t0 = performance.now();
+  function step(now: number): void {
+    const p = Math.min((now - t0) / duration, 1);
+    const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
+    element.scrollTop = start + distance * eased;
+    if (p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+/** Compact viewport height (must match .time-grid.compact max-height in CSS). */
+const COMPACT_HEIGHT = 200;
+
+/**
+ * Compute the ideal scroll target and count of timed events hidden below the
+ * fold for compact mode. Computed from event data (not DOM) so it works
+ * reliably on first paint.
+ */
+function computeCompactScrollInfo(
+  context: DayContext,
+  visibleEvents: DayViewEvent[]
+): { scrollTarget: number; hiddenCount: number } {
+  const timedEvents = visibleEvents.filter(e => !e.isAllDay);
+
+  if (timedEvents.length === 0) {
+    // No timed events — try current time if today, otherwise top
+    if (isToday(context.date, context.timezone)) {
+      const ROW_HEIGHT = 48;
+      let currentHour: number;
+      try {
+        const now = new Date();
+        const parts = new Intl.DateTimeFormat('en-US', {
+          timeZone: context.timezone,
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }).formatToParts(now);
+        const hour = Number(parts.find(p => p.type === 'hour')?.value ?? 0);
+        const minute = Number(parts.find(p => p.type === 'minute')?.value ?? 0);
+        currentHour = (hour === 24 ? 0 : hour) + minute / 60;
+      } catch {
+        const now = new Date();
+        currentHour = now.getHours() + now.getMinutes() / 60;
+      }
+      const scrollPos = (currentHour - context.timeRange.startHour) * ROW_HEIGHT;
+      return { scrollTarget: Math.max(0, scrollPos - 24), hiddenCount: 0 };
+    }
+    return { scrollTarget: 0, hiddenCount: 0 };
+  }
+
+  // Compute positions from event data
+  const { startHour, endHour } = context.timeRange;
+  const positions = timedEvents.map(event => {
+    const pos = calculateEventPosition(event, startHour, endHour, context.timezone);
+    return { top: parseFloat(pos.top), height: parseFloat(pos.height) };
+  });
+
+  // Scroll target: first event near the top of the viewport
+  const minTop = Math.min(...positions.map(p => p.top));
+  const scrollTarget = Math.max(0, minTop - 8);
+
+  // Count timed events whose top edge is fully below the compact viewport
+  const viewBottom = scrollTarget + COMPACT_HEIGHT;
+  let hiddenCount = 0;
+  for (const pos of positions) {
+    if (pos.top >= viewBottom) {
+      hiddenCount++;
+    }
+  }
+
+  return { scrollTarget, hiddenCount };
+}
+
+/**
+ * Build the compact-mode toggle label, e.g. "Show more (3)" or "Show more".
+ */
+function compactToggleLabel(hiddenCount: number): string {
+  return hiddenCount > 0 ? `Show more (${hiddenCount})` : 'Show more';
+}
+
+/**
  * Main render function for single-day view
  */
 export function renderDayView(
@@ -415,6 +503,14 @@ export function renderDayView(
         const visibleEvents = filterVisibleEvents(context.events, filters);
         renderAllDayEvents(visibleEvents, context.focusEventId, appInstance, domRefs, onEventClick);
         renderTimeGrid(context, appInstance, domRefs, visibleEvents, schedulingMode, onSlotSelect, onEventClick);
+        // Recompute scroll position and hidden-event count
+        const info = computeCompactScrollInfo(context, visibleEvents);
+        domRefs.expandToggle.dataset.hiddenCount = String(info.hiddenCount);
+        domRefs.expandToggle.dataset.scrollTarget = String(info.scrollTarget);
+        if (!stateRefs.isExpanded.value) {
+          domRefs.toggleText.textContent = compactToggleLabel(info.hiddenCount);
+          smoothScrollTop(domRefs.timeGrid, info.scrollTarget);
+        }
         onFilterChange?.();
       });
       domRefs.calendarLegendContainer.appendChild(legend);
@@ -430,9 +526,14 @@ export function renderDayView(
   // Render time grid with optional scheduling mode
   renderTimeGrid(context, appInstance, domRefs, initialEvents, schedulingMode, onSlotSelect, onEventClick);
 
+  // Compute compact-mode scroll target and hidden-event count from event data
+  const scrollInfo = computeCompactScrollInfo(context, initialEvents);
+
   // Show expand toggle and set up handler
   domRefs.expandToggle.style.display = '';
   domRefs.expandToggle.onclick = toggleExpanded;
+  domRefs.expandToggle.dataset.hiddenCount = String(scrollInfo.hiddenCount);
+  domRefs.expandToggle.dataset.scrollTarget = String(scrollInfo.scrollTarget);
 
   // Apply persisted expand state, or default to compact
   if (stateRefs.isExpanded.value) {
@@ -443,7 +544,14 @@ export function renderDayView(
     stateRefs.isExpanded.value = false;
     domRefs.timeGrid.classList.add('compact');
     domRefs.expandToggle.classList.remove('expanded');
-    domRefs.toggleText.textContent = 'Show more';
+    domRefs.toggleText.textContent = compactToggleLabel(scrollInfo.hiddenCount);
+
+    // Set initial scroll position instantly (no animation on first paint).
+    // Skip if a focused event exists — the setTimeout below will center it instead.
+    if (!context.focusEventId) {
+      void domRefs.timeGrid.offsetHeight; // force reflow so scrollTop sticks
+      domRefs.timeGrid.scrollTop = scrollInfo.scrollTarget;
+    }
   }
 
   // Scroll focused event into view (after a short delay for render)
@@ -462,7 +570,6 @@ export function renderDayView(
       const gridVisibleHeight = gridRect.height;
       domRefs.timeGrid.scrollTop = Math.max(0, scrollOffset - gridVisibleHeight / 2 + focusedRect.height / 2);
     }
-
     focusedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, 100);
 }

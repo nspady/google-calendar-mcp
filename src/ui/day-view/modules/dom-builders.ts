@@ -256,7 +256,8 @@ export function createOverlapGroup(
   eventB: MultiDayViewEvent,
   overlapMinutes: number,
   appInstance: App | null,
-  focusEventId?: string
+  focusEventId?: string,
+  onEventClick?: (event: MultiDayViewEvent) => void
 ): HTMLDivElement {
   const group = document.createElement('div');
   group.className = 'overlap-group';
@@ -301,8 +302,8 @@ export function createOverlapGroup(
   firstRow.style.minHeight = `${heightBeforeOverlap}px`;
   firstRow.setAttribute('role', 'button');
   firstRow.setAttribute('tabindex', '0');
-  firstRow.title = `${eventA.summary}\n${formatTime(eventA.start)} - ${formatTime(eventA.end)} (${formatDuration(durationA)})\nClick to open in Google Calendar`;
-  firstRow.addEventListener('click', () => openLink(eventA.htmlLink, appInstance));
+  firstRow.title = `${eventA.summary}\n${formatTime(eventA.start)} - ${formatTime(eventA.end)} (${formatDuration(durationA)})\n${onEventClick ? 'Click for details' : 'Click to open in Google Calendar'}`;
+  firstRow.addEventListener('click', () => onEventClick ? onEventClick(eventA) : openLink(eventA.htmlLink, appInstance));
 
   const barFirst = document.createElement('div');
   barFirst.className = 'overlap-bar-first';
@@ -355,8 +356,8 @@ export function createOverlapGroup(
   overlapRow.style.minHeight = `${heightOverlap}px`;
   overlapRow.setAttribute('role', 'button');
   overlapRow.setAttribute('tabindex', '0');
-  overlapRow.title = `${eventB.summary}\n${formatTime(eventB.start)} - ${formatTime(eventB.end)} (${formatDuration(durationB)})\nClick to open in Google Calendar`;
-  overlapRow.addEventListener('click', () => openLink(eventB.htmlLink, appInstance));
+  overlapRow.title = `${eventB.summary}\n${formatTime(eventB.start)} - ${formatTime(eventB.end)} (${formatDuration(durationB)})\n${onEventClick ? 'Click for details' : 'Click to open in Google Calendar'}`;
+  overlapRow.addEventListener('click', () => onEventClick ? onEventClick(eventB) : openLink(eventB.htmlLink, appInstance));
 
   const overlapBars = document.createElement('div');
   overlapBars.className = 'overlap-bars';
@@ -430,8 +431,8 @@ export function createOverlapGroup(
       continuationRow.style.minHeight = `${heightAfterOverlap}px`;
       continuationRow.setAttribute('role', 'button');
       continuationRow.setAttribute('tabindex', '0');
-      continuationRow.title = `${eventA.summary} continues\n${formatTime(eventA.start)} - ${formatTime(eventA.end)} (${formatDuration(durationA)})\nClick to open in Google Calendar`;
-      continuationRow.addEventListener('click', () => openLink(eventA.htmlLink, appInstance));
+      continuationRow.title = `${eventA.summary} continues\n${formatTime(eventA.start)} - ${formatTime(eventA.end)} (${formatDuration(durationA)})\n${onEventClick ? 'Click for details' : 'Click to open in Google Calendar'}`;
+      continuationRow.addEventListener('click', () => onEventClick ? onEventClick(eventA) : openLink(eventA.htmlLink, appInstance));
 
       const barContinuation = document.createElement('div');
       barContinuation.className = 'overlap-bar-continuation';
@@ -471,8 +472,8 @@ export function createOverlapGroup(
       secondRow.style.minHeight = `${heightAfterOverlap}px`;
       secondRow.setAttribute('role', 'button');
       secondRow.setAttribute('tabindex', '0');
-      secondRow.title = `${eventB.summary}\n${formatTime(eventB.start)} - ${formatTime(eventB.end)} (${formatDuration(durationB)})\nClick to open in Google Calendar`;
-      secondRow.addEventListener('click', () => openLink(eventB.htmlLink, appInstance));
+      secondRow.title = `${eventB.summary}\n${formatTime(eventB.start)} - ${formatTime(eventB.end)} (${formatDuration(durationB)})\n${onEventClick ? 'Click for details' : 'Click to open in Google Calendar'}`;
+      secondRow.addEventListener('click', () => onEventClick ? onEventClick(eventB) : openLink(eventB.htmlLink, appInstance));
 
       const barSecond = document.createElement('div');
       barSecond.className = 'overlap-bar-second';
@@ -842,7 +843,7 @@ export function createDayEventList(
 
       // If overlapping with next, render as an overlap group
       if (overlapWithNext.overlaps && nextEvent) {
-        const overlapGroup = createOverlapGroup(event, nextEvent, overlapWithNext.overlapMinutes, appInstance, focusEventId);
+        const overlapGroup = createOverlapGroup(event, nextEvent, overlapWithNext.overlapMinutes, appInstance, focusEventId, onEventClick);
         container.appendChild(overlapGroup);
         // Mark both events as rendered
         renderedEventIds.add(event.id);
