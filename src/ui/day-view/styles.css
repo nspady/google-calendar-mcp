@@ -301,11 +301,11 @@ body {
   position: relative;
   min-height: var(--row-height);
   /* Line starts here, doesn't go through the hour label */
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);
 }
 
 .time-row:last-child .time-slot {
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);
 }
 
 .time-row.skeleton .time-slot {
