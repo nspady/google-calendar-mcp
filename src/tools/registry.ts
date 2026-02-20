@@ -249,7 +249,7 @@ export const ToolSchemas = {
       "Search query — all words are ANDed, so use 1-2 specific keywords for best results. " +
       "Searches title, description, location, and attendee names/emails. " +
       "Use quotes for exact phrases: \"team standup\". Use - to exclude: meeting -standup. " +
-      "Example: search 'school' then filter results, or make separate searches for 'last day of school' and 'summer'."
+      "Example: search 'school' then filter results, or make separate searches for 'last day' and 'summer'."
     ),
     timeMin: z.string()
       .refine(isValidIsoDateTime, "Must be ISO 8601 format: '2026-01-01T00:00:00'")
