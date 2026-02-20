@@ -395,6 +395,9 @@ const COMPACT_HEIGHT = 200;
  * Compute the ideal scroll target and count of timed events hidden below the
  * fold for compact mode. Computed from event data (not DOM) so it works
  * reliably on first paint.
+ *
+ * When a focusEventId is provided (create/update), centers on that event.
+ * Otherwise scrolls to the first visible timed event.
  */
 function computeCompactScrollInfo(
   context: DayContext,
@@ -432,12 +435,27 @@ function computeCompactScrollInfo(
   const { startHour, endHour } = context.timeRange;
   const positions = timedEvents.map(event => {
     const pos = calculateEventPosition(event, startHour, endHour, context.timezone);
-    return { top: parseFloat(pos.top), height: parseFloat(pos.height) };
+    return { id: event.id, top: parseFloat(pos.top), height: parseFloat(pos.height) };
   });
 
-  // Scroll target: first event near the top of the viewport
-  const minTop = Math.min(...positions.map(p => p.top));
-  const scrollTarget = Math.max(0, minTop - 8);
+  // If a focused event exists in timed events, center on it; otherwise first event
+  let anchorTop: number;
+  let anchorHeight = 0;
+  const focusPos = context.focusEventId
+    ? positions.find(p => p.id === context.focusEventId)
+    : undefined;
+
+  if (focusPos) {
+    anchorTop = focusPos.top;
+    anchorHeight = focusPos.height;
+  } else {
+    anchorTop = Math.min(...positions.map(p => p.top));
+  }
+
+  // Center the anchor in the viewport when focusing; top-align otherwise
+  const scrollTarget = focusPos
+    ? Math.max(0, anchorTop - (COMPACT_HEIGHT - anchorHeight) / 2)
+    : Math.max(0, anchorTop - 8);
 
   // Count timed events whose top edge is fully below the compact viewport
   const viewBottom = scrollTarget + COMPACT_HEIGHT;
@@ -547,31 +565,24 @@ export function renderDayView(
     domRefs.toggleText.textContent = compactToggleLabel(scrollInfo.hiddenCount);
 
     // Set initial scroll position instantly (no animation on first paint).
-    // Skip if a focused event exists — the setTimeout below will center it instead.
-    if (!context.focusEventId) {
-      void domRefs.timeGrid.offsetHeight; // force reflow so scrollTop sticks
-      domRefs.timeGrid.scrollTop = scrollInfo.scrollTarget;
-    }
+    // computeCompactScrollInfo already centers on the focused event when present.
+    void domRefs.timeGrid.offsetHeight; // force reflow so scrollTop sticks
+    domRefs.timeGrid.scrollTop = scrollInfo.scrollTarget;
   }
 
-  // Scroll focused event into view (after a short delay for render)
-  setTimeout(() => {
-    const focusedInGrid = domRefs.timeGrid.querySelector('.focused') as HTMLElement | null;
-    const focusedInAllDay = domRefs.allDayEvents.querySelector('.focused') as HTMLElement | null;
-    const focusedElement = focusedInGrid || focusedInAllDay;
-
-    if (!focusedElement) return;
-
-    // In compact mode, scroll the time grid internally to center the focused event
-    if (focusedInGrid && !stateRefs.isExpanded.value) {
-      const gridRect = domRefs.timeGrid.getBoundingClientRect();
-      const focusedRect = focusedInGrid.getBoundingClientRect();
-      const scrollOffset = focusedRect.top - gridRect.top + domRefs.timeGrid.scrollTop;
-      const gridVisibleHeight = gridRect.height;
-      domRefs.timeGrid.scrollTop = Math.max(0, scrollOffset - gridVisibleHeight / 2 + focusedRect.height / 2);
-    }
-    focusedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, 100);
+  // For focused all-day events or expanded mode, scroll the element into view
+  if (context.focusEventId) {
+    setTimeout(() => {
+      const focusedInAllDay = domRefs.allDayEvents.querySelector('.focused') as HTMLElement | null;
+      if (focusedInAllDay) {
+        focusedInAllDay.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (stateRefs.isExpanded.value) {
+        // In expanded mode, scroll the focused timed event into the page
+        const focusedInGrid = domRefs.timeGrid.querySelector('.focused') as HTMLElement | null;
+        focusedInGrid?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
+  }
 }
 
 /**

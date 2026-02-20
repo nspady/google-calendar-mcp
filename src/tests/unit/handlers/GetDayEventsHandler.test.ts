@@ -291,7 +291,7 @@ describe('GetDayEventsHandler', () => {
       expect(response.dayContext.focusEventId).toBe('event-2');
     });
 
-    it('should default focusEventId to first event when not provided', async () => {
+    it('should default focusEventId to empty string when not provided', async () => {
       const accounts = new Map([['work', mockOAuth2Client]]);
 
       setupUnifiedCalendars([
@@ -320,7 +320,7 @@ describe('GetDayEventsHandler', () => {
       const result = await handler.runTool({ date: '2026-02-05' }, accounts);
       const response = parseResponse(result);
 
-      expect(response.dayContext.focusEventId).toBe('first-event');
+      expect(response.dayContext.focusEventId).toBe('');
     });
   });
 

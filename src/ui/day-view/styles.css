@@ -256,8 +256,10 @@ body {
   color: var(--color-text-inverse, #ffffff);
   background-color: var(--accent-color);
   border-radius: var(--border-radius-sm, 4px);
+  border: none;
   border-left: 3px solid rgba(0, 0, 0, 0.15);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  outline: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
   text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
@@ -323,8 +325,10 @@ body {
   color: var(--color-text-inverse, #ffffff);
   background-color: var(--accent-color);
   border-radius: var(--border-radius-sm, 4px);
+  border: none;
   border-left: 3px solid rgba(0, 0, 0, 0.15);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  outline: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
   text-decoration: none;
   overflow: hidden;
   z-index: 1;
@@ -343,7 +347,8 @@ body {
   box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--accent-color);
 }
 
-.event-block:focus {
+.event-block:focus,
+.all-day-event:focus {
   outline: none;
   box-shadow: 0 0 0 3px var(--focus-ring-color);
   z-index: 3;
@@ -1471,42 +1476,52 @@ body {
   box-shadow: 0 0 0 2px var(--focus-ring-color);
 }
 
-/* Color accent strip at top of card */
-.event-detail-color-strip {
-  height: 4px;
-  border-radius: var(--border-radius-lg, 12px) var(--border-radius-lg, 12px) 0 0;
+/* Colored dot next to title (Google Calendar style) */
+.event-detail-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
   flex-shrink: 0;
+  margin-top: 5px;
 }
 
 .event-detail-header {
   display: flex;
-  align-items: stretch;
+  align-items: flex-start;
+  gap: 12px;
   padding: 20px 20px 0 20px;
-}
-
-.event-detail-color-bar {
-  width: 4px;
-  border-radius: 2px;
-  margin-right: 14px;
-  flex-shrink: 0;
 }
 
 .event-detail-meta {
   display: flex;
   flex-direction: column;
-  gap: 2px;
   flex: 1;
   min-width: 0;
 }
 
 .event-detail-title {
+  display: block;
   font-size: 17px;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 6px;
+  margin-bottom: 2px;
   padding-right: 36px;
   letter-spacing: -0.01em;
   line-height: 1.3;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.event-detail-title:hover {
+  text-decoration: underline;
+}
+
+/* Time subtitle under title */
+.event-detail-time {
+  font-size: var(--font-text-sm-size, 13px);
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-bottom: 2px;
 }
 
 .event-detail-row {
@@ -1516,6 +1531,7 @@ body {
   font-size: var(--font-text-sm-size, 13px);
   color: var(--text-secondary);
   line-height: 1.5;
+  padding: 4px 0;
 }
 
 .event-detail-row svg {
@@ -1531,7 +1547,23 @@ body {
 
 /* Content body area with consistent padding */
 .event-detail-body {
-  padding: 0 20px 14px;
+  padding: 6px 20px 16px;
+}
+
+/* Description row with icon + text side by side */
+.event-detail-desc-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 12px;
+  margin-top: 8px;
+  border-top: 1px solid var(--border-color);
+}
+
+.event-detail-desc-row > svg {
+  flex-shrink: 0;
+  opacity: 0.55;
+  margin-top: 2px;
 }
 
 /* Section dividers */
@@ -1676,62 +1708,14 @@ body {
   padding-bottom: 4px;
 }
 
-/* Sticky footer actions */
-.event-detail-footer {
-  position: sticky;
-  bottom: 0;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px 0 calc(12px + var(--safe-area-bottom, 0px));
-  background: var(--bg-primary);
-  border-top: 1px solid var(--border-color);
-  box-shadow: 0 -8px 18px rgba(0, 0, 0, 0.06);
-}
-
-.event-detail-secondary-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.event-detail-secondary-menu {
-  margin-top: 2px;
-  padding: 12px 20px 0;
-  border-top: 1px solid var(--border-color);
-}
-
-.event-detail-action-status {
-  min-height: 18px;
-  padding: 0 20px;
-  font-size: var(--font-text-xs-size, 12px);
-  color: var(--text-secondary);
-}
-
-.event-detail-action-status:empty {
-  min-height: 0;
-}
-
-.event-detail-footer.is-busy a {
-  pointer-events: none;
-  opacity: 0.65;
-}
-
-/* Primary action row (Join meeting + Open in Calendar) */
-.event-detail-actions {
-  display: flex;
-  gap: 8px;
-  padding: 0 20px;
-}
-
-/* Conference / Join meeting button — prominent primary CTA */
+/* Conference / Join meeting button in body */
 .event-detail-conference {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
   padding: 9px 16px;
+  margin-top: 12px;
   font-size: var(--font-text-sm-size, 13px);
   font-weight: 600;
   color: #ffffff;
@@ -1741,7 +1725,7 @@ body {
   cursor: pointer;
   text-decoration: none;
   transition: background-color 0.15s, transform 0.1s;
-  flex: 1;
+  width: 100%;
 }
 
 .event-detail-conference:hover {
@@ -1759,146 +1743,4 @@ body {
 
 .event-detail-conference svg {
   flex-shrink: 0;
-}
-
-/* Open in Calendar — secondary outlined button in actions row */
-.event-detail-actions .open-calendar-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 9px 16px;
-  font-size: var(--font-text-sm-size, 13px);
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: transparent;
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-md, 8px);
-  cursor: pointer;
-  text-decoration: none;
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
-  white-space: nowrap;
-}
-
-.event-detail-actions .open-calendar-btn:hover {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border-color: var(--text-tertiary);
-}
-
-.event-detail-actions .open-calendar-btn:active {
-  transform: scale(0.98);
-}
-
-.event-detail-secondary-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 9px 14px;
-  font-size: var(--font-text-sm-size, 13px);
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: transparent;
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-md, 8px);
-  cursor: pointer;
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
-  white-space: nowrap;
-}
-
-.event-detail-secondary-toggle:hover {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border-color: var(--text-tertiary);
-}
-
-.event-detail-secondary-toggle:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--focus-ring-color);
-}
-
-.event-detail-secondary-toggle[aria-expanded="true"] {
-  color: var(--text-primary);
-  border-color: var(--text-tertiary);
-}
-
-.event-action-btn {
-  padding: 7px 16px;
-  font-size: var(--font-text-sm-size, 13px);
-  font-weight: 500;
-  color: var(--text-primary);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-md, 8px);
-  cursor: pointer;
-  transition: background-color 0.15s, color 0.15s, border-color 0.15s, transform 0.1s;
-}
-
-.event-action-btn:hover {
-  background: var(--bg-tertiary);
-  border-color: var(--text-tertiary);
-}
-
-.event-action-btn:active {
-  transform: scale(0.97);
-}
-
-.event-action-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--focus-ring-color);
-}
-
-/* RSVP button group */
-.event-detail-rsvp-section {
-  padding: 2px 0 0;
-}
-
-.event-detail-rsvp-label {
-  font-size: var(--font-text-xs-size, 12px);
-  font-weight: 600;
-  color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 8px;
-}
-
-.event-detail-rsvp-actions {
-  display: flex;
-  gap: 6px;
-  width: 100%;
-}
-
-.event-detail-rsvp-actions .event-action-btn {
-  flex: 1;
-  text-align: center;
-  padding: 8px 8px;
-}
-
-.event-action-rsvp.active {
-  background: var(--accent-color);
-  color: var(--color-text-inverse, #ffffff);
-  border-color: var(--accent-color);
-  font-weight: 600;
-}
-
-.event-action-rsvp.active:hover {
-  opacity: 0.92;
-}
-
-@media (max-width: 600px) {
-  .event-detail-footer {
-    padding-bottom: calc(12px + var(--safe-area-bottom, 0px));
-  }
-
-  .event-detail-actions,
-  .event-detail-rsvp-actions {
-    flex-direction: column;
-  }
-
-  .event-detail-conference,
-  .event-detail-actions .open-calendar-btn,
-  .event-detail-secondary-toggle,
-  .event-detail-rsvp-actions .event-action-btn {
-    width: 100%;
-  }
 }

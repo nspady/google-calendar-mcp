@@ -105,10 +105,8 @@ export class DayContextService {
     date: string,
     timezone: string
   ): DayContext {
-    // Use first event as focus, or empty string if no events
-    const focusEventId = events.length > 0 ? events[0].id : '';
-
-    return this._buildCommonDayContext(events, date, timezone, focusEventId);
+    // No focus event for list operations — empty string means no highlight
+    return this._buildCommonDayContext(events, date, timezone, '');
   }
 
   /**

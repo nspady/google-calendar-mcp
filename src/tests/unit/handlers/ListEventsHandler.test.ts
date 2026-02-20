@@ -516,7 +516,7 @@ describe('ListEventsHandler - Day Context for MCP Apps UI', () => {
     expect(parsed.dayContext).toBeDefined();
     expect(parsed.dayContext.date).toBe('2025-01-30');
     expect(parsed.dayContext.events).toHaveLength(2);
-    expect(parsed.dayContext.focusEventId).toBe('event-1'); // First event is focus
+    expect(parsed.dayContext.focusEventId).toBe(''); // No focus event for list operations
     expect(parsed.dayContext.dayLink).toContain('2025/01/30');
     expect(parsed.dayContext.timeRange).toBeDefined();
     expect(parsed.dayContext.timeRange.startHour).toBeGreaterThanOrEqual(0);

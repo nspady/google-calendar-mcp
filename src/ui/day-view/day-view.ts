@@ -4,7 +4,7 @@ import { App, applyHostStyleVariables, applyHostFonts, applyDocumentTheme } from
 import { setHostContext, formatTime, formatSlotTime } from './modules/formatting.js';
 
 // Import prompt builders
-import { buildRsvpPrompt, buildSlotSelectPrompt } from './modules/prompt-builders.js';
+import { buildSlotSelectPrompt } from './modules/prompt-builders.js';
 
 // Import renderers
 import {
@@ -420,45 +420,48 @@ function showEventDetails(event: DayViewEvent): void {
     eventDetailContent.removeChild(eventDetailContent.firstChild);
   }
 
-  // Color strip at top of card
-  const colorStrip = document.createElement('div');
-  colorStrip.className = 'event-detail-color-strip';
-  colorStrip.style.backgroundColor = event.backgroundColor || 'var(--accent-color)';
-  eventDetailContent.appendChild(colorStrip);
-
-  // Header with color bar + meta info
+  // Header with colored dot + meta (title + time)
   const header = document.createElement('div');
   header.className = 'event-detail-header';
 
-  const colorBar = document.createElement('div');
-  colorBar.className = 'event-detail-color-bar';
-  if (event.backgroundColor) {
-    colorBar.style.backgroundColor = event.backgroundColor;
-  }
-  header.appendChild(colorBar);
+  const dot = document.createElement('div');
+  dot.className = 'event-detail-dot';
+  dot.style.backgroundColor = event.backgroundColor || 'var(--accent-color)';
+  header.appendChild(dot);
 
   const meta = document.createElement('div');
   meta.className = 'event-detail-meta';
 
-  const title = document.createElement('div');
+  const title = document.createElement('a');
   title.className = 'event-detail-title';
   title.textContent = event.summary || '(No title)';
+  title.href = '#';
+  title.onclick = (e) => {
+    e.preventDefault();
+    if (appInstance) {
+      appInstance.openLink({ url: event.htmlLink }).catch(() => {
+        window.open(event.htmlLink, '_blank');
+      });
+    }
+  };
   meta.appendChild(title);
 
-  // Time row with clock icon
-  const timeRow = document.createElement('div');
-  timeRow.className = 'event-detail-row';
-  const clockSvg = createSvgIcon('clock');
-  timeRow.appendChild(clockSvg);
-  const timeText = document.createElement('span');
-  timeText.className = 'event-detail-row-text';
-  timeText.textContent = !event.isAllDay
+  // Time as plain text under title (no icon)
+  const timeEl = document.createElement('div');
+  timeEl.className = 'event-detail-time';
+  timeEl.textContent = !event.isAllDay
     ? `${formatTime(event.start)} – ${formatTime(event.end)}`
     : 'All day';
-  timeRow.appendChild(timeText);
-  meta.appendChild(timeRow);
+  meta.appendChild(timeEl);
 
-  // Location row with pin icon
+  header.appendChild(meta);
+  eventDetailContent.appendChild(header);
+
+  // Body container for location, calendar, description, attendees, etc.
+  const body = document.createElement('div');
+  body.className = 'event-detail-body';
+
+  // Location row (available immediately from event object)
   if (event.location) {
     const locRow = document.createElement('div');
     locRow.className = 'event-detail-row';
@@ -468,10 +471,10 @@ function showEventDetails(event: DayViewEvent): void {
     locText.className = 'event-detail-row-text';
     locText.textContent = event.location;
     locRow.appendChild(locText);
-    meta.appendChild(locRow);
+    body.appendChild(locRow);
   }
 
-  // Calendar name row with calendar icon
+  // Calendar name row (available immediately from event object)
   if (event.calendarName) {
     const calRow = document.createElement('div');
     calRow.className = 'event-detail-row';
@@ -481,22 +484,16 @@ function showEventDetails(event: DayViewEvent): void {
     calText.className = 'event-detail-row-text';
     calText.textContent = event.calendarName;
     calRow.appendChild(calText);
-    meta.appendChild(calRow);
+    body.appendChild(calRow);
   }
-
-  header.appendChild(meta);
-  eventDetailContent.appendChild(header);
-
-  // Body container for description, attendees, etc.
-  const body = document.createElement('div');
-  body.className = 'event-detail-body';
-  eventDetailContent.appendChild(body);
 
   // Loading indicator for full details
   const loading = document.createElement('div');
   loading.className = 'event-detail-loading';
   loading.textContent = 'Loading details...';
   body.appendChild(loading);
+
+  eventDetailContent.appendChild(body);
 
   const showDetailsError = (): void => {
     if (detailRequestId !== eventDetailsRequestId || !body.isConnected) return;
@@ -507,104 +504,6 @@ function showEventDetails(event: DayViewEvent): void {
     error.textContent = 'Could not load additional details.';
     body.appendChild(error);
   };
-
-  // Sticky footer actions
-  const actionFooter = document.createElement('div');
-  actionFooter.className = 'event-detail-footer';
-
-  // Primary actions row (Join meeting + Open in Calendar)
-  const actions = document.createElement('div');
-  actions.className = 'event-detail-actions';
-
-  const secondaryActions = document.createElement('div');
-  secondaryActions.className = 'event-detail-secondary-actions';
-  const secondaryMenu = document.createElement('div');
-  secondaryMenu.className = 'event-detail-secondary-menu';
-  secondaryMenu.hidden = true;
-  secondaryMenu.appendChild(secondaryActions);
-
-  const secondaryToggle = document.createElement('button');
-  secondaryToggle.className = 'event-detail-secondary-toggle';
-  secondaryToggle.type = 'button';
-  const collapsedSecondaryLabel = 'Change your response';
-  const expandedSecondaryLabel = 'Hide response options';
-  secondaryToggle.textContent = collapsedSecondaryLabel;
-  secondaryToggle.setAttribute('aria-expanded', 'false');
-  secondaryToggle.hidden = true;
-  secondaryToggle.onclick = () => {
-    const isOpening = secondaryMenu.hidden;
-    secondaryMenu.hidden = !isOpening;
-    secondaryToggle.setAttribute('aria-expanded', isOpening ? 'true' : 'false');
-    secondaryToggle.textContent = isOpening ? expandedSecondaryLabel : collapsedSecondaryLabel;
-  };
-
-  const actionStatus = document.createElement('div');
-  actionStatus.className = 'event-detail-action-status';
-  actionStatus.setAttribute('role', 'status');
-  actionStatus.setAttribute('aria-live', 'polite');
-
-  const updateSecondaryActionsVisibility = (): void => {
-    const hasSecondaryActions = secondaryActions.childElementCount > 0;
-    secondaryToggle.hidden = !hasSecondaryActions;
-    if (!hasSecondaryActions) {
-      secondaryMenu.hidden = true;
-      secondaryToggle.textContent = collapsedSecondaryLabel;
-      secondaryToggle.setAttribute('aria-expanded', 'false');
-    }
-  };
-
-  const setActionBusy = (busy: boolean): void => {
-    actionFooter.classList.toggle('is-busy', busy);
-    for (const button of actionFooter.querySelectorAll('button')) {
-      (button as HTMLButtonElement).disabled = busy;
-    }
-  };
-
-  const setActionStatus = (message: string): void => {
-    actionStatus.textContent = message;
-  };
-
-  const sendMessageAction = (
-    button: HTMLButtonElement,
-    messageText: string,
-    pendingLabel = 'Sending...'
-  ): void => {
-    if (!appInstance || actionFooter.classList.contains('is-busy')) return;
-    const originalLabel = button.textContent || '';
-    setActionStatus('');
-    setActionBusy(true);
-    button.textContent = pendingLabel;
-    appInstance.sendMessage({
-      role: 'user',
-      content: [{ type: 'text', text: messageText }]
-    }).then(() => {
-      hideEventDetails();
-    }).catch(() => {
-      setActionBusy(false);
-      button.textContent = originalLabel;
-      setActionStatus('Could not send action. Try again.');
-    });
-  };
-
-  const openBtn = document.createElement('a');
-  openBtn.className = 'open-calendar-btn';
-  openBtn.textContent = 'Open in Calendar';
-  openBtn.href = '#';
-  openBtn.onclick = (e) => {
-    e.preventDefault();
-    if (appInstance) {
-      appInstance.openLink({ url: event.htmlLink }).catch(() => {
-        window.open(event.htmlLink, '_blank');
-      });
-    }
-  };
-  actions.appendChild(openBtn);
-  actions.appendChild(secondaryToggle);
-
-  actionFooter.appendChild(actions);
-  actionFooter.appendChild(secondaryMenu);
-  actionFooter.appendChild(actionStatus);
-  eventDetailContent.appendChild(actionFooter);
 
   // Position card near the clicked event, ensuring it stays fully within viewport
   const MARGIN = 16;
@@ -648,14 +547,16 @@ function showEventDetails(event: DayViewEvent): void {
         const fullEvent = data.event;
         if (!fullEvent) return;
 
-        // Description section
+        // Description section with description icon
         if (fullEvent.description) {
-          const descSection = document.createElement('div');
-          descSection.className = 'event-detail-section';
-          const desc = document.createElement('div');
-          desc.className = 'event-detail-description';
-          desc.innerHTML = sanitizeDescription(fullEvent.description);
-          for (const link of desc.querySelectorAll('a')) {
+          const descRow = document.createElement('div');
+          descRow.className = 'event-detail-desc-row';
+          const descIcon = createSvgIcon('description');
+          descRow.appendChild(descIcon);
+          const descContent = document.createElement('div');
+          descContent.className = 'event-detail-description';
+          descContent.innerHTML = sanitizeDescription(fullEvent.description);
+          for (const link of descContent.querySelectorAll('a')) {
             const href = link.getAttribute('href');
             if (!href || !isAllowedExternalUrl(href)) {
               link.removeAttribute('href');
@@ -672,11 +573,11 @@ function showEventDetails(event: DayViewEvent): void {
               }
             });
           }
-          descSection.appendChild(desc);
-          body.appendChild(descSection);
+          descRow.appendChild(descContent);
+          body.appendChild(descRow);
         }
 
-        // Conference link — insert as primary CTA in actions row
+        // Conference link — rendered in body as a button
         if (fullEvent.conferenceData?.entryPoints) {
           const videoEntry = fullEvent.conferenceData.entryPoints.find(
             (ep: { entryPointType: string; uri: string }) => ep.entryPointType === 'video'
@@ -685,7 +586,6 @@ function showEventDetails(event: DayViewEvent): void {
             const confBtn = document.createElement('a');
             confBtn.className = 'event-detail-conference';
             confBtn.href = '#';
-            // Video icon
             const vidSvg = createSvgIcon('video');
             confBtn.appendChild(vidSvg);
             const confLabel = document.createElement('span');
@@ -699,7 +599,7 @@ function showEventDetails(event: DayViewEvent): void {
                 });
               }
             };
-            actions.insertBefore(confBtn, actions.firstChild);
+            body.appendChild(confBtn);
           }
         }
 
@@ -758,61 +658,6 @@ function showEventDetails(event: DayViewEvent): void {
           }
 
           body.appendChild(attendeesSection);
-        }
-
-        // Model action buttons (RSVP) if host supports sendMessage
-        const caps = appInstance?.getHostCapabilities?.();
-        if (caps?.message && appInstance) {
-          const eventSummary = event.summary || '(No title)';
-          const dateStr = event.start.split('T')[0] || '';
-
-          // RSVP section
-          const selfStatus = fullEvent.attendees?.find(
-            (a: { self?: boolean }) => a.self
-          )?.responseStatus as string | undefined;
-
-          const otherAttendees = fullEvent.attendees?.filter(
-            (a: { self?: boolean }) => !a.self
-          );
-          if (selfStatus && otherAttendees && otherAttendees.length > 0) {
-            const rsvpSection = document.createElement('div');
-            rsvpSection.className = 'event-detail-rsvp-section';
-
-            const rsvpLabel = document.createElement('div');
-            rsvpLabel.className = 'event-detail-rsvp-label';
-            rsvpLabel.textContent = 'Your response';
-            rsvpSection.appendChild(rsvpLabel);
-
-            const rsvpRow = document.createElement('div');
-            rsvpRow.className = 'event-detail-rsvp-actions';
-
-            const rsvpActions: Array<[string, 'accepted' | 'tentative' | 'declined', 'accept' | 'tentative' | 'decline']> = [
-              ['Accept', 'accepted', 'accept'],
-              ['Maybe', 'tentative', 'tentative'],
-              ['Decline', 'declined', 'decline']
-            ];
-            for (const [rsvpText, status, action] of rsvpActions) {
-              const btn = document.createElement('button');
-              btn.className = `event-action-btn event-action-rsvp${selfStatus === status ? ' active' : ''}`;
-              btn.textContent = rsvpText;
-              btn.onclick = () => {
-                const prompt = buildRsvpPrompt({
-                  action,
-                  summary: eventSummary,
-                  date: dateStr,
-                  eventId: event.id,
-                  calendarId: event.calendarId,
-                  accountId: event.accountId,
-                  locale: stateRefs.hostLocale
-                });
-                sendMessageAction(btn, prompt);
-              };
-              rsvpRow.appendChild(btn);
-            }
-            rsvpSection.appendChild(rsvpRow);
-            secondaryActions.appendChild(rsvpSection);
-            updateSecondaryActionsVisibility();
-          }
         }
       } catch {
         showDetailsError();
@@ -892,6 +737,21 @@ function createSvgIcon(name: string): SVGSVGElement {
       line3.setAttribute('x2', '21');
       line3.setAttribute('y2', '10');
       svg.appendChild(line3);
+      break;
+    }
+    case 'description': {
+      const l1 = document.createElementNS(ns, 'line');
+      l1.setAttribute('x1', '3'); l1.setAttribute('y1', '6');
+      l1.setAttribute('x2', '21'); l1.setAttribute('y2', '6');
+      svg.appendChild(l1);
+      const l2 = document.createElementNS(ns, 'line');
+      l2.setAttribute('x1', '3'); l2.setAttribute('y1', '12');
+      l2.setAttribute('x2', '21'); l2.setAttribute('y2', '12');
+      svg.appendChild(l2);
+      const l3 = document.createElementNS(ns, 'line');
+      l3.setAttribute('x1', '3'); l3.setAttribute('y1', '18');
+      l3.setAttribute('x2', '15'); l3.setAttribute('y2', '18');
+      svg.appendChild(l3);
       break;
     }
     case 'video': {
