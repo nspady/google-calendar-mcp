@@ -1053,16 +1053,10 @@ async function init(): Promise<void> {
       dayRefreshBtn.style.display = lastToolInputArgs ? '' : 'none';
       sendModelContextUpdate();
 
-      // For create/update responses, trigger background cross-calendar fetch
+      // Always trigger cross-calendar background fetch for single-day views
       const createUpdateInfo = isCreateUpdateResponse(params);
-      if (createUpdateInfo) {
-        fetchCrossCalendarDayEvents(
-          createUpdateInfo.date, createUpdateInfo.timezone, createUpdateInfo.focusEventId
-        );
-      } else {
-        // Reset cross-calendar args when view comes from list-events/search-events
-        lastCrossCalendarArgs = null;
-      }
+      const focusId = createUpdateInfo ? createUpdateInfo.focusEventId : '';
+      fetchCrossCalendarDayEvents(dayContext.date, dayContext.timezone, focusId);
     }
   };
 
