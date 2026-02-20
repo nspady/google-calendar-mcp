@@ -796,26 +796,6 @@ let lastToolName: string | null = null;
 // Clear highlight callback (set inside init(), used by module-level render calls)
 let clearHighlightRef: (() => void) | undefined;
 
-/**
- * Try to parse a highlight-events result from ontoolresult params.
- * Returns the highlight data if this is a highlight result, null otherwise.
- */
-function tryParseHighlightResult(
-  params: { content?: Array<{ type: string; text?: string }> }
-): { eventIds: string[]; label?: string } | null {
-  const textBlock = params.content?.find(
-    (c: { type: string; text?: string }) => c.type === 'text' && c.text
-  ) as { type: string; text: string } | undefined;
-  if (!textBlock) return null;
-  try {
-    const data = JSON.parse(textBlock.text);
-    if (data.action === 'highlight' && Array.isArray(data.eventIds)) {
-      return { eventIds: data.eventIds, label: data.label };
-    }
-  } catch { /* not a highlight result */ }
-  return null;
-}
-
 // --- Model context sync ---
 
 let modelContextTimer: ReturnType<typeof setTimeout> | undefined;
@@ -1063,20 +1043,6 @@ async function init(): Promise<void> {
 
   // Handle tool results
   app.ontoolresult = (params) => {
-    // Check for highlight-events result (server handler returns {action:'highlight',...})
-    const highlightResult = tryParseHighlightResult(params);
-    if (highlightResult !== null) {
-      if (highlightResult.eventIds.length > 0) {
-        stateRefs.highlightedEventIds = new Set(highlightResult.eventIds);
-        stateRefs.highlightLabel = highlightResult.label;
-      } else {
-        stateRefs.highlightedEventIds = undefined;
-        stateRefs.highlightLabel = undefined;
-      }
-      reRenderCurrentView();
-      return;
-    }
-
     // Clear highlight filter on new tool result (tied to one model response)
     stateRefs.highlightedEventIds = undefined;
     stateRefs.highlightLabel = undefined;
@@ -1218,7 +1184,7 @@ async function init(): Promise<void> {
   clearHighlightRef = clearHighlight;
 
   app.onlisttools = async () => ({
-    tools: ['navigate-to-date', 'set-calendar-filter', 'set-display-mode']
+    tools: ['navigate-to-date', 'set-calendar-filter', 'set-display-mode', 'highlight-events']
   });
 
   app.oncalltool = async (params) => {
@@ -1298,6 +1264,33 @@ async function init(): Promise<void> {
         } catch {
           return { content: [{ type: 'text', text: `Failed to set display mode to ${mode}` }], isError: true };
         }
+      }
+
+      case 'highlight-events': {
+        const eventIds = args.eventIds as string[] | undefined;
+        const label = args.label as string | undefined;
+
+        if (!eventIds || eventIds.length === 0) {
+          clearHighlight();
+          return { content: [{ type: 'text', text: 'Highlight cleared' }] };
+        }
+
+        stateRefs.highlightedEventIds = new Set(eventIds);
+        stateRefs.highlightLabel = label;
+        reRenderCurrentView();
+
+        // Count matches across current context
+        let matchCount = 0;
+        if (currentDayContext) {
+          matchCount = currentDayContext.events.filter(e => stateRefs.highlightedEventIds!.has(e.id)).length;
+        } else if (currentMultiDayContext) {
+          for (const date of currentMultiDayContext.dates) {
+            const events = currentMultiDayContext.eventsByDate[date] || [];
+            matchCount += events.filter(e => stateRefs.highlightedEventIds!.has(e.id)).length;
+          }
+        }
+
+        return { content: [{ type: 'text', text: `Highlighting ${matchCount} events` }] };
       }
 
       default:

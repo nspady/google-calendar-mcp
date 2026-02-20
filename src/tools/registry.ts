@@ -77,10 +77,10 @@ const conferenceDataSchema = z.object({
 }).optional();
 
 const extendedPropertiesSchema = z.object({
-  private: z.record(z.string()).optional().describe(
+  private: z.record(z.string(), z.string()).optional().describe(
     "Properties private to the application. Keys can have max 44 chars, values max 1024 chars."
   ),
-  shared: z.record(z.string()).optional().describe(
+  shared: z.record(z.string(), z.string()).optional().describe(
     "Properties visible to all attendees. Keys can have max 44 chars, values max 1024 chars."
   )
 }).optional().describe(
@@ -672,24 +672,18 @@ interface ToolDefinition {
 export class ToolRegistry {
   private static extractSchemaShape(schema: z.ZodType<any>): any {
     const schemaAny = schema as any;
-    
-    // Handle ZodEffects (schemas with .refine())
-    if (schemaAny._def && schemaAny._def.typeName === 'ZodEffects') {
-      return this.extractSchemaShape(schemaAny._def.schema);
-    }
-    
-    // Handle regular ZodObject
+
+    // In zod 4, .shape is directly accessible even on refined schemas
     if ('shape' in schemaAny) {
       return schemaAny.shape;
     }
-    
-    // Handle other nested structures
-    if (schemaAny._def && schemaAny._def.schema) {
-      return this.extractSchemaShape(schemaAny._def.schema);
+
+    // Fallback for pipe/preprocess schemas: unwrap inner schema
+    if (schemaAny._def?.out) {
+      return this.extractSchemaShape(schemaAny._def.out);
     }
-    
-    // Fallback to the original approach
-    return schemaAny._def?.schema?.shape || schemaAny.shape;
+
+    return schemaAny.shape;
   }
 
   private static tools: ToolDefinition[] = [
@@ -808,7 +802,8 @@ export class ToolRegistry {
       schema: ToolSchemas['highlight-events'],
       handler: HighlightEventsHandler,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-      hasUI: true
+      hasUI: true,
+      uiVisibility: ['app']
     },
     {
       name: "list-colors",
