@@ -903,6 +903,12 @@ function sendModelContextUpdate(): void {
         : `Highlight filter: ${highlightCount} of ${highlightTotal} events`
       );
       structured.highlightFilter = { count: highlightCount, total: highlightTotal, label };
+    } else {
+      // Hint to use highlight-events when showing many events without a filter
+      const totalEvents = currentDayContext?.events.length ?? currentMultiDayContext?.totalEventCount ?? 0;
+      if (totalEvents > 10) {
+        lines.push(`The UI is showing all ${totalEvents} events. Call highlight-events with the IDs of events relevant to the user's question (from the tool result above) so the UI matches your answer.`);
+      }
     }
 
     appInstance.updateModelContext({
@@ -993,13 +999,24 @@ async function init(): Promise<void> {
   // Store app instance globally for openLink calls
   appInstance = app;
 
-  // Handle partial tool input - show skeleton preview with available hints
+  // Handle partial tool input - show skeleton preview with available hints.
+  // Only show skeleton for data-fetching tools (list-events, search-events, get-day-events).
+  // Since ontoolinputpartial doesn't include a tool name, we detect by arg keys.
+  // The first partial may be {} before args stream in, so we also check whether
+  // a view is already rendered — no need to clobber it with a skeleton.
   app.ontoolinputpartial = (params) => {
-    const args = params.arguments as Record<string, unknown> | undefined;
-    // Skip skeleton for highlight-events (no loading needed)
-    if (args && 'eventIds' in args) return;
-
     if (skeletonRendered) return;
+
+    const args = params.arguments as Record<string, unknown> | undefined;
+
+    // Detect data-fetching tool by characteristic args
+    const isDataTool = args && ('timeMin' in args || 'calendarId' in args || 'query' in args || 'date' in args || 'focusEventId' in args);
+
+    if (!isDataTool) {
+      // Args empty or unrecognized — only show skeleton if no view is rendered yet
+      if (currentDayContext || currentMultiDayContext) return;
+    }
+
     skeletonRendered = true;
 
     const hints: { date?: string; timeZone?: string; query?: string } = {};
@@ -1025,13 +1042,14 @@ async function init(): Promise<void> {
     renderSkeletonView(domRefs, hints);
   };
 
-  // Handle tool input - show loading state while tool executes
+  // Handle tool input - show loading state while tool executes.
+  // Only show loading for data-fetching tools, not UI-only tools like highlight-events.
   app.ontoolinput = (params) => {
     skeletonRendered = false;
 
-    // Skip loading for highlight-events (handled in ontoolresult)
     const args = params.arguments as Record<string, unknown> | undefined;
-    if (args && 'eventIds' in args) return;
+    const isDataTool = !args || 'timeMin' in args || 'calendarId' in args || 'query' in args || 'date' in args || 'focusEventId' in args;
+    if (!isDataTool) return;
 
     // Store tool input args for refresh functionality
     if (args) {
@@ -1200,7 +1218,7 @@ async function init(): Promise<void> {
   clearHighlightRef = clearHighlight;
 
   app.onlisttools = async () => ({
-    tools: ['navigate-to-date', 'set-calendar-filter', 'set-display-mode', 'highlight-events']
+    tools: ['navigate-to-date', 'set-calendar-filter', 'set-display-mode']
   });
 
   app.oncalltool = async (params) => {
@@ -1280,33 +1298,6 @@ async function init(): Promise<void> {
         } catch {
           return { content: [{ type: 'text', text: `Failed to set display mode to ${mode}` }], isError: true };
         }
-      }
-
-      case 'highlight-events': {
-        const eventIds = args.eventIds as string[] | undefined;
-        const label = args.label as string | undefined;
-
-        if (!eventIds || eventIds.length === 0) {
-          clearHighlight();
-          return { content: [{ type: 'text', text: 'Highlight cleared' }] };
-        }
-
-        stateRefs.highlightedEventIds = new Set(eventIds);
-        stateRefs.highlightLabel = label;
-        reRenderCurrentView();
-
-        // Count matches across current context
-        let matchCount = 0;
-        if (currentDayContext) {
-          matchCount = currentDayContext.events.filter(e => stateRefs.highlightedEventIds!.has(e.id)).length;
-        } else if (currentMultiDayContext) {
-          for (const date of currentMultiDayContext.dates) {
-            const events = currentMultiDayContext.eventsByDate[date] || [];
-            matchCount += events.filter(e => stateRefs.highlightedEventIds!.has(e.id)).length;
-          }
-        }
-
-        return { content: [{ type: 'text', text: `Highlighting ${matchCount} events` }] };
       }
 
       default:

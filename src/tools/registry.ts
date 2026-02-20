@@ -804,7 +804,7 @@ export class ToolRegistry {
     },
     {
       name: "highlight-events",
-      description: "Filter the calendar UI to show only specific events. Call after list-events or search-events when your response discusses a subset of the returned events, so the UI matches your answer. Pass the event IDs of the relevant events.",
+      description: "After list-events or search-events returns many results, call this to filter the calendar UI to only the events you discuss in your answer. Read through the returned events, pick the ones relevant to the user's question, and pass their IDs from the result data. Always call this when your answer covers a subset of the returned events.",
       schema: ToolSchemas['highlight-events'],
       handler: HighlightEventsHandler,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
