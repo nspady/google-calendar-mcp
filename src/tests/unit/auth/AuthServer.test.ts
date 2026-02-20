@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { OAuth2Client } from 'google-auth-library';
 import http from 'http';
 import { EventEmitter } from 'events';
+import crypto from 'crypto';
 
 // Mock http module
 vi.mock('http', () => {
@@ -245,6 +246,46 @@ describe('AuthServer', () => {
       // (it may have been called for other reasons in setup)
       const closeCalls = mockHttpServer.close.mock.calls.length;
       expect(closeCalls).toBe(0);
+    });
+  });
+
+  describe('OAuth state parameter (CSRF protection)', () => {
+    it('should include state parameter in auth URL', async () => {
+      const result = await authServer.startForMcpTool('work');
+
+      expect(result.success).toBe(true);
+      expect(result.authUrl).toBeDefined();
+      expect(result.authUrl).toContain('state=');
+    });
+
+    it('should generate a new state for each auth URL', async () => {
+      const result1 = await authServer.startForMcpTool('work');
+      const state1 = new URL(result1.authUrl!).searchParams.get('state');
+
+      const result2 = await authServer.startForMcpTool('personal');
+      const state2 = new URL(result2.authUrl!).searchParams.get('state');
+
+      expect(state1).toBeDefined();
+      expect(state2).toBeDefined();
+      expect(state1).not.toBe(state2);
+    });
+
+    it('should store pendingState when generating auth URL', async () => {
+      await authServer.startForMcpTool('work');
+
+      expect(authServer.pendingState).toBeDefined();
+      expect(authServer.pendingState).not.toBeNull();
+      expect(typeof authServer.pendingState).toBe('string');
+      expect(authServer.pendingState!.length).toBe(64); // 32 bytes hex-encoded
+    });
+
+    it('should include state that matches pendingState in auth URL', async () => {
+      const result = await authServer.startForMcpTool('work');
+
+      const authUrl = new URL(result.authUrl!);
+      const urlState = authUrl.searchParams.get('state');
+
+      expect(urlState).toBe(authServer.pendingState);
     });
   });
 });

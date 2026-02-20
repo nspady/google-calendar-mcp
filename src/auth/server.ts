@@ -1,5 +1,6 @@
 import { OAuth2Client } from 'google-auth-library';
 import { TokenManager } from './tokenManager.js';
+import crypto from 'crypto';
 import http from 'http';
 import { URL } from 'url';
 import open from 'open';
@@ -24,6 +25,7 @@ export class AuthServer {
   public authCompletedSuccessfully = false; // Flag for standalone script
   private mcpToolTimeout: ReturnType<typeof setTimeout> | null = null; // Timeout for MCP tool auth flow
   private autoShutdownOnSuccess = false; // Whether to auto-shutdown after successful auth
+  private pendingState: string | null = null; // CSRF protection state for OAuth flow
 
   constructor(oauth2Client: OAuth2Client) {
     this.baseOAuth2Client = oauth2Client;
@@ -45,12 +47,15 @@ export class AuthServer {
 
   /**
    * Generates an OAuth authorization URL with standard settings.
+   * Includes a cryptographically random state parameter for CSRF protection.
    */
   private generateOAuthUrl(client: OAuth2Client): string {
+    this.pendingState = crypto.randomBytes(32).toString('hex');
     return client.generateAuthUrl({
       access_type: 'offline',
       scope: ['https://www.googleapis.com/auth/calendar'],
-      prompt: 'consent'
+      prompt: 'consent',
+      state: this.pendingState
     });
   }
 
@@ -88,6 +93,18 @@ export class AuthServer {
           res.end(errorHtml);
           return;
         }
+
+        // Validate state parameter for CSRF protection
+        const returnedState = url.searchParams.get('state');
+        if (!returnedState || returnedState !== this.pendingState) {
+          const errorHtml = await renderAuthError({
+            errorMessage: 'Invalid state parameter. This may indicate a CSRF attack or an expired authentication session. Please try authenticating again.'
+          });
+          res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(errorHtml);
+          return;
+        }
+        this.pendingState = null; // Clear after successful validation
 
         if (!this.flowOAuth2Client) {
           const errorHtml = await renderAuthError({
