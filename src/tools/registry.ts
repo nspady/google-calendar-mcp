@@ -20,6 +20,7 @@ import { FreeBusyEventHandler } from "../handlers/core/FreeBusyEventHandler.js";
 import { GetCurrentTimeHandler } from "../handlers/core/GetCurrentTimeHandler.js";
 import { RespondToEventHandler } from "../handlers/core/RespondToEventHandler.js";
 import { GetDayEventsHandler } from "../handlers/core/GetDayEventsHandler.js";
+import { HighlightEventsHandler } from "../handlers/core/HighlightEventsHandler.js";
 
 // ============================================================================
 // SHARED VALIDATION PATTERNS
@@ -245,7 +246,10 @@ export const ToolSchemas = {
       return val;
     }).describe("Calendar identifier(s) to search. Accepts calendar IDs or names. Single or multiple calendars supported."),
     query: z.string().describe(
-      "Free text search query (searches summary, description, location, attendees, etc.)"
+      "Search query — all words are ANDed, so use 1-2 specific keywords for best results. " +
+      "Searches title, description, location, and attendee names/emails. " +
+      "Use quotes for exact phrases: \"team standup\". Use - to exclude: meeting -standup. " +
+      "Example: search 'school' then filter results, or make separate searches for 'last day of school' and 'summer'."
     ),
     timeMin: z.string()
       .refine(isValidIsoDateTime, "Must be ISO 8601 format: '2026-01-01T00:00:00'")
@@ -290,6 +294,11 @@ export const ToolSchemas = {
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("Date to fetch events for (YYYY-MM-DD)"),
     timeZone: z.string().optional().describe("IANA timezone (e.g., 'America/Los_Angeles')"),
     focusEventId: z.string().optional().describe("Event ID to highlight in the day view"),
+  }),
+
+  'highlight-events': z.object({
+    eventIds: z.array(z.string()).describe("Event IDs to keep visible in the UI. Use empty array to clear the filter."),
+    label: z.string().optional().describe("Display label for the filter chip (e.g., 'Travel events', '1:1 meetings')")
   }),
 
   'list-colors': z.object({
@@ -762,7 +771,7 @@ export class ToolRegistry {
     },
     {
       name: "search-events",
-      description: "Search for events in a calendar by text query.",
+      description: "Search for events by keyword. Google Calendar ANDs all query terms — keep queries short (1-2 keywords). For broad lookups like 'what do I have this summer', prefer list-events with a time range instead. Use search only when looking for specific event names or topics.",
       schema: ToolSchemas['search-events'],
       handler: SearchEventsHandler,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
@@ -792,6 +801,14 @@ export class ToolRegistry {
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
       hasUI: true,
       uiVisibility: ['app']
+    },
+    {
+      name: "highlight-events",
+      description: "Filter the calendar UI to show only specific events. Call after list-events or search-events when your response discusses a subset of the returned events, so the UI matches your answer. Pass the event IDs of the relevant events.",
+      schema: ToolSchemas['highlight-events'],
+      handler: HighlightEventsHandler,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      hasUI: true
     },
     {
       name: "list-colors",

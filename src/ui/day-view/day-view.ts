@@ -70,7 +70,9 @@ const stateRefs = {
   expandedDays: new Set<string>(),
   hostLocale: undefined as string | undefined,
   viewKey: undefined as string | undefined,
-  hiddenCalendarIds: undefined as string[] | undefined
+  hiddenCalendarIds: undefined as string[] | undefined,
+  highlightedEventIds: undefined as Set<string> | undefined,
+  highlightLabel: undefined as string | undefined
 };
 
 // --- View state persistence via localStorage ---
@@ -182,7 +184,8 @@ async function fetchCrossCalendarDayEvents(
         undefined,
         undefined,
         sendModelContextUpdate,
-        showEventDetails
+        showEventDetails,
+        clearHighlightRef
       );
       sendModelContextUpdate();
     }
@@ -222,7 +225,8 @@ async function refreshEvents(): Promise<void> {
           undefined,
           undefined,
           sendModelContextUpdate,
-          showEventDetails
+          showEventDetails,
+          clearHighlightRef
         );
         sendModelContextUpdate();
       }
@@ -263,7 +267,8 @@ async function refreshEvents(): Promise<void> {
         stateRefs,
         undefined, // schedulingMode
         handleSlotSelect,
-        showEventDetails // onEventClick
+        showEventDetails, // onEventClick
+        clearHighlightRef
       );
       sendModelContextUpdate();
       return;
@@ -282,7 +287,8 @@ async function refreshEvents(): Promise<void> {
         undefined, // schedulingMode
         handleSlotSelect,
         onStateChange, // onFilterChange — persists hidden calendars and updates model context
-        showEventDetails // onEventClick
+        showEventDetails, // onEventClick
+        clearHighlightRef
       );
       sendModelContextUpdate();
     }
@@ -787,6 +793,29 @@ let currentMultiDayContext: MultiDayContext | null = null;
 let lastToolInputArgs: Record<string, unknown> | null = null;
 let lastToolName: string | null = null;
 
+// Clear highlight callback (set inside init(), used by module-level render calls)
+let clearHighlightRef: (() => void) | undefined;
+
+/**
+ * Try to parse a highlight-events result from ontoolresult params.
+ * Returns the highlight data if this is a highlight result, null otherwise.
+ */
+function tryParseHighlightResult(
+  params: { content?: Array<{ type: string; text?: string }> }
+): { eventIds: string[]; label?: string } | null {
+  const textBlock = params.content?.find(
+    (c: { type: string; text?: string }) => c.type === 'text' && c.text
+  ) as { type: string; text: string } | undefined;
+  if (!textBlock) return null;
+  try {
+    const data = JSON.parse(textBlock.text);
+    if (data.action === 'highlight' && Array.isArray(data.eventIds)) {
+      return { eventIds: data.eventIds, label: data.label };
+    }
+  } catch { /* not a highlight result */ }
+  return null;
+}
+
 // --- Model context sync ---
 
 let modelContextTimer: ReturnType<typeof setTimeout> | undefined;
@@ -852,6 +881,28 @@ function sendModelContextUpdate(): void {
     }
     if (hiddenCalendars.length > 0) {
       structured.hiddenCalendars = hiddenCalendars;
+    }
+
+    // Report highlight filter state
+    if (stateRefs.highlightedEventIds?.size) {
+      let highlightTotal = 0;
+      let highlightCount = 0;
+      if (currentDayContext) {
+        highlightTotal = currentDayContext.events.length;
+        highlightCount = currentDayContext.events.filter(e => stateRefs.highlightedEventIds!.has(e.id)).length;
+      } else if (currentMultiDayContext) {
+        highlightTotal = currentMultiDayContext.totalEventCount;
+        for (const date of currentMultiDayContext.dates) {
+          const events = currentMultiDayContext.eventsByDate[date] || [];
+          highlightCount += events.filter(e => stateRefs.highlightedEventIds!.has(e.id)).length;
+        }
+      }
+      const label = stateRefs.highlightLabel;
+      lines.push(label
+        ? `Highlight filter: ${label} (${highlightCount} of ${highlightTotal})`
+        : `Highlight filter: ${highlightCount} of ${highlightTotal} events`
+      );
+      structured.highlightFilter = { count: highlightCount, total: highlightTotal, label };
     }
 
     appInstance.updateModelContext({
@@ -944,10 +995,13 @@ async function init(): Promise<void> {
 
   // Handle partial tool input - show skeleton preview with available hints
   app.ontoolinputpartial = (params) => {
+    const args = params.arguments as Record<string, unknown> | undefined;
+    // Skip skeleton for highlight-events (no loading needed)
+    if (args && 'eventIds' in args) return;
+
     if (skeletonRendered) return;
     skeletonRendered = true;
 
-    const args = params.arguments as Record<string, unknown> | undefined;
     const hints: { date?: string; timeZone?: string; query?: string } = {};
 
     if (args) {
@@ -975,8 +1029,11 @@ async function init(): Promise<void> {
   app.ontoolinput = (params) => {
     skeletonRendered = false;
 
-    // Store tool input args for refresh functionality
+    // Skip loading for highlight-events (handled in ontoolresult)
     const args = params.arguments as Record<string, unknown> | undefined;
+    if (args && 'eventIds' in args) return;
+
+    // Store tool input args for refresh functionality
     if (args) {
       lastToolInputArgs = { ...args };
       // Infer tool name from arguments
@@ -988,6 +1045,24 @@ async function init(): Promise<void> {
 
   // Handle tool results
   app.ontoolresult = (params) => {
+    // Check for highlight-events result (server handler returns {action:'highlight',...})
+    const highlightResult = tryParseHighlightResult(params);
+    if (highlightResult !== null) {
+      if (highlightResult.eventIds.length > 0) {
+        stateRefs.highlightedEventIds = new Set(highlightResult.eventIds);
+        stateRefs.highlightLabel = highlightResult.label;
+      } else {
+        stateRefs.highlightedEventIds = undefined;
+        stateRefs.highlightLabel = undefined;
+      }
+      reRenderCurrentView();
+      return;
+    }
+
+    // Clear highlight filter on new tool result (tied to one model response)
+    stateRefs.highlightedEventIds = undefined;
+    stateRefs.highlightLabel = undefined;
+
     // Check for multi-day context first (multi-day queries, search results)
     const multiDayContext = extractMultiDayContext(params);
     if (multiDayContext) {
@@ -1014,7 +1089,8 @@ async function init(): Promise<void> {
         stateRefs,
         undefined, // schedulingMode
         handleSlotSelect,
-        showEventDetails // onEventClick
+        showEventDetails, // onEventClick
+        clearHighlight
       );
       multiDayRefreshBtn.style.display = lastToolInputArgs ? '' : 'none';
       sendModelContextUpdate();
@@ -1048,7 +1124,8 @@ async function init(): Promise<void> {
         undefined, // schedulingMode
         handleSlotSelect,
         onStateChange, // onFilterChange — persists hidden calendars and updates model context
-        showEventDetails // onEventClick
+        showEventDetails, // onEventClick
+        clearHighlight
       );
       dayRefreshBtn.style.display = lastToolInputArgs ? '' : 'none';
       sendModelContextUpdate();
@@ -1096,7 +1173,8 @@ async function init(): Promise<void> {
         undefined,
         handleSlotSelect,
         onStateChange,
-        showEventDetails
+        showEventDetails,
+        clearHighlight
       );
     } else if (currentMultiDayContext) {
       renderMultiDayView(
@@ -1107,14 +1185,22 @@ async function init(): Promise<void> {
         stateRefs,
         undefined,
         handleSlotSelect,
-        showEventDetails
+        showEventDetails,
+        clearHighlight
       );
     }
     sendModelContextUpdate();
   }
 
+  function clearHighlight(): void {
+    stateRefs.highlightedEventIds = undefined;
+    stateRefs.highlightLabel = undefined;
+    reRenderCurrentView();
+  }
+  clearHighlightRef = clearHighlight;
+
   app.onlisttools = async () => ({
-    tools: ['navigate-to-date', 'set-calendar-filter', 'set-display-mode']
+    tools: ['navigate-to-date', 'set-calendar-filter', 'set-display-mode', 'highlight-events']
   });
 
   app.oncalltool = async (params) => {
@@ -1194,6 +1280,33 @@ async function init(): Promise<void> {
         } catch {
           return { content: [{ type: 'text', text: `Failed to set display mode to ${mode}` }], isError: true };
         }
+      }
+
+      case 'highlight-events': {
+        const eventIds = args.eventIds as string[] | undefined;
+        const label = args.label as string | undefined;
+
+        if (!eventIds || eventIds.length === 0) {
+          clearHighlight();
+          return { content: [{ type: 'text', text: 'Highlight cleared' }] };
+        }
+
+        stateRefs.highlightedEventIds = new Set(eventIds);
+        stateRefs.highlightLabel = label;
+        reRenderCurrentView();
+
+        // Count matches across current context
+        let matchCount = 0;
+        if (currentDayContext) {
+          matchCount = currentDayContext.events.filter(e => stateRefs.highlightedEventIds!.has(e.id)).length;
+        } else if (currentMultiDayContext) {
+          for (const date of currentMultiDayContext.dates) {
+            const events = currentMultiDayContext.eventsByDate[date] || [];
+            matchCount += events.filter(e => stateRefs.highlightedEventIds!.has(e.id)).length;
+          }
+        }
+
+        return { content: [{ type: 'text', text: `Highlighting ${matchCount} events` }] };
       }
 
       default:

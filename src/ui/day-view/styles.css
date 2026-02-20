@@ -89,7 +89,7 @@ body {
   padding: 0;
   text-decoration: none;
   background-color: transparent;
-  border: var(--border-width-regular, 1px) solid var(--border-color);
+  border: none;
   border-radius: var(--border-radius-sm, 4px);
   transition: background-color 0.2s;
 }
@@ -123,7 +123,7 @@ body {
   height: 32px;
   padding: 0;
   background: transparent;
-  border: var(--border-width-regular, 1px) solid var(--border-color);
+  border: none;
   border-radius: var(--border-radius-sm, 4px);
   color: var(--text-secondary);
   cursor: pointer;
@@ -153,7 +153,7 @@ body {
   height: 32px;
   padding: 0;
   background: transparent;
-  border: var(--border-width-regular, 1px) solid var(--border-color);
+  border: none;
   border-radius: var(--border-radius-sm, 4px);
   color: var(--text-secondary);
   cursor: pointer;
@@ -1736,4 +1736,51 @@ body {
 
 .event-detail-conference svg {
   flex-shrink: 0;
+}
+
+/* ============================================================================
+   Highlight Filter Chip
+   ============================================================================ */
+
+.highlight-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  margin-top: 8px;
+  font-size: var(--font-text-xs-size, 12px);
+  color: var(--accent-color);
+  background-color: color-mix(in srgb, var(--accent-color) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-color) 25%, transparent);
+  border-radius: 16px;
+}
+
+.highlight-chip-label {
+  font-weight: 500;
+}
+
+.highlight-chip-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: var(--accent-color);
+  cursor: pointer;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+  transition: background-color 0.15s;
+}
+
+.highlight-chip-close:hover {
+  background-color: color-mix(in srgb, var(--accent-color) 20%, transparent);
+}
+
+.highlight-chip-close:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--focus-ring-color);
 }
