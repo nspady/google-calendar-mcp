@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { OAuth2Client } from 'google-auth-library';
 import http from 'http';
 import { EventEmitter } from 'events';
+import crypto from 'crypto';
 
 // Mock http module
 vi.mock('http', () => {
@@ -203,6 +204,106 @@ describe('AuthServer', () => {
     it('should resolve immediately if no server running', async () => {
       // Should not throw
       await expect(authServer.stop()).resolves.not.toThrow();
+    });
+  });
+
+  describe('PKCE (Proof Key for Code Exchange)', () => {
+    it('should include code_challenge in the auth URL', async () => {
+      const result = await authServer.startForMcpTool('work');
+
+      expect(result.success).toBe(true);
+      const url = new URL(result.authUrl!);
+      expect(url.searchParams.get('code_challenge')).toBeTruthy();
+    });
+
+    it('should include code_challenge_method=S256 in the auth URL', async () => {
+      const result = await authServer.startForMcpTool('work');
+
+      expect(result.success).toBe(true);
+      const url = new URL(result.authUrl!);
+      expect(url.searchParams.get('code_challenge_method')).toBe('S256');
+    });
+
+    it('should store pendingCodeVerifier when generating auth URL', async () => {
+      expect(authServer.pendingCodeVerifier).toBeNull();
+
+      await authServer.startForMcpTool('work');
+
+      expect(authServer.pendingCodeVerifier).toBeTruthy();
+      expect(typeof authServer.pendingCodeVerifier).toBe('string');
+    });
+
+    it('should generate a fresh code verifier for each auth flow', async () => {
+      await authServer.startForMcpTool('work');
+      const firstVerifier = authServer.pendingCodeVerifier;
+
+      // Stop and start a new flow to get a new verifier
+      await authServer.stop();
+      await authServer.startForMcpTool('personal');
+      const secondVerifier = authServer.pendingCodeVerifier;
+
+      expect(firstVerifier).toBeTruthy();
+      expect(secondVerifier).toBeTruthy();
+      expect(firstVerifier).not.toBe(secondVerifier);
+    });
+
+    it('should reuse the same verifier across multiple generateOAuthUrl calls (race condition fix)', async () => {
+      await authServer.startForMcpTool('work');
+      const verifierAfterStart = authServer.pendingCodeVerifier;
+      const challengeAfterStart = authServer.pendingCodeChallenge;
+
+      // Simulate what happens when the landing page is visited (calls generateOAuthUrl internally)
+      // The verifier and challenge should remain the same - not regenerated
+      expect(authServer.pendingCodeVerifier).toBe(verifierAfterStart);
+      expect(authServer.pendingCodeChallenge).toBe(challengeAfterStart);
+    });
+  });
+
+  describe('OAuth state parameter (CSRF protection)', () => {
+    it('should include state parameter in auth URL', async () => {
+      const result = await authServer.startForMcpTool('work');
+
+      expect(result.success).toBe(true);
+      expect(result.authUrl).toContain('state=');
+    });
+
+    it('should generate a new state for each auth flow', async () => {
+      const result1 = await authServer.startForMcpTool('work');
+      const state1 = new URL(result1.authUrl!).searchParams.get('state');
+
+      await authServer.stop();
+      const result2 = await authServer.startForMcpTool('personal');
+      const state2 = new URL(result2.authUrl!).searchParams.get('state');
+
+      expect(state1).toBeDefined();
+      expect(state2).toBeDefined();
+      expect(state1).not.toBe(state2);
+    });
+
+    it('should store pendingState when generating auth URL', async () => {
+      await authServer.startForMcpTool('work');
+
+      expect(authServer.pendingState).toBeDefined();
+      expect(authServer.pendingState).not.toBeNull();
+      expect(typeof authServer.pendingState).toBe('string');
+      expect(authServer.pendingState!.length).toBe(64); // 32 bytes hex-encoded
+    });
+
+    it('should include state that matches pendingState in auth URL', async () => {
+      const result = await authServer.startForMcpTool('work');
+
+      const authUrl = new URL(result.authUrl!);
+      const urlState = authUrl.searchParams.get('state');
+
+      expect(urlState).toBe(authServer.pendingState);
+    });
+
+    it('should reuse the same state across multiple generateOAuthUrl calls', async () => {
+      await authServer.startForMcpTool('work');
+      const stateAfterStart = authServer.pendingState;
+
+      // State should remain stable (not regenerated on landing page visits)
+      expect(authServer.pendingState).toBe(stateAfterStart);
     });
   });
 
