@@ -1,5 +1,6 @@
-import { OAuth2Client } from 'google-auth-library';
+import { OAuth2Client, CodeChallengeMethod } from 'google-auth-library';
 import { TokenManager } from './tokenManager.js';
+import crypto from 'crypto';
 import http from 'http';
 import { URL } from 'url';
 import open from 'open';
@@ -24,6 +25,9 @@ export class AuthServer {
   public authCompletedSuccessfully = false; // Flag for standalone script
   private mcpToolTimeout: ReturnType<typeof setTimeout> | null = null; // Timeout for MCP tool auth flow
   private autoShutdownOnSuccess = false; // Whether to auto-shutdown after successful auth
+  private pendingCodeVerifier: string | null = null; // PKCE code verifier for OAuth flow
+  private pendingCodeChallenge: string | null = null; // PKCE code challenge (generated once per flow)
+  private pendingState: string | null = null; // CSRF protection state for OAuth flow
 
   constructor(oauth2Client: OAuth2Client) {
     this.baseOAuth2Client = oauth2Client;
@@ -45,13 +49,36 @@ export class AuthServer {
 
   /**
    * Generates an OAuth authorization URL with standard settings.
+   * Includes PKCE (Proof Key for Code Exchange) and a state parameter for CSRF protection.
+   * Requires that PKCE credentials and state have been pre-generated via preparePkceAndState().
    */
   private generateOAuthUrl(client: OAuth2Client): string {
+    if (!this.pendingCodeChallenge || !this.pendingCodeVerifier) {
+      throw new Error('PKCE credentials not initialized. Call preparePkceAndState() before generating auth URL.');
+    }
+    if (!this.pendingState) {
+      throw new Error('OAuth state not initialized. Call preparePkceAndState() before generating auth URL.');
+    }
     return client.generateAuthUrl({
       access_type: 'offline',
       scope: ['https://www.googleapis.com/auth/calendar'],
-      prompt: 'consent'
+      prompt: 'consent',
+      code_challenge_method: CodeChallengeMethod.S256,
+      code_challenge: this.pendingCodeChallenge,
+      state: this.pendingState
     });
+  }
+
+  /**
+   * Generates and stores PKCE verifier/challenge pair and a random state parameter.
+   * Must be called once per auth flow, before generateOAuthUrl().
+   * Subsequent calls to generateOAuthUrl() or landing page visits reuse these values.
+   */
+  private async preparePkceAndState(client: OAuth2Client): Promise<void> {
+    const { codeVerifier, codeChallenge } = await client.generateCodeVerifierAsync();
+    this.pendingCodeVerifier = codeVerifier;
+    this.pendingCodeChallenge = codeChallenge;
+    this.pendingState = crypto.randomBytes(32).toString('hex');
   }
 
   private createServer(): http.Server {
@@ -65,7 +92,7 @@ export class AuthServer {
         res.end(css);
 
       } else if (url.pathname === '/') {
-        // Root route - show auth link
+        // Root route - show auth link (reuses pre-generated PKCE + state)
         const clientForUrl = this.flowOAuth2Client || this.baseOAuth2Client;
         const authUrl = this.generateOAuthUrl(clientForUrl);
         const accountMode = getAccountMode();
@@ -89,6 +116,18 @@ export class AuthServer {
           return;
         }
 
+        // Validate state parameter for CSRF protection
+        const returnedState = url.searchParams.get('state');
+        if (!returnedState || returnedState !== this.pendingState) {
+          const errorHtml = await renderAuthError({
+            errorMessage: 'Invalid state parameter. This may indicate a CSRF attack or an expired authentication session. Please try authenticating again.'
+          });
+          res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(errorHtml);
+          return;
+        }
+        this.pendingState = null; // Clear after successful validation
+
         if (!this.flowOAuth2Client) {
           const errorHtml = await renderAuthError({
             errorMessage: 'Authentication flow not properly initiated.'
@@ -97,9 +136,23 @@ export class AuthServer {
           res.end(errorHtml);
           return;
         }
+
+        if (!this.pendingCodeVerifier) {
+          const errorHtml = await renderAuthError({
+            errorMessage: 'PKCE code verifier missing. The authentication session may have expired. Please try authenticating again.'
+          });
+          res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(errorHtml);
+          return;
+        }
         
         try {
-          const { tokens } = await this.flowOAuth2Client.getToken(code);
+          const { tokens } = await this.flowOAuth2Client.getToken({
+            code,
+            codeVerifier: this.pendingCodeVerifier
+          });
+          this.pendingCodeVerifier = null; // Clear after use
+          this.pendingCodeChallenge = null; // Clear after use
           await this.tokenManager.saveTokens(tokens);
           this.authCompletedSuccessfully = true;
 
@@ -188,6 +241,9 @@ export class AuthServer {
         await this.stop(); // Stop the server we just started
         return false;
     }
+
+    // Generate PKCE credentials and state once for this flow
+    await this.preparePkceAndState(this.flowOAuth2Client);
 
     // Generate Auth URL using the newly created flow client
     const authorizeUrl = this.generateOAuthUrl(this.flowOAuth2Client);
@@ -330,6 +386,9 @@ export class AuthServer {
         error: `Failed to load OAuth credentials: ${error instanceof Error ? error.message : 'Unknown error'}`
       };
     }
+
+    // Generate PKCE credentials and state once for this flow
+    await this.preparePkceAndState(this.flowOAuth2Client);
 
     // Generate Auth URL
     const authUrl = this.generateOAuthUrl(this.flowOAuth2Client);
