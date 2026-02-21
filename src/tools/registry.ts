@@ -12,6 +12,7 @@ import { SearchEventsHandler } from "../handlers/core/SearchEventsHandler.js";
 import { GetEventHandler } from "../handlers/core/GetEventHandler.js";
 import { ListColorsHandler } from "../handlers/core/ListColorsHandler.js";
 import { CreateEventHandler } from "../handlers/core/CreateEventHandler.js";
+import { CreateEventsHandler } from "../handlers/core/CreateEventsHandler.js";
 import { UpdateEventHandler } from "../handlers/core/UpdateEventHandler.js";
 import { DeleteEventHandler } from "../handlers/core/DeleteEventHandler.js";
 import { FreeBusyEventHandler } from "../handlers/core/FreeBusyEventHandler.js";
@@ -411,6 +412,78 @@ export const ToolSchemas = {
     }
   ),
 
+  // Note: All schemas within create-events are inlined (not reusing shared schema objects)
+  // to prevent $ref generation in JSON schema output, which causes issues with some MCP clients.
+  'create-events': z.object({
+    account: z.string()
+      .regex(/^[a-z0-9_-]{1,64}$/, "Account nickname must be 1-64 characters: lowercase letters, numbers, dashes, underscores only")
+      .optional()
+      .describe("Default account for all events. Individual events can override this."),
+    calendarId: z.string().optional().describe(
+      "Default calendar ID for all events (use 'primary' for the main calendar). Individual events can override this. Defaults to 'primary' if not specified."
+    ),
+    timeZone: z.string().optional().describe(
+      "Default IANA timezone for all events (e.g., 'America/Los_Angeles'). Individual events can override this."
+    ),
+    sendUpdates: z.enum(["all", "externalOnly", "none"]).optional().describe(
+      "Default notification setting for all events. Individual events can override this."
+    ),
+    events: z.array(z.object({
+      summary: z.string().describe("Title of the event"),
+      start: z.string()
+        .refine(isValidIsoDateOrDateTime, "Must be ISO 8601 format: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events")
+        .describe("Event start time: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events"),
+      end: z.string()
+        .refine(isValidIsoDateOrDateTime, "Must be ISO 8601 format: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events")
+        .describe("Event end time: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events (exclusive)"),
+      calendarId: z.string().optional().describe("Override calendar ID for this event"),
+      account: z.string()
+        .regex(/^[a-z0-9_-]{1,64}$/, "Account nickname must be 1-64 characters: lowercase letters, numbers, dashes, underscores only")
+        .optional()
+        .describe("Override account for this event"),
+      timeZone: z.string().optional().describe("Override timezone for this event"),
+      description: z.string().optional().describe("Description/notes for the event"),
+      location: z.string().optional().describe("Location of the event"),
+      attendees: z.array(z.object({
+        email: z.string().email().describe("Email address of the attendee"),
+        displayName: z.string().optional().describe("Display name of the attendee"),
+        optional: z.boolean().optional().describe("Whether this is an optional attendee"),
+        responseStatus: z.enum(["needsAction", "declined", "tentative", "accepted"]).optional().describe("Attendee's response status"),
+      })).optional().describe("List of event attendees"),
+      colorId: z.string().optional().describe("Color ID for the event (use list-colors to see available IDs)"),
+      reminders: z.object({
+        useDefault: z.boolean().describe("Whether to use the default reminders"),
+        overrides: z.array(z.object({
+          method: z.enum(["email", "popup"]).default("popup").describe("Reminder method"),
+          minutes: z.number().describe("Minutes before the event to trigger the reminder")
+        }).partial({ method: true })).optional().describe("Custom reminders")
+      }).describe("Reminder settings for the event").optional(),
+      recurrence: z.preprocess(
+        parseJsonStringArray,
+        z.array(z.string())
+      ).optional().describe(
+        "Recurrence rules in RFC5545 format (e.g., [\"RRULE:FREQ=WEEKLY;COUNT=5\"])"
+      ),
+      transparency: z.enum(["opaque", "transparent"]).optional().describe(
+        "Whether the event blocks time. 'opaque' = busy, 'transparent' = free."
+      ),
+      visibility: z.enum(["default", "public", "private", "confidential"]).optional().describe("Visibility of the event"),
+      guestsCanInviteOthers: z.boolean().optional().describe("Whether attendees can invite others"),
+      guestsCanModify: z.boolean().optional().describe("Whether attendees can modify the event"),
+      guestsCanSeeOtherGuests: z.boolean().optional().describe("Whether attendees can see other attendees"),
+      anyoneCanAddSelf: z.boolean().optional().describe("Whether anyone can add themselves"),
+      sendUpdates: z.enum(["all", "externalOnly", "none"]).optional().describe("Override notification setting for this event"),
+      conferenceData: z.object({
+        createRequest: z.object({
+          requestId: z.string().describe("Client-generated unique ID for this request to ensure idempotency"),
+          conferenceSolutionKey: z.object({
+            type: z.enum(["hangoutsMeet", "eventHangout", "eventNamedHangout", "addOn"]).describe("Conference solution type")
+          }).describe("Conference solution to create")
+        }).describe("Request to generate a new conference")
+      }).optional().describe("Conference properties for the event"),
+    })).min(1).max(50).describe("Array of events to create (1-50 events)")
+  }),
+
   'update-event': z.object({
     account: singleAccountSchema,
     calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
@@ -608,6 +681,7 @@ export type SearchEventsInput = ToolInputs['search-events'];
 export type GetEventInput = ToolInputs['get-event'];
 export type ListColorsInput = ToolInputs['list-colors'];
 export type CreateEventInput = ToolInputs['create-event'];
+export type CreateEventsInput = ToolInputs['create-events'];
 export type UpdateEventInput = ToolInputs['update-event'];
 export type DeleteEventInput = ToolInputs['delete-event'];
 export type GetFreeBusyInput = ToolInputs['get-freebusy'];
@@ -746,6 +820,12 @@ export class ToolRegistry {
       handler: CreateEventHandler
     },
     {
+      name: "create-events",
+      description: "Create multiple calendar events in bulk. Accepts shared defaults (account, calendarId, timeZone) that apply to all events, with per-event overrides. Skips duplicate detection for speed.",
+      schema: ToolSchemas['create-events'],
+      handler: CreateEventsHandler
+    },
+    {
       name: "update-event",
       description: "Update an existing calendar event with recurring event modification scope support.",
       schema: ToolSchemas['update-event'],
@@ -797,13 +877,32 @@ export class ToolRegistry {
    */
   private static normalizeDateTimeFields(toolName: string, args: any): any {
     // Only normalize for tools that have datetime fields
-    const toolsWithDateTime = ['create-event', 'update-event'];
+    const toolsWithDateTime = ['create-event', 'update-event', 'create-events'];
     if (!toolsWithDateTime.includes(toolName)) {
       return args;
     }
 
     const normalized = { ...args };
     const dateTimeFields = ['start', 'end', 'originalStartTime', 'futureStartDate'];
+
+    // Handle nested events array for create-events
+    if (toolName === 'create-events' && Array.isArray(normalized.events)) {
+      normalized.events = normalized.events.map((event: any) => {
+        const normalizedEvent = { ...event };
+        for (const field of dateTimeFields) {
+          if (normalizedEvent[field] && typeof normalizedEvent[field] === 'object') {
+            const obj = normalizedEvent[field];
+            if (obj.date) {
+              normalizedEvent[field] = obj.date;
+            } else if (obj.dateTime) {
+              normalizedEvent[field] = obj.dateTime;
+            }
+          }
+        }
+        return normalizedEvent;
+      });
+      return normalized;
+    }
 
     for (const field of dateTimeFields) {
       if (normalized[field] && typeof normalized[field] === 'object') {
