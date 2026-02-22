@@ -174,9 +174,9 @@ Always use HTTPS in production:
 1. Client connects to HTTP endpoint
 2. Server redirects to Google OAuth
 3. User authenticates with Google
-4. Server stores tokens securely
-5. Client receives session token
-6. All requests use session token
+4. Server stores OAuth2 refresh tokens securely on disk
+5. Tokens are automatically refreshed on expiry
+6. All API calls use the stored OAuth2 credentials
 
 ## Monitoring
 

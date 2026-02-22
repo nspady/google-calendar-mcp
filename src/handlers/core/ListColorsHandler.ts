@@ -51,13 +51,4 @@ export class ListColorsHandler extends BaseToolHandler {
         }
     }
 
-    /**
-     * Formats the color information into a user-friendly string.
-     */
-    private formatColorList(colors: calendar_v3.Schema$Colors): string {
-        const eventColors = colors.event || {};
-        return Object.entries(eventColors)
-            .map(([id, colorInfo]) => `Color ID: ${id} - ${colorInfo.background} (background) / ${colorInfo.foreground} (foreground)`)
-            .join("\n");
-    }
 }
