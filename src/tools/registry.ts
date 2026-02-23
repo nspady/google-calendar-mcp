@@ -1,6 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
 import { BaseToolHandler } from "../handlers/core/BaseToolHandler.js";
 import { ALLOWED_EVENT_FIELDS } from "../utils/field-mask-builder.js";
 import { ServerConfig } from "../config/TransportConfig.js";
@@ -73,10 +72,10 @@ const conferenceDataSchema = z.object({
 }).optional();
 
 const extendedPropertiesSchema = z.object({
-  private: z.record(z.string()).optional().describe(
+  private: z.record(z.string(), z.string()).optional().describe(
     "Properties private to the application. Keys can have max 44 chars, values max 1024 chars."
   ),
-  shared: z.record(z.string()).optional().describe(
+  shared: z.record(z.string(), z.string()).optional().describe(
     "Properties visible to all attendees. Keys can have max 44 chars, values max 1024 chars."
   )
 }).optional().describe(
@@ -620,31 +619,20 @@ interface ToolDefinition {
   schema: z.ZodType<any>;
   handler: new () => BaseToolHandler;
   handlerFunction?: (args: any) => Promise<any>;
-  customInputSchema?: any; // Custom schema shape for MCP registration (overrides extractSchemaShape)
 }
 
 
 export class ToolRegistry {
   private static extractSchemaShape(schema: z.ZodType<any>): any {
     const schemaAny = schema as any;
-    
-    // Handle ZodEffects (schemas with .refine())
-    if (schemaAny._def && schemaAny._def.typeName === 'ZodEffects') {
-      return this.extractSchemaShape(schemaAny._def.schema);
-    }
-    
-    // Handle regular ZodObject
+
+    // In Zod v4, .refine() no longer wraps in ZodEffects —
+    // the shape is always directly accessible on the schema
     if ('shape' in schemaAny) {
       return schemaAny.shape;
     }
-    
-    // Handle other nested structures
-    if (schemaAny._def && schemaAny._def.schema) {
-      return this.extractSchemaShape(schemaAny._def.schema);
-    }
-    
-    // Fallback to the original approach
-    return schemaAny._def?.schema?.shape || schemaAny.shape;
+
+    return schemaAny.shape;
   }
 
   private static tools: ToolDefinition[] = [
@@ -779,9 +767,7 @@ export class ToolRegistry {
 
   static getToolsWithSchemas() {
     return this.tools.map(tool => {
-      const jsonSchema = tool.customInputSchema
-        ? zodToJsonSchema(z.object(tool.customInputSchema))
-        : zodToJsonSchema(tool.schema);
+      const jsonSchema = z.toJSONSchema(tool.schema, { io: 'input' });
       return {
         name: tool.name,
         description: tool.description,
@@ -890,7 +876,7 @@ export class ToolRegistry {
         tool.name,
         {
           description: tool.description,
-          inputSchema: tool.customInputSchema || this.extractSchemaShape(tool.schema)
+          inputSchema: this.extractSchemaShape(tool.schema)
         },
         async (args: any) => {
           // Preprocess: Normalize datetime fields (convert object format to string format)
