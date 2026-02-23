@@ -26,10 +26,10 @@ import { createTimeObject } from '../../../utils/datetime.js';
 
 // Mock RecurringEventHelpers
 vi.mock('../../../handlers/core/RecurringEventHelpers.js', () => ({
-  RecurringEventHelpers: vi.fn().mockImplementation((calendar) => ({
-    detectEventType: vi.fn().mockResolvedValue('single'),
-    getCalendar: vi.fn(() => calendar),
-    buildUpdateRequestBody: vi.fn((args, defaultTimeZone) => {
+  RecurringEventHelpers: class {
+    detectEventType = vi.fn().mockResolvedValue('single');
+    getCalendar = vi.fn();
+    buildUpdateRequestBody = vi.fn((args: any, defaultTimeZone: any) => {
       const body: any = {};
       if (args.summary !== undefined && args.summary !== null) body.summary = args.summary;
       if (args.description !== undefined && args.description !== null) body.description = args.description;
@@ -69,8 +69,12 @@ vi.mock('../../../handlers/core/RecurringEventHelpers.js', () => ({
       if (args.extendedProperties !== undefined && args.extendedProperties !== null) body.extendedProperties = args.extendedProperties;
       if (args.attachments !== undefined && args.attachments !== null) body.attachments = args.attachments;
       return body;
-    })
-  })),
+    });
+
+    constructor(calendar: any) {
+      this.getCalendar.mockImplementation(() => calendar);
+    }
+  },
   RecurringEventError: class extends Error {
     code: string;
     constructor(message: string, code: string) {

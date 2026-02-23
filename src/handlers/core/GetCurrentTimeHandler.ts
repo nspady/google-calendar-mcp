@@ -1,7 +1,6 @@
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult, McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { BaseToolHandler } from "./BaseToolHandler.js";
-import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { GetCurrentTimeInput } from "../../tools/registry.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
 import { GetCurrentTimeResponse } from "../../types/structured-responses.js";

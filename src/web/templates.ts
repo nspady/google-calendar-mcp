@@ -88,7 +88,7 @@ export async function renderAuthSuccess(params: AuthSuccessParams): Promise<stri
   const scriptSection = params.postMessageOrigin
     ? `<script>
         if (window.opener) {
-          window.opener.postMessage({ type: 'auth-success', accountId: '${safeAccountId}' }, '${escapeHtml(params.postMessageOrigin)}');
+          window.opener.postMessage({ type: 'auth-success', accountId: ${JSON.stringify(safeAccountId)} }, ${JSON.stringify(params.postMessageOrigin)});
         }
         setTimeout(() => window.close(), 3000);
       </script>`

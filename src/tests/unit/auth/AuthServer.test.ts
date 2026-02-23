@@ -33,13 +33,13 @@ vi.mock('../../../auth/client.js', () => ({
 
 // Mock TokenManager
 vi.mock('../../../auth/tokenManager.js', () => ({
-  TokenManager: vi.fn().mockImplementation(() => ({
-    validateTokens: vi.fn().mockResolvedValue(false),
-    setAccountMode: vi.fn(),
-    saveTokens: vi.fn(),
-    getTokenPath: vi.fn().mockReturnValue('/mock/path/tokens.json'),
-    getAccountMode: vi.fn().mockReturnValue('test')
-  }))
+  TokenManager: class {
+    validateTokens = vi.fn().mockResolvedValue(false);
+    setAccountMode = vi.fn();
+    saveTokens = vi.fn();
+    getTokenPath = vi.fn().mockReturnValue('/mock/path/tokens.json');
+    getAccountMode = vi.fn().mockReturnValue('test');
+  }
 }));
 
 // Mock utils
