@@ -473,6 +473,7 @@ Original error: ${errorMessage}`
         };
     }
 
+
     /**
      * Combined setup for calendar operations that need both OAuth2Client and Calendar API.
      * Returns the client, calendar instance, resolved calendar ID, and account ID in one call.

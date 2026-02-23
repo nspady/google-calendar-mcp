@@ -761,6 +761,7 @@ export class ToolRegistry {
       return this.extractSchemaShape(schemaAny._def.out);
     }
 
+
     return schemaAny.shape;
   }
 
