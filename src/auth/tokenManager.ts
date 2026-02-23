@@ -1,6 +1,7 @@
 import { OAuth2Client, Credentials } from 'google-auth-library';
 import fs from 'fs/promises';
 import { getSecureTokenPath, getAccountMode, getLegacyTokenPath } from './utils.js';
+import { validateAccountId } from './paths.js';
 import { GaxiosError } from 'gaxios';
 import { mkdir } from 'fs/promises';
 import { dirname } from 'path';
@@ -254,12 +255,13 @@ export class TokenManager {
       process.stderr.write(`Loaded tokens for ${this.accountMode} account\n`);
       return true;
     } catch (error: unknown) {
-      process.stderr.write(`Error loading tokens for ${this.accountMode} account: `);
-      if (error instanceof Error && 'code' in error && error.code !== 'ENOENT') { 
-          try { 
-              await fs.unlink(this.tokenPath); 
-              process.stderr.write("Removed potentially corrupted token file\n"); 
-            } catch (unlinkErr) { /* ignore */ } 
+      const msg = error instanceof Error ? error.message : String(error);
+      process.stderr.write(`Error loading tokens for ${this.accountMode} account: ${msg}\n`);
+      if (error instanceof SyntaxError) {
+        try {
+          await fs.unlink(this.tokenPath);
+          process.stderr.write("Removed corrupted token file\n");
+        } catch { /* ignore */ }
       }
       return false;
     }
@@ -473,7 +475,6 @@ export class TokenManager {
       for (const [accountId, tokens] of Object.entries(multiAccountTokens)) {
         // Validate account ID
         try {
-          const { validateAccountId } = await import('./paths.js') as any;
           validateAccountId(accountId);
 
           // Skip invalid token entries
@@ -527,8 +528,6 @@ export class TokenManager {
    * @throws Error if account not found or invalid
    */
   getClient(accountId: string): OAuth2Client {
-    // Validate account ID first
-    const { validateAccountId } = require('./paths.js');
     validateAccountId(accountId);
 
     const client = this.accounts.get(accountId);

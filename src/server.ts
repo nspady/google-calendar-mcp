@@ -1,6 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
+import { readFileSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 
 // Import authentication components
 import { initializeOAuth2Client } from './auth/client.js';
@@ -24,6 +27,10 @@ import { ServerConfig } from './config/TransportConfig.js';
 // Import UI resource registration
 import { registerUIResources } from './ui/register-ui-resources.js';
 
+// Read version from package.json
+const __server_dirname = dirname(fileURLToPath(import.meta.url));
+const SERVER_VERSION = JSON.parse(readFileSync(join(__server_dirname, '..', 'package.json'), 'utf-8')).version;
+
 export class GoogleCalendarMcpServer {
   private server: McpServer;
   private oauth2Client!: OAuth2Client;
@@ -36,7 +43,7 @@ export class GoogleCalendarMcpServer {
     this.config = config;
     this.server = new McpServer({
       name: "google-calendar",
-      version: "1.3.0"
+      version: SERVER_VERSION
     });
   }
 
@@ -82,9 +89,9 @@ export class GoogleCalendarMcpServer {
       const hasValidTokens = await this.tokenManager.validateTokens(accountMode);
       if (!hasValidTokens) {
         // No existing tokens - server will start but calendar tools won't work
-        // User can authenticate via the 'add-account' tool
+        // User can authenticate via the 'manage-accounts' tool
         process.stderr.write(`⚠️  No authenticated accounts found.\n`);
-        process.stderr.write(`Use the 'add-account' tool to authenticate a Google account, or run:\n`);
+        process.stderr.write(`Use the 'manage-accounts' tool with action 'add' to authenticate a Google account, or run:\n`);
         process.stderr.write(`  npx @cocal/google-calendar-mcp auth\n\n`);
         // Don't exit - allow server to start so add-account tool is available
       } else {
@@ -118,11 +125,13 @@ export class GoogleCalendarMcpServer {
    * - Needs access to authServer, tokenManager, etc.
    */
   private registerAccountManagementTools(): void {
+    // Use arrow functions to keep `this` reference current after reloadAccounts()
+    const self = this;
     const serverContext: ServerContext = {
       oauth2Client: this.oauth2Client,
       tokenManager: this.tokenManager,
       authServer: this.authServer,
-      accounts: this.accounts,
+      get accounts() { return self.accounts; },
       reloadAccounts: async () => {
         this.accounts = await this.tokenManager.loadAllAccounts();
         return this.accounts;

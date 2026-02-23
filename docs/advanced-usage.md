@@ -8,21 +8,23 @@ The server allows you to connect multiple Google accounts simultaneously (e.g., 
 
 ### Using Accounts with Tools
 
-All tools accept an optional `account` parameter. The behavior depends on the tool type:
+All tools accept an optional `account` parameter. The behavior depends on the tool:
 
 #### Account Parameter Behavior
 
-| Tool Type | Accepts Arrays? | `account` Omitted | `account: "work"` | `account: ["work", "personal"]` |
-|-----------|----------------|-------------------|-------------------|----------------------------------|
-| **Read-only** (list-events, list-calendars, get-freebusy) | ✅ Yes | Merges ALL accounts | Single account only | Merges specified accounts |
-| **Write** (create-event, update-event, delete-event) | ❌ No | Auto-selects best permission | Uses specified account | ❌ Error (not supported) |
-| **Get** (get-event, search-events) | ❌ No | Auto-selects account with access | Uses specified account | ❌ Error (not supported) |
+**Multi-account tools** — accept a single account or an array of accounts:
+- `list-events`, `list-calendars`, `search-events`, `get-freebusy`
+- Omit `account` → queries all authenticated accounts and merges results
+- `account: "work"` → queries only that account
+- `account: ["work", "personal"]` → queries and merges specified accounts
 
-**Auto-selection logic:**
-- When `account` is omitted, the server automatically selects the account with appropriate permissions
-- Write operations require write/owner access
-- Read operations work with any access level (reader, writer, or owner)
-- If no account has the required permissions, you'll get a clear error message
+**Single-account tools** — accept one account only:
+- *Write:* `create-event`, `update-event`, `delete-event`
+- *Read:* `get-event`, `get-current-time`, `list-colors`
+- Omit `account` → auto-selects the best account (write tools pick the account with write permission to the target calendar)
+- `account: "work"` → uses that account
+
+If no account has the required permissions, you'll get a clear error message.
 
 #### Examples
 
@@ -211,8 +213,8 @@ Built-in protection against API limits:
 
 ### Permission Scopes
 
-The server only requests necessary permissions:
-- `calendar.events`: Full event management
+The server requests a single scope:
+- `https://www.googleapis.com/auth/calendar`: Full calendar and event management
 - Never requests email or profile access
 - No access to other Google services
 

@@ -3,10 +3,7 @@ import { ConflictCheckResult } from "../services/conflict-detection/types.js";
 import {
   ConflictInfo,
   DuplicateInfo,
-  convertGoogleEventToStructured,
-  StructuredEvent
 } from "../types/structured-responses.js";
-import { calendar_v3 } from "googleapis";
 
 /**
  * Creates a structured JSON response for MCP tools.
@@ -93,128 +90,6 @@ export function convertConflictsToStructured(
   }
   
   return result;
-}
-
-/**
- * Converts an array of Google Calendar events to structured format
- */
-export function convertEventsToStructured(
-  events: calendar_v3.Schema$Event[],
-  calendarId?: string,
-  accountId?: string
-): StructuredEvent[] {
-  return events.map(event => convertGoogleEventToStructured(event, calendarId, accountId));
-}
-
-/**
- * Helper to add calendar ID to events
- */
-export function addCalendarIdToEvents(
-  events: calendar_v3.Schema$Event[],
-  calendarId: string
-): StructuredEvent[] {
-  return events.map(event => ({
-    ...convertGoogleEventToStructured(event),
-    calendarId
-  }));
-}
-
-/**
- * Formats free/busy information into structured format
- */
-export function formatFreeBusyStructured(
-  freeBusy: any,
-  timeMin: string,
-  timeMax: string
-): {
-  timeMin: string;
-  timeMax: string;
-  calendars: Record<string, {
-    busy: Array<{ start: string; end: string }>;
-    errors?: Array<{ domain?: string; reason?: string }>;
-  }>;
-} {
-  const calendars: Record<string, any> = {};
-  
-  if (freeBusy.calendars) {
-    for (const [calId, calData] of Object.entries(freeBusy.calendars) as [string, any][]) {
-      calendars[calId] = {
-        busy: calData.busy?.map((slot: any) => ({
-          start: slot.start,
-          end: slot.end
-        })) || []
-      };
-      
-      if (calData.errors?.length > 0) {
-        calendars[calId].errors = calData.errors;
-      }
-    }
-  }
-  
-  return {
-    timeMin,
-    timeMax,
-    calendars
-  };
-}
-
-/**
- * Converts calendar list to structured format
- */
-export function convertCalendarsToStructured(
-  calendars: calendar_v3.Schema$CalendarListEntry[]
-): Array<{
-  id: string;
-  summary?: string;
-  description?: string;
-  location?: string;
-  timeZone?: string;
-  summaryOverride?: string;
-  colorId?: string;
-  backgroundColor?: string;
-  foregroundColor?: string;
-  hidden?: boolean;
-  selected?: boolean;
-  accessRole?: string;
-  defaultReminders?: Array<{ method: 'email' | 'popup'; minutes: number }>;
-  notificationSettings?: {
-    notifications?: Array<{ type?: string; method?: string }>;
-  };
-  primary?: boolean;
-  deleted?: boolean;
-  conferenceProperties?: {
-    allowedConferenceSolutionTypes?: string[];
-  };
-}> {
-  return calendars.map(cal => ({
-    id: cal.id || '',
-    summary: cal.summary ?? undefined,
-    description: cal.description ?? undefined,
-    location: cal.location ?? undefined,
-    timeZone: cal.timeZone ?? undefined,
-    summaryOverride: cal.summaryOverride ?? undefined,
-    colorId: cal.colorId ?? undefined,
-    backgroundColor: cal.backgroundColor ?? undefined,
-    foregroundColor: cal.foregroundColor ?? undefined,
-    hidden: cal.hidden ?? undefined,
-    selected: cal.selected ?? undefined,
-    accessRole: cal.accessRole ?? undefined,
-    defaultReminders: cal.defaultReminders?.map(r => ({
-      method: (r.method as 'email' | 'popup') || 'popup',
-      minutes: r.minutes || 0
-    })),
-    notificationSettings: cal.notificationSettings ? {
-      notifications: cal.notificationSettings.notifications?.map(n => ({
-        type: n.type ?? undefined,
-        method: n.method ?? undefined
-      }))
-    } : undefined,
-    primary: cal.primary ?? undefined,
-    deleted: cal.deleted ?? undefined,
-    conferenceProperties: cal.conferenceProperties ? {
-      allowedConferenceSolutionTypes: cal.conferenceProperties.allowedConferenceSolutionTypes ?? undefined
-    } : undefined
-  }));
 }
 
 /**

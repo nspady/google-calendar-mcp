@@ -146,7 +146,7 @@ export class EventSimilarityChecker {
 
   /**
    * Calculate overlap duration in milliseconds
-   * Used by ConflictAnalyzer for detailed overlap analysis
+   * Calculate overlap duration for conflict analysis
    */
   calculateOverlapDuration(event1: calendar_v3.Schema$Event, event2: calendar_v3.Schema$Event): number {
     const time1 = this.getEventTime(event1);
@@ -169,7 +169,7 @@ export class EventSimilarityChecker {
 
   /**
    * Analyze overlap between two events with detailed information
-   * (Merged from ConflictAnalyzer)
+
    */
   analyzeOverlap(event1: calendar_v3.Schema$Event, event2: calendar_v3.Schema$Event): {
     hasOverlap: boolean;
@@ -209,7 +209,7 @@ export class EventSimilarityChecker {
 
   /**
    * Get event time range with isAllDay flag
-   * (Merged from ConflictAnalyzer)
+
    */
   getEventTimeRange(event: calendar_v3.Schema$Event): EventTimeRange | null {
     const startTime = event.start?.dateTime || event.start?.date;
@@ -226,7 +226,7 @@ export class EventSimilarityChecker {
 
   /**
    * Format duration in human-readable format
-   * (Merged from ConflictAnalyzer)
+
    */
   private formatDuration(milliseconds: number): string {
     const minutes = Math.floor(milliseconds / (1000 * 60));
@@ -252,7 +252,7 @@ export class EventSimilarityChecker {
 
   /**
    * Check if an event conflicts with a busy time slot
-   * (Merged from ConflictAnalyzer)
+
    */
   checkBusyConflict(event: calendar_v3.Schema$Event, busySlot: { start?: string | null; end?: string | null }): boolean {
     const start = busySlot.start ?? undefined;
@@ -270,7 +270,7 @@ export class EventSimilarityChecker {
 
   /**
    * Filter events that overlap with a given target event
-   * (Merged from ConflictAnalyzer)
+
    */
   findOverlappingEvents(
     events: calendar_v3.Schema$Event[],

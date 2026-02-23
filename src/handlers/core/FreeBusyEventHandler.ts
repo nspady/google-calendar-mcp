@@ -5,8 +5,7 @@ import { GetFreeBusyInput } from "../../tools/registry.js";
 import { FreeBusyResponse as GoogleFreeBusyResponse } from '../../schemas/types.js';
 import { FreeBusyResponse, BusySlot } from '../../types/structured-responses.js';
 import { createStructuredResponse } from '../../utils/response-builder.js';
-import { McpError } from '@modelcontextprotocol/sdk/types.js';
-import { ErrorCode } from '@modelcontextprotocol/sdk/types.js';
+import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { convertToRFC3339 } from '../../utils/datetime.js';
 
 interface FreeBusyCalendarResult {
@@ -148,18 +147,8 @@ export class FreeBusyEventHandler extends BaseToolHandler {
       // 1. Explicit timeZone parameter (highest priority)
       // 2. Primary calendar's default timezone (fallback)
       // 3. UTC if calendar timezone retrieval fails
-      let timezone: string;
-      if (args.timeZone) {
-        timezone = args.timeZone;
-      } else {
-        try {
-          timezone = await this.getCalendarTimezone(client, 'primary');
-        } catch (error) {
-          // If we can't get the primary calendar's timezone, fall back to UTC
-          // This can happen if the user doesn't have access to 'primary' calendar
-          timezone = 'UTC';
-        }
-      }
+      // getCalendarTimezone already falls back to UTC on failure
+      const timezone = args.timeZone || await this.getCalendarTimezone(client, 'primary');
 
       // Convert time boundaries to RFC3339 format for Google Calendar API
       // This handles both timezone-aware and timezone-naive datetime strings

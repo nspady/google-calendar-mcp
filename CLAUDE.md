@@ -147,20 +147,24 @@ npm run dev test:integration:direct
 ### Key Services
 
 **Conflict Detection** (`src/services/conflict-detection/`):
-- `ConflictAnalyzer.ts` - Detects scheduling conflicts
-- `EventSimilarityChecker.ts` - Identifies duplicate events
-- `ConflictDetectionService.ts` - Main service coordinating conflict checks
+- `EventSimilarityChecker.ts` - Detects scheduling conflicts, identifies duplicate events, and analyzes event overlap
+- `ConflictDetectionService.ts` - Main service coordinating conflict and duplicate checks
 - Used by `create-event` and `update-event` handlers
+
+**Calendar Registry** (`src/services/CalendarRegistry.ts`):
+- Calendar deduplication across multiple accounts
+- Permission-based account auto-selection (read vs write)
+- Calendar name-to-ID resolution with caching
 
 **Structured Responses** (`src/types/structured-responses.ts`):
 - TypeScript interfaces for consistent response formats
-- Used across handlers for type safety
+- All handlers return structured JSON via `createStructuredResponse()`
 
 **Utilities**:
 - `src/utils/field-mask-builder.ts` - Builds Google API field masks
 - `src/utils/event-id-validator.ts` - Validates Google Calendar event IDs
 - `src/utils/response-builder.ts` - Formats MCP responses
-- `src/handlers/utils/datetime.ts` - Timezone and datetime utilities
+- `src/utils/datetime.ts` - Timezone and datetime utilities
 
 ## Important Patterns
 
@@ -208,9 +212,9 @@ server.sendLoggingMessage({ level: "info", data: "message" });
 tail -n 20 -F ~/Library/Logs/Claude/mcp*.log
 ```
 
-### Structured Output Migration
+### Structured Responses
 
-The codebase uses a structured response format for tool outputs. Recent commits (see git status) show migration to structured outputs using types from `src/types/structured-responses.ts`. When updating handlers, ensure responses conform to these structured formats.
+All tool outputs use a structured JSON response format. Types are defined in `src/types/structured-responses.ts` and responses are created via `createStructuredResponse()` from `src/utils/response-builder.ts`. When adding new handlers, ensure responses conform to these structured formats.
 
 ### MCP Structure
 
@@ -228,9 +232,7 @@ MCP tools return errors as successful responses with error content, not as throw
 - **Version**: v3 (`googleapis` package)
 - **Timeout**: 3 seconds per API call (configured in `BaseToolHandler`)
 - **Rate Limiting**: Google Calendar API has quotas - integration tests may hit limits
-- **Scopes Required**:
-  - `https://www.googleapis.com/auth/calendar.events`
-  - `https://www.googleapis.com/auth/calendar`
+- **Scope Required**: `https://www.googleapis.com/auth/calendar` (full calendar access, superset of `calendar.events`)
 
 ## Deployment
 

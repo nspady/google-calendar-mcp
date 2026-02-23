@@ -52,6 +52,7 @@ Your credentials file should look like this:
 ```json
 {
   "installed": {
+    "project_id": "YOUR_PROJECT_ID",
     "client_id": "YOUR_CLIENT_ID.apps.googleusercontent.com",
     "client_secret": "YOUR_CLIENT_SECRET",
     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
@@ -60,6 +61,8 @@ Your credentials file should look like this:
   }
 }
 ```
+
+> **Note:** Including `project_id` is important to avoid "User Rate Limit Exceeded" errors. It allows API calls to be properly attributed to your Google Cloud project quota.
 
 ## Credential Storage Options
 

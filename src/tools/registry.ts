@@ -673,7 +673,8 @@ export class ToolRegistry {
   private static extractSchemaShape(schema: z.ZodType<any>): any {
     const schemaAny = schema as any;
 
-    // In zod 4, .shape is directly accessible even on refined schemas
+    // In Zod v4, .refine() no longer wraps in ZodEffects —
+    // the shape is always directly accessible on the schema
     if ('shape' in schemaAny) {
       return schemaAny.shape;
     }
@@ -860,9 +861,7 @@ export class ToolRegistry {
 
   static getToolsWithSchemas() {
     return this.tools.map(tool => {
-      const jsonSchema = tool.customInputSchema
-        ? zodToJsonSchema(z.object(tool.customInputSchema))
-        : zodToJsonSchema(tool.schema);
+      const jsonSchema = z.toJSONSchema(tool.schema, { io: 'input' });
       return {
         name: tool.name,
         description: tool.description,
