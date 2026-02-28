@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { OAuth2Client } from 'google-auth-library';
 import http from 'http';
-import { EventEmitter } from 'events';
 
 // Mock http module
 vi.mock('http', () => {
@@ -33,13 +32,13 @@ vi.mock('../../../auth/client.js', () => ({
 
 // Mock TokenManager
 vi.mock('../../../auth/tokenManager.js', () => ({
-  TokenManager: vi.fn().mockImplementation(() => ({
-    validateTokens: vi.fn().mockResolvedValue(false),
-    setAccountMode: vi.fn(),
-    saveTokens: vi.fn(),
-    getTokenPath: vi.fn().mockReturnValue('/mock/path/tokens.json'),
-    getAccountMode: vi.fn().mockReturnValue('test')
-  }))
+  TokenManager: class {
+    validateTokens = vi.fn().mockResolvedValue(false);
+    setAccountMode = vi.fn();
+    saveTokens = vi.fn();
+    getTokenPath = vi.fn().mockReturnValue('/mock/path/tokens.json');
+    getAccountMode = vi.fn().mockReturnValue('test');
+  }
 }));
 
 // Mock utils
@@ -203,6 +202,213 @@ describe('AuthServer', () => {
     it('should resolve immediately if no server running', async () => {
       // Should not throw
       await expect(authServer.stop()).resolves.not.toThrow();
+    });
+  });
+
+  describe('PKCE (Proof Key for Code Exchange)', () => {
+    it('should include code_challenge in the auth URL', async () => {
+      const result = await authServer.startForMcpTool('work');
+
+      expect(result.success).toBe(true);
+      const url = new URL(result.authUrl!);
+      expect(url.searchParams.get('code_challenge')).toBeTruthy();
+    });
+
+    it('should include code_challenge_method=S256 in the auth URL', async () => {
+      const result = await authServer.startForMcpTool('work');
+
+      expect(result.success).toBe(true);
+      const url = new URL(result.authUrl!);
+      expect(url.searchParams.get('code_challenge_method')).toBe('S256');
+    });
+
+    it('should store pendingAuthFlow when generating auth URL', async () => {
+      expect(authServer.pendingAuthFlow).toBeNull();
+
+      await authServer.startForMcpTool('work');
+
+      expect(authServer.pendingAuthFlow).not.toBeNull();
+      expect(typeof authServer.pendingAuthFlow.codeVerifier).toBe('string');
+      expect(typeof authServer.pendingAuthFlow.codeChallenge).toBe('string');
+      expect(typeof authServer.pendingAuthFlow.state).toBe('string');
+    });
+
+    it('should generate a fresh code verifier for each auth flow', async () => {
+      await authServer.startForMcpTool('work');
+      const firstVerifier = authServer.pendingAuthFlow!.codeVerifier;
+
+      // Stop and start a new flow to get a new verifier
+      await authServer.stop();
+      await authServer.startForMcpTool('personal');
+      const secondVerifier = authServer.pendingAuthFlow!.codeVerifier;
+
+      expect(firstVerifier).toBeTruthy();
+      expect(secondVerifier).toBeTruthy();
+      expect(firstVerifier).not.toBe(secondVerifier);
+    });
+
+    it('should reuse the same PKCE values when auth URL is regenerated (race condition fix)', async () => {
+      await authServer.startForMcpTool('work');
+      const verifierAfterStart = authServer.pendingAuthFlow!.codeVerifier;
+      const challengeAfterStart = authServer.pendingAuthFlow!.codeChallenge;
+
+      // Simulate landing page visit by invoking the HTTP handler for '/'
+      const handler = (http.createServer as any).mock.calls[0][0];
+      const mockRes = { writeHead: vi.fn(), end: vi.fn() };
+      await handler(
+        { url: '/', headers: { host: 'localhost:3500' } },
+        mockRes
+      );
+
+      // PKCE values should not have been regenerated
+      expect(authServer.pendingAuthFlow!.codeVerifier).toBe(verifierAfterStart);
+      expect(authServer.pendingAuthFlow!.codeChallenge).toBe(challengeAfterStart);
+    });
+  });
+
+  describe('OAuth state parameter (CSRF protection)', () => {
+    it('should include state parameter in auth URL', async () => {
+      const result = await authServer.startForMcpTool('work');
+
+      expect(result.success).toBe(true);
+      expect(result.authUrl).toContain('state=');
+    });
+
+    it('should generate a new state for each auth flow', async () => {
+      const result1 = await authServer.startForMcpTool('work');
+      const state1 = new URL(result1.authUrl!).searchParams.get('state');
+
+      await authServer.stop();
+      const result2 = await authServer.startForMcpTool('personal');
+      const state2 = new URL(result2.authUrl!).searchParams.get('state');
+
+      expect(state1).toBeDefined();
+      expect(state2).toBeDefined();
+      expect(state1).not.toBe(state2);
+    });
+
+    it('should store state in pendingAuthFlow', async () => {
+      await authServer.startForMcpTool('work');
+
+      expect(authServer.pendingAuthFlow).not.toBeNull();
+      expect(typeof authServer.pendingAuthFlow!.state).toBe('string');
+      expect(authServer.pendingAuthFlow!.state.length).toBe(64); // 32 bytes hex-encoded
+    });
+
+    it('should include state that matches pendingAuthFlow.state in auth URL', async () => {
+      const result = await authServer.startForMcpTool('work');
+
+      const authUrl = new URL(result.authUrl!);
+      const urlState = authUrl.searchParams.get('state');
+
+      expect(urlState).toBe(authServer.pendingAuthFlow!.state);
+    });
+  });
+
+  describe('OAuth callback handler', () => {
+    let handler: any;
+    let mockRes: any;
+
+    beforeEach(async () => {
+      await authServer.startForMcpTool('work');
+      handler = (http.createServer as any).mock.calls[0][0];
+      mockRes = {
+        writeHead: vi.fn(),
+        end: vi.fn()
+      };
+    });
+
+    it('should return 403 when state parameter does not match', async () => {
+      await handler(
+        { url: '/oauth2callback?code=test-code&state=wrong-state', headers: { host: 'localhost:3500' } },
+        mockRes
+      );
+
+      expect(mockRes.writeHead).toHaveBeenCalledWith(403, expect.any(Object));
+    });
+
+    it('should return 403 when state parameter is missing', async () => {
+      await handler(
+        { url: '/oauth2callback?code=test-code', headers: { host: 'localhost:3500' } },
+        mockRes
+      );
+
+      expect(mockRes.writeHead).toHaveBeenCalledWith(403, expect.any(Object));
+    });
+
+    it('should return 403 when pendingAuthFlow is null (expired session)', async () => {
+      // Clear the auth flow to simulate expiration
+      authServer.pendingAuthFlow = null;
+
+      await handler(
+        { url: '/oauth2callback?code=test-code&state=some-state', headers: { host: 'localhost:3500' } },
+        mockRes
+      );
+
+      expect(mockRes.writeHead).toHaveBeenCalledWith(403, expect.any(Object));
+    });
+
+    it('should pass codeVerifier to getToken on valid callback', async () => {
+      const state = authServer.pendingAuthFlow!.state;
+      const expectedVerifier = authServer.pendingAuthFlow!.codeVerifier;
+
+      // Mock getToken on the flowOAuth2Client
+      const flowClient = authServer.flowOAuth2Client;
+      const getTokenSpy = vi.spyOn(flowClient, 'getToken').mockResolvedValue({
+        tokens: { access_token: 'test-token', refresh_token: 'test-refresh' },
+        res: null
+      } as any);
+
+      await handler(
+        { url: `/oauth2callback?code=test-code&state=${state}`, headers: { host: 'localhost:3500' } },
+        mockRes
+      );
+
+      expect(getTokenSpy).toHaveBeenCalledWith({
+        code: 'test-code',
+        codeVerifier: expectedVerifier
+      });
+    });
+
+    it('should clear pendingAuthFlow after successful token exchange', async () => {
+      const state = authServer.pendingAuthFlow!.state;
+
+      vi.spyOn(authServer.flowOAuth2Client, 'getToken').mockResolvedValue({
+        tokens: { access_token: 'test-token', refresh_token: 'test-refresh' },
+        res: null
+      } as any);
+
+      await handler(
+        { url: `/oauth2callback?code=test-code&state=${state}`, headers: { host: 'localhost:3500' } },
+        mockRes
+      );
+
+      expect(authServer.pendingAuthFlow).toBeNull();
+    });
+
+    it('should clear pendingAuthFlow after failed token exchange', async () => {
+      const state = authServer.pendingAuthFlow!.state;
+
+      vi.spyOn(authServer.flowOAuth2Client, 'getToken').mockRejectedValue(new Error('Token exchange failed'));
+
+      await handler(
+        { url: `/oauth2callback?code=test-code&state=${state}`, headers: { host: 'localhost:3500' } },
+        mockRes
+      );
+
+      expect(authServer.pendingAuthFlow).toBeNull();
+      expect(mockRes.writeHead).toHaveBeenCalledWith(500, expect.any(Object));
+    });
+  });
+
+  describe('stop cleanup', () => {
+    it('should clear pendingAuthFlow on stop', async () => {
+      await authServer.startForMcpTool('work');
+      expect(authServer.pendingAuthFlow).not.toBeNull();
+
+      await authServer.stop();
+
+      expect(authServer.pendingAuthFlow).toBeNull();
     });
   });
 

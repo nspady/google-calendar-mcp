@@ -1,6 +1,6 @@
 {
   "name": "@cocal/google-calendar-mcp",
-  "version": "2.4.1",
+  "version": "2.5.0",
   "description": "Google Calendar MCP Server with extensive support for calendar management",
   "type": "module",
   "main": "build/index.js",
@@ -42,31 +42,36 @@
     "check:imports": "node scripts/check-imports.js",
     "test": "vitest run src/tests/unit",
     "test:watch": "vitest src/tests/unit",
-    "test:integration": "vitest run src/tests/integration",
-    "test:all": "vitest run src/tests",
+    "test:integration": "npm run test:integration:direct",
+    "test:integration:direct": "npm run build && vitest run src/tests/integration/direct-integration.test.ts",
+    "test:integration:multi-account": "npm run build && vitest run src/tests/integration/multi-account.test.ts src/tests/integration/multi-account-integration.test.ts",
+    "test:integration:claude": "npm run build && vitest run src/tests/integration/claude-mcp-integration.test.ts",
+    "test:integration:openai": "npm run build && vitest run src/tests/integration/openai-mcp-integration.test.ts",
+    "test:integration:llm": "npm run test:integration:claude && npm run test:integration:openai",
+    "test:integration:docker": "npm run build && vitest run src/tests/integration/docker-integration.test.ts",
+    "test:integration:all": "npm run build && vitest run src/tests/integration",
+    "test:all": "npm run test && npm run test:integration:all",
     "test:coverage": "vitest run src/tests/unit --coverage",
     "start:http": "node build/index.js --transport http --port 3000",
     "start:http:public": "node build/index.js --transport http --port 3000 --host 0.0.0.0",
     "analyze:tokens:compare": "npx tsx scripts/analyze-tool-descriptions.ts compare --output markdown"
   },
   "dependencies": {
-    "@google-cloud/local-auth": "^3.0.1",
-    "@modelcontextprotocol/sdk": "^1.12.1",
-    "gaxios": "^6.7.1",
-    "google-auth-library": "^9.15.0",
-    "googleapis": "^144.0.0",
-    "open": "^7.4.2",
-    "zod": "^3.22.4",
-    "zod-to-json-schema": "^3.24.5"
+    "@modelcontextprotocol/sdk": "^1.27.0",
+    "gaxios": "^7.1.3",
+    "google-auth-library": "^10.5.0",
+    "googleapis": "^171.4.0",
+    "open": "^11.0.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "^0.52.0",
-    "@types/node": "^20.10.4",
-    "@vitest/coverage-v8": "^3.1.1",
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@types/node": "^22.19.11",
+    "@vitest/coverage-v8": "^4.0.18",
     "esbuild": "^0.27.2",
     "js-tiktoken": "^1.0.21",
-    "openai": "^4.104.0",
+    "openai": "^6.22.0",
     "typescript": "^5.3.3",
-    "vitest": "^3.1.1"
+    "vitest": "^4.0.18"
   }
 }

@@ -1,5 +1,4 @@
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult, McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { GaxiosError } from 'gaxios';
 import { calendar_v3, google } from "googleapis";
@@ -165,11 +164,6 @@ export abstract class BaseToolHandler<TArgs = any> {
 
         // If no specific accounts requested, use all available accounts
         if (ids.length === 0) {
-            if (accounts.size === 1) {
-                // Single account - use it
-                return accounts;
-            }
-            // Multiple accounts - return all
             return accounts;
         }
 
@@ -202,20 +196,6 @@ export abstract class BaseToolHandler<TArgs = any> {
         }
 
         return result;
-    }
-
-    /**
-     * Get the best account to use for writing to a specific calendar
-     * Uses CalendarRegistry to find account with highest permissions
-     * @param calendarId Calendar ID
-     * @param accounts All available accounts
-     * @returns Account ID and client for the calendar, or null if no write access
-     */
-    protected async getAccountForCalendarWrite(
-        calendarId: string,
-        accounts: Map<string, OAuth2Client>
-    ): Promise<{ accountId: string; client: OAuth2Client } | null> {
-        return this.getAccountForCalendarAccess(calendarId, accounts, 'write');
     }
 
     /**
@@ -341,6 +321,21 @@ export abstract class BaseToolHandler<TArgs = any> {
             return [];
         }
         return Array.isArray(accountIds) ? accountIds : [accountIds];
+    }
+
+    /**
+     * Format a Google API error into a human-readable message without throwing.
+     * Useful when collecting errors in batch operations.
+     */
+    protected formatGoogleApiError(error: unknown): string {
+        try {
+            this.handleGoogleApiError(error);
+        } catch (mcpError: unknown) {
+            if (mcpError instanceof McpError) return mcpError.message;
+            if (mcpError instanceof Error) return mcpError.message;
+            return 'Unknown error';
+        }
+        return 'Unknown error';
     }
 
     protected handleGoogleApiError(error: unknown): never {
@@ -472,14 +467,6 @@ Original error: ${errorMessage}`
         }
 
         return google.calendar(config);
-    }
-
-    protected async withTimeout<T>(promise: Promise<T>, timeoutMs: number = 30000): Promise<T> {
-        const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error(`Operation timed out after ${timeoutMs}ms`)), timeoutMs);
-        });
-
-        return Promise.race([promise, timeoutPromise]);
     }
 
     /**

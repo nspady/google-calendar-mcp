@@ -27,14 +27,17 @@ The server provides calendar management tools that LLMs can use for calendar ope
 ### Available Tools
 
 - `list-calendars` - List all available calendars
-- `list-events` - List events with date filtering  
+- `list-events` - List events with date filtering
 - `search-events` - Search events by text query
+- `get-event` - Get details of a specific event by ID
 - `create-event` - Create new calendar events
 - `update-event` - Update existing events
 - `delete-event` - Delete events
+- `respond-to-event` - Accept, decline, or tentatively accept event invitations
 - `get-freebusy` - Check availability across calendars
 - `list-colors` - List available event colors
 - `get-current-time` - Get current system time and timezone information
+- `manage-accounts` - Manage Google account authentication (list, add, remove)
 
 ## Key Features
 

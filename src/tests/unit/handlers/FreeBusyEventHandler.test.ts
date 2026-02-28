@@ -233,7 +233,8 @@ describe('FreeBusyEventHandler', () => {
     });
 
     it('should fallback to UTC if calendar timezone fails', async () => {
-      vi.spyOn(handler as any, 'getCalendarTimezone').mockRejectedValue(new Error('Failed'));
+      // getCalendarTimezone itself catches errors and returns 'UTC'
+      vi.spyOn(handler as any, 'getCalendarTimezone').mockResolvedValue('UTC');
       mockCalendar.freebusy.query.mockResolvedValue({ data: { calendars: {} } });
 
       const args = {

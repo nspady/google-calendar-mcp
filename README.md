@@ -266,7 +266,7 @@ If an invalid tool name is specified, the server will fail to start with an erro
    - Ensure your credentials file contains credentials for a **Desktop App** type
    - Verify your user email is added as a **Test User** in the Google Cloud OAuth Consent screen
    - Try deleting saved tokens and re-authenticating
-   - Check that no other process is blocking ports 3000-3004
+   - Check that no other process is blocking ports 3500-3505
 
 3. **Build Errors:**
    - Run `npm install && npm run build` again

@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { spawn, ChildProcess } from 'child_process';
 import { TestDataFactory, TestEvent } from './test-data-factory.js';
+import { createIntegrationClient } from './helpers/mcp-client.js';
 
 /**
  * Comprehensive Integration Tests for Google Calendar MCP
@@ -36,7 +35,6 @@ import { TestDataFactory, TestEvent } from './test-data-factory.js';
 
 describe('Google Calendar MCP - Direct Integration Tests', () => {
   let client: Client;
-  let serverProcess: ChildProcess;
   let testFactory: TestDataFactory;
   let createdEventIds: string[] = [];
   
@@ -46,39 +44,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
   beforeAll(async () => {
     // Start the MCP server
     console.log('🚀 Starting Google Calendar MCP server...');
-    
-    // Filter out undefined values from process.env and set NODE_ENV=test
-    const cleanEnv = Object.fromEntries(
-      Object.entries(process.env).filter(([_, value]) => value !== undefined)
-    ) as Record<string, string>;
-    cleanEnv.NODE_ENV = 'test';
-    
-    serverProcess = spawn('node', ['build/index.js'], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: cleanEnv
-    });
-
-    // Wait for server to start
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    // Create MCP client
-    client = new Client({
-      name: "integration-test-client",
-      version: "1.0.0"
-    }, {
-      capabilities: {
-        tools: {}
-      }
-    });
-
-    // Connect to server
-    const transport = new StdioClientTransport({
-      command: 'node',
-      args: ['build/index.js'],
-      env: cleanEnv
-    });
-    
-    await client.connect(transport);
+    client = await createIntegrationClient({ name: "integration-test-client" });
     console.log('✅ Connected to MCP server');
 
     // Initialize test factory
@@ -101,13 +67,6 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
     if (client) {
       await client.close();
       console.log('🔌 Closed MCP client connection');
-    }
-    
-    // Terminate server process
-    if (serverProcess && !serverProcess.killed) {
-      serverProcess.kill();
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      console.log('🛑 Terminated MCP server process');
     }
 
     // Log performance summary
@@ -529,6 +488,255 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
           console.log('✅ Event created successfully without explicit timezone - using calendar default');
         } catch (error) {
           testFactory.endTimer('create-event-default-timezone', startTime, false, String(error));
+          throw error;
+        }
+      });
+    });
+
+    describe('Bulk Event Creation (create-events)', () => {
+      it('should create multiple events in bulk', async () => {
+        const startTime = testFactory.startTimer('create-events-bulk');
+        const timestamp = Date.now();
+
+        try {
+          const event1 = TestDataFactory.createSingleEvent({
+            summary: `Bulk Test Event 1 ${timestamp}`
+          });
+          const event2 = TestDataFactory.createSingleEvent({
+            summary: `Bulk Test Event 2 ${timestamp}`
+          });
+          const event3 = TestDataFactory.createSingleEvent({
+            summary: `Bulk Test Event 3 ${timestamp}`
+          });
+
+          const result = await client.callTool({
+            name: 'create-events',
+            arguments: {
+              calendarId: TEST_CALENDAR_ID,
+              timeZone: 'America/Los_Angeles',
+              sendUpdates: SEND_UPDATES,
+              events: [
+                { summary: event1.summary, start: event1.start, end: event1.end, description: event1.description },
+                { summary: event2.summary, start: event2.start, end: event2.end, description: event2.description },
+                { summary: event3.summary, start: event3.start, end: event3.end, description: event3.description },
+              ]
+            }
+          });
+
+          testFactory.endTimer('create-events-bulk', startTime, true);
+
+          expect(TestDataFactory.validateEventResponse(result)).toBe(true);
+          const response = JSON.parse((result.content as any)[0].text);
+
+          expect(response.totalRequested).toBe(3);
+          expect(response.totalCreated).toBe(3);
+          expect(response.totalFailed).toBe(0);
+          expect(response.created).toHaveLength(3);
+
+          for (const event of response.created) {
+            expect(event.id).toBeTruthy();
+            createdEventIds.push(event.id);
+            testFactory.addCreatedEventId(event.id);
+          }
+        } catch (error) {
+          testFactory.endTimer('create-events-bulk', startTime, false, String(error));
+          throw error;
+        }
+      });
+
+      it('should verify bulk-created events exist via list-events', async () => {
+        const timestamp = Date.now();
+        const event1 = TestDataFactory.createSingleEvent({
+          summary: `Bulk Verify Event 1 ${timestamp}`
+        });
+        const event2 = TestDataFactory.createSingleEvent({
+          summary: `Bulk Verify Event 2 ${timestamp}`
+        });
+
+        // Create events in bulk
+        const createResult = await client.callTool({
+          name: 'create-events',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            timeZone: 'America/Los_Angeles',
+            sendUpdates: SEND_UPDATES,
+            events: [
+              { summary: event1.summary, start: event1.start, end: event1.end },
+              { summary: event2.summary, start: event2.start, end: event2.end },
+            ]
+          }
+        });
+
+        const createResponse = JSON.parse((createResult.content as any)[0].text);
+        expect(createResponse.totalCreated).toBe(2);
+
+        const bulkEventIds = createResponse.created.map((e: any) => e.id);
+        for (const id of bulkEventIds) {
+          createdEventIds.push(id);
+          testFactory.addCreatedEventId(id);
+        }
+
+        // Verify events appear in list-events
+        const timeRanges = TestDataFactory.getTimeRanges();
+        const listResult = await client.callTool({
+          name: 'list-events',
+          arguments: {
+            calendarId: TEST_CALENDAR_ID,
+            timeMin: timeRanges.nextWeek.timeMin,
+            timeMax: timeRanges.nextWeek.timeMax
+          }
+        });
+
+        const listResponse = JSON.parse((listResult.content as any)[0].text);
+        const listedIds = listResponse.events?.map((e: any) => e.id) || [];
+        for (const id of bulkEventIds) {
+          expect(listedIds).toContain(id);
+        }
+      });
+
+      it('should handle partial failure gracefully', async () => {
+        const startTime = testFactory.startTimer('create-events-partial-failure');
+        const timestamp = Date.now();
+
+        try {
+          const validEvent1 = TestDataFactory.createSingleEvent({
+            summary: `Bulk Partial Success 1 ${timestamp}`
+          });
+          const validEvent2 = TestDataFactory.createSingleEvent({
+            summary: `Bulk Partial Success 2 ${timestamp}`
+          });
+
+          // Create an event with end before start (invalid)
+          const invalidStart = new Date(Date.now() + 4 * 60 * 60 * 1000);
+          const invalidEnd = new Date(invalidStart.getTime() - 60 * 60 * 1000); // 1 hour BEFORE start
+
+          const result = await client.callTool({
+            name: 'create-events',
+            arguments: {
+              calendarId: TEST_CALENDAR_ID,
+              timeZone: 'America/Los_Angeles',
+              sendUpdates: SEND_UPDATES,
+              events: [
+                { summary: validEvent1.summary, start: validEvent1.start, end: validEvent1.end },
+                {
+                  summary: `Bulk Invalid Event ${timestamp}`,
+                  start: TestDataFactory.formatDateTimeRFC3339(invalidStart),
+                  end: TestDataFactory.formatDateTimeRFC3339(invalidEnd),
+                },
+                { summary: validEvent2.summary, start: validEvent2.start, end: validEvent2.end },
+              ]
+            }
+          });
+
+          testFactory.endTimer('create-events-partial-failure', startTime, true);
+
+          expect(TestDataFactory.validateEventResponse(result)).toBe(true);
+          const response = JSON.parse((result.content as any)[0].text);
+
+          expect(response.totalCreated).toBe(2);
+          expect(response.totalFailed).toBe(1);
+          expect(result.isError).toBeFalsy();
+
+          expect(response.failed).toHaveLength(1);
+          expect(response.failed[0].index).toBe(1);
+          expect(response.failed[0].error).toBeTruthy();
+
+          for (const event of response.created) {
+            createdEventIds.push(event.id);
+            testFactory.addCreatedEventId(event.id);
+          }
+        } catch (error) {
+          testFactory.endTimer('create-events-partial-failure', startTime, false, String(error));
+          throw error;
+        }
+      });
+
+      it('should support per-event overrides', async () => {
+        const startTime = testFactory.startTimer('create-events-overrides');
+        const timestamp = Date.now();
+
+        try {
+          const event1 = TestDataFactory.createSingleEvent({
+            summary: `Bulk Override Default TZ ${timestamp}`
+          });
+          const event2 = TestDataFactory.createSingleEvent({
+            summary: `Bulk Override Custom TZ ${timestamp}`
+          });
+
+          const result = await client.callTool({
+            name: 'create-events',
+            arguments: {
+              calendarId: TEST_CALENDAR_ID,
+              timeZone: 'America/Los_Angeles',
+              sendUpdates: SEND_UPDATES,
+              events: [
+                { summary: event1.summary, start: event1.start, end: event1.end },
+                { summary: event2.summary, start: event2.start, end: event2.end, timeZone: 'America/New_York' },
+              ]
+            }
+          });
+
+          testFactory.endTimer('create-events-overrides', startTime, true);
+
+          expect(TestDataFactory.validateEventResponse(result)).toBe(true);
+          const response = JSON.parse((result.content as any)[0].text);
+
+          expect(response.totalRequested).toBe(2);
+          expect(response.totalCreated).toBe(2);
+          expect(response.totalFailed).toBe(0);
+
+          for (const event of response.created) {
+            expect(event.id).toBeTruthy();
+            createdEventIds.push(event.id);
+            testFactory.addCreatedEventId(event.id);
+          }
+        } catch (error) {
+          testFactory.endTimer('create-events-overrides', startTime, false, String(error));
+          throw error;
+        }
+      });
+
+      it('should support all-day events in bulk', async () => {
+        const startTime = testFactory.startTimer('create-events-allday');
+        const timestamp = Date.now();
+
+        try {
+          const timedEvent = TestDataFactory.createSingleEvent({
+            summary: `Bulk Timed Event ${timestamp}`
+          });
+          const allDayEvent = TestDataFactory.createAllDayEvent({
+            summary: `Bulk All-Day Event ${timestamp}`
+          });
+
+          const result = await client.callTool({
+            name: 'create-events',
+            arguments: {
+              calendarId: TEST_CALENDAR_ID,
+              timeZone: 'America/Los_Angeles',
+              sendUpdates: SEND_UPDATES,
+              events: [
+                { summary: timedEvent.summary, start: timedEvent.start, end: timedEvent.end },
+                { summary: allDayEvent.summary, start: allDayEvent.start, end: allDayEvent.end },
+              ]
+            }
+          });
+
+          testFactory.endTimer('create-events-allday', startTime, true);
+
+          expect(TestDataFactory.validateEventResponse(result)).toBe(true);
+          const response = JSON.parse((result.content as any)[0].text);
+
+          expect(response.totalRequested).toBe(2);
+          expect(response.totalCreated).toBe(2);
+          expect(response.totalFailed).toBe(0);
+
+          for (const event of response.created) {
+            expect(event.id).toBeTruthy();
+            createdEventIds.push(event.id);
+            testFactory.addCreatedEventId(event.id);
+          }
+        } catch (error) {
+          testFactory.endTimer('create-events-allday', startTime, false, String(error));
           throw error;
         }
       });

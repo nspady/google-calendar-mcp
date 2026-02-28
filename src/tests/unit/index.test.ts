@@ -12,11 +12,11 @@ import { ListEventsHandler } from "../../handlers/core/ListEventsHandler.js";
 
 // Mock OAuth2Client
 vi.mock('google-auth-library', () => ({
-  OAuth2Client: vi.fn().mockImplementation(() => ({
-    setCredentials: vi.fn(),
-    refreshAccessToken: vi.fn().mockResolvedValue({ credentials: { access_token: 'mock_access_token' } }),
-    on: vi.fn(),
-  }))
+  OAuth2Client: class {
+    setCredentials = vi.fn();
+    refreshAccessToken = vi.fn().mockResolvedValue({ credentials: { access_token: 'mock_access_token' } });
+    on = vi.fn();
+  }
 }));
 
 // Mock googleapis
@@ -45,11 +45,11 @@ vi.mock('googleapis', () => ({
 
 // Mock TokenManager
 vi.mock('./auth/tokenManager.js', () => ({
-  TokenManager: vi.fn().mockImplementation(() => ({
-    validateTokens: vi.fn().mockResolvedValue(true),
-    loadSavedTokens: vi.fn().mockResolvedValue(true),
-    clearTokens: vi.fn(),
-  })),
+  TokenManager: class {
+    validateTokens = vi.fn().mockResolvedValue(true);
+    loadSavedTokens = vi.fn().mockResolvedValue(true);
+    clearTokens = vi.fn();
+  },
 }));
 
 describe('Google Calendar MCP Server', () => {

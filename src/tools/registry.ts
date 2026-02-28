@@ -1,6 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
 import { BaseToolHandler } from "../handlers/core/BaseToolHandler.js";
 import { ALLOWED_EVENT_FIELDS } from "../utils/field-mask-builder.js";
 import { ServerConfig } from "../config/TransportConfig.js";
@@ -12,6 +11,7 @@ import { SearchEventsHandler } from "../handlers/core/SearchEventsHandler.js";
 import { GetEventHandler } from "../handlers/core/GetEventHandler.js";
 import { ListColorsHandler } from "../handlers/core/ListColorsHandler.js";
 import { CreateEventHandler } from "../handlers/core/CreateEventHandler.js";
+import { CreateEventsHandler } from "../handlers/core/CreateEventsHandler.js";
 import { UpdateEventHandler } from "../handlers/core/UpdateEventHandler.js";
 import { DeleteEventHandler } from "../handlers/core/DeleteEventHandler.js";
 import { FreeBusyEventHandler } from "../handlers/core/FreeBusyEventHandler.js";
@@ -35,6 +35,53 @@ const isValidIsoDateTime = (val: string): boolean =>
 
 const isValidIsoDateOrDateTime = (val: string): boolean =>
   ISO_DATE_ONLY.test(val) || isValidIsoDateTime(val);
+
+// Time input validation: accepts ISO 8601 string or JSON-encoded object with per-field timezone
+// JSON object format enables different timezones for start/end (e.g., flights departing/arriving in different timezones)
+// Examples:
+//   String: "2025-01-01T10:00:00" or "2025-01-01"
+//   JSON object: '{"dateTime": "2025-01-01T10:00:00", "timeZone": "America/Los_Angeles"}'
+const validateTimeInput = (val: string): string | true => {
+  const trimmed = val.trim();
+  if (trimmed.startsWith('{')) {
+    let obj;
+    try {
+      obj = JSON.parse(trimmed);
+    } catch {
+      return "Invalid JSON format in time input";
+    }
+    if (obj.date !== undefined && obj.dateTime !== undefined) {
+      return "Cannot specify both 'date' and 'dateTime' in time input";
+    }
+    if (obj.date !== undefined) {
+      return ISO_DATE_ONLY.test(obj.date) ? true : "Invalid date format: must be YYYY-MM-DD (e.g., '2025-01-01')";
+    }
+    if (obj.dateTime !== undefined) {
+      if (obj.timeZone !== undefined) {
+        if (typeof obj.timeZone !== 'string') {
+          return "timeZone must be a string (IANA timezone, e.g., 'America/Los_Angeles')";
+        }
+        if (obj.timeZone.trim() === '') {
+          return "timeZone cannot be empty - provide a valid IANA timezone (e.g., 'America/Los_Angeles') or omit the field";
+        }
+      }
+      return isValidIsoDateTime(obj.dateTime) ? true : "Invalid dateTime format: must be ISO 8601 (e.g., '2025-01-01T10:00:00')";
+    }
+    return "JSON time object must have either 'dateTime' or 'date' field";
+  }
+  return isValidIsoDateOrDateTime(trimmed) ? true : "Must be ISO 8601 format: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events";
+};
+
+const isValidTimeInput = (val: string): boolean => validateTimeInput(val) === true;
+
+// superRefine handler for time input validation with dynamic error messages
+// Zod 4's .refine() doesn't support function-based error messages, so we use .superRefine()
+const superRefineTimeInput = (val: string, ctx: z.RefinementCtx) => {
+  const result = validateTimeInput(val);
+  if (typeof result === 'string') {
+    ctx.addIssue({ code: 'custom', message: result });
+  }
+};
 
 // ============================================================================
 // SHARED ENUMS
@@ -73,10 +120,10 @@ const conferenceDataSchema = z.object({
 }).optional();
 
 const extendedPropertiesSchema = z.object({
-  private: z.record(z.string()).optional().describe(
+  private: z.record(z.string(), z.string()).optional().describe(
     "Properties private to the application. Keys can have max 44 chars, values max 1024 chars."
   ),
-  shared: z.record(z.string()).optional().describe(
+  shared: z.record(z.string(), z.string()).optional().describe(
     "Properties visible to all attendees. Keys can have max 44 chars, values max 1024 chars."
   )
 }).optional().describe(
@@ -288,11 +335,21 @@ export const ToolSchemas = {
     summary: z.string().describe("Title of the event"),
     description: z.string().optional().describe("Description/notes for the event"),
     start: z.string()
-      .refine(isValidIsoDateOrDateTime, "Must be ISO 8601 format: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events")
-      .describe("Event start time: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events. Also accepts Google Calendar API object format: {date: '2025-01-01'} or {dateTime: '2025-01-01T10:00:00', timeZone: 'America/Los_Angeles'}"),
+      .superRefine(superRefineTimeInput)
+      .describe(
+        "Event start time. String format: '2025-01-01T10:00:00' (timed) or '2025-01-01' (all-day). " +
+        "For per-field timezone, use JSON: '{\"dateTime\": \"2025-01-01T10:00:00\", \"timeZone\": \"America/Los_Angeles\"}'. " +
+        "Per-field timezone is useful for events spanning multiple timezones (e.g., flights). " +
+        "Note: If the dateTime already includes a timezone offset (e.g., 'Z' or '+05:00'), the embedded timezone takes precedence over the timeZone field."
+      ),
     end: z.string()
-      .refine(isValidIsoDateOrDateTime, "Must be ISO 8601 format: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events")
-      .describe("Event end time: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events (exclusive). Also accepts Google Calendar API object format: {date: '2025-01-02'} or {dateTime: '2025-01-01T11:00:00', timeZone: 'America/Los_Angeles'}"),
+      .superRefine(superRefineTimeInput)
+      .describe(
+        "Event end time. String format: '2025-01-01T11:00:00' (timed) or '2025-01-02' (all-day, exclusive). " +
+        "For per-field timezone, use JSON: '{\"dateTime\": \"2025-01-01T11:00:00\", \"timeZone\": \"America/New_York\"}'. " +
+        "Per-field timezone is useful for events spanning multiple timezones (e.g., flights). " +
+        "Note: If the dateTime already includes a timezone offset (e.g., 'Z' or '+05:00'), the embedded timezone takes precedence over the timeZone field."
+      ),
     timeZone: z.string().optional().describe(
       "Timezone as IANA Time Zone Database name (e.g., America/Los_Angeles). Takes priority over calendar's default timezone. Only used for timezone-naive datetime strings."
     ),
@@ -399,7 +456,20 @@ export const ToolSchemas = {
     (data) => {
       // Validate that focusTime and outOfOffice events use dateTime (not all-day date format)
       if (data.eventType === 'focusTime' || data.eventType === 'outOfOffice') {
-        if (ISO_DATE_ONLY.test(data.start) || ISO_DATE_ONLY.test(data.end)) {
+        // Helper to check if a time value is all-day format
+        const isAllDay = (val: string): boolean => {
+          const trimmed = val.trim();
+          if (trimmed.startsWith('{')) {
+            try {
+              const obj = JSON.parse(trimmed);
+              return obj.date !== undefined;
+            } catch {
+              return false;
+            }
+          }
+          return ISO_DATE_ONLY.test(trimmed);
+        };
+        if (isAllDay(data.start) || isAllDay(data.end)) {
           return false;
         }
       }
@@ -411,6 +481,78 @@ export const ToolSchemas = {
     }
   ),
 
+  // Note: All schemas within create-events are inlined (not reusing shared schema objects)
+  // to prevent $ref generation in JSON schema output, which causes issues with some MCP clients.
+  'create-events': z.object({
+    account: z.string()
+      .regex(/^[a-z0-9_-]{1,64}$/, "Account nickname must be 1-64 characters: lowercase letters, numbers, dashes, underscores only")
+      .optional()
+      .describe("Default account for all events. Individual events can override this."),
+    calendarId: z.string().optional().describe(
+      "Default calendar ID for all events (use 'primary' for the main calendar). Individual events can override this. Defaults to 'primary' if not specified."
+    ),
+    timeZone: z.string().optional().describe(
+      "Default IANA timezone for all events (e.g., 'America/Los_Angeles'). Individual events can override this."
+    ),
+    sendUpdates: z.enum(["all", "externalOnly", "none"]).optional().describe(
+      "Default notification setting for all events. Individual events can override this."
+    ),
+    events: z.array(z.object({
+      summary: z.string().describe("Title of the event"),
+      start: z.string()
+        .refine(isValidIsoDateOrDateTime, "Must be ISO 8601 format: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events")
+        .describe("Event start time: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events"),
+      end: z.string()
+        .refine(isValidIsoDateOrDateTime, "Must be ISO 8601 format: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events")
+        .describe("Event end time: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events (exclusive)"),
+      calendarId: z.string().optional().describe("Override calendar ID for this event"),
+      account: z.string()
+        .regex(/^[a-z0-9_-]{1,64}$/, "Account nickname must be 1-64 characters: lowercase letters, numbers, dashes, underscores only")
+        .optional()
+        .describe("Override account for this event"),
+      timeZone: z.string().optional().describe("Override timezone for this event"),
+      description: z.string().optional().describe("Description/notes for the event"),
+      location: z.string().optional().describe("Location of the event"),
+      attendees: z.array(z.object({
+        email: z.string().email().describe("Email address of the attendee"),
+        displayName: z.string().optional().describe("Display name of the attendee"),
+        optional: z.boolean().optional().describe("Whether this is an optional attendee"),
+        responseStatus: z.enum(["needsAction", "declined", "tentative", "accepted"]).optional().describe("Attendee's response status"),
+      })).optional().describe("List of event attendees"),
+      colorId: z.string().optional().describe("Color ID for the event (use list-colors to see available IDs)"),
+      reminders: z.object({
+        useDefault: z.boolean().describe("Whether to use the default reminders"),
+        overrides: z.array(z.object({
+          method: z.enum(["email", "popup"]).default("popup").describe("Reminder method"),
+          minutes: z.number().describe("Minutes before the event to trigger the reminder")
+        }).partial({ method: true })).optional().describe("Custom reminders")
+      }).describe("Reminder settings for the event").optional(),
+      recurrence: z.preprocess(
+        parseJsonStringArray,
+        z.array(z.string())
+      ).optional().describe(
+        "Recurrence rules in RFC5545 format (e.g., [\"RRULE:FREQ=WEEKLY;COUNT=5\"])"
+      ),
+      transparency: z.enum(["opaque", "transparent"]).optional().describe(
+        "Whether the event blocks time. 'opaque' = busy, 'transparent' = free."
+      ),
+      visibility: z.enum(["default", "public", "private", "confidential"]).optional().describe("Visibility of the event"),
+      guestsCanInviteOthers: z.boolean().optional().describe("Whether attendees can invite others"),
+      guestsCanModify: z.boolean().optional().describe("Whether attendees can modify the event"),
+      guestsCanSeeOtherGuests: z.boolean().optional().describe("Whether attendees can see other attendees"),
+      anyoneCanAddSelf: z.boolean().optional().describe("Whether anyone can add themselves"),
+      sendUpdates: z.enum(["all", "externalOnly", "none"]).optional().describe("Override notification setting for this event"),
+      conferenceData: z.object({
+        createRequest: z.object({
+          requestId: z.string().describe("Client-generated unique ID for this request to ensure idempotency"),
+          conferenceSolutionKey: z.object({
+            type: z.enum(["hangoutsMeet", "eventHangout", "eventNamedHangout", "addOn"]).describe("Conference solution type")
+          }).describe("Conference solution to create")
+        }).describe("Request to generate a new conference")
+      }).optional().describe("Conference properties for the event"),
+    })).min(1).max(50).describe("Array of events to create (1-50 events)")
+  }),
+
   'update-event': z.object({
     account: singleAccountSchema,
     calendarId: z.string().describe("ID of the calendar (use 'primary' for the main calendar)"),
@@ -418,12 +560,20 @@ export const ToolSchemas = {
     summary: z.string().optional().describe("Updated title of the event"),
     description: z.string().optional().describe("Updated description/notes"),
     start: z.string()
-      .refine(isValidIsoDateOrDateTime, "Must be ISO 8601 format: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events")
-      .describe("Updated start time: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events. Also accepts Google Calendar API object format: {date: '2025-01-01'} or {dateTime: '2025-01-01T10:00:00', timeZone: 'America/Los_Angeles'}")
+      .superRefine(superRefineTimeInput)
+      .describe(
+        "Updated start time. String format: '2025-01-01T10:00:00' (timed) or '2025-01-01' (all-day). " +
+        "For per-field timezone, use JSON: '{\"dateTime\": \"2025-01-01T10:00:00\", \"timeZone\": \"America/Los_Angeles\"}'. " +
+        "Note: If the dateTime already includes a timezone offset, the embedded timezone takes precedence over the timeZone field."
+      )
       .optional(),
     end: z.string()
-      .refine(isValidIsoDateOrDateTime, "Must be ISO 8601 format: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events")
-      .describe("Updated end time: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events (exclusive). Also accepts Google Calendar API object format: {date: '2025-01-02'} or {dateTime: '2025-01-01T11:00:00', timeZone: 'America/Los_Angeles'}")
+      .superRefine(superRefineTimeInput)
+      .describe(
+        "Updated end time. String format: '2025-01-01T11:00:00' (timed) or '2025-01-02' (all-day, exclusive). " +
+        "For per-field timezone, use JSON: '{\"dateTime\": \"2025-01-01T11:00:00\", \"timeZone\": \"America/New_York\"}'. " +
+        "Note: If the dateTime already includes a timezone offset, the embedded timezone takes precedence over the timeZone field."
+      )
       .optional(),
     timeZone: z.string().optional().describe("Updated timezone as IANA Time Zone Database name. If not provided, uses the calendar's default timezone."),
     location: z.string().optional().describe("Updated location"),
@@ -608,6 +758,7 @@ export type SearchEventsInput = ToolInputs['search-events'];
 export type GetEventInput = ToolInputs['get-event'];
 export type ListColorsInput = ToolInputs['list-colors'];
 export type CreateEventInput = ToolInputs['create-event'];
+export type CreateEventsInput = ToolInputs['create-events'];
 export type UpdateEventInput = ToolInputs['update-event'];
 export type DeleteEventInput = ToolInputs['delete-event'];
 export type GetFreeBusyInput = ToolInputs['get-freebusy'];
@@ -620,31 +771,20 @@ interface ToolDefinition {
   schema: z.ZodType<any>;
   handler: new () => BaseToolHandler;
   handlerFunction?: (args: any) => Promise<any>;
-  customInputSchema?: any; // Custom schema shape for MCP registration (overrides extractSchemaShape)
 }
 
 
 export class ToolRegistry {
   private static extractSchemaShape(schema: z.ZodType<any>): any {
     const schemaAny = schema as any;
-    
-    // Handle ZodEffects (schemas with .refine())
-    if (schemaAny._def && schemaAny._def.typeName === 'ZodEffects') {
-      return this.extractSchemaShape(schemaAny._def.schema);
-    }
-    
-    // Handle regular ZodObject
+
+    // In Zod v4, .refine() no longer wraps in ZodEffects —
+    // the shape is always directly accessible on the schema
     if ('shape' in schemaAny) {
       return schemaAny.shape;
     }
-    
-    // Handle other nested structures
-    if (schemaAny._def && schemaAny._def.schema) {
-      return this.extractSchemaShape(schemaAny._def.schema);
-    }
-    
-    // Fallback to the original approach
-    return schemaAny._def?.schema?.shape || schemaAny.shape;
+
+    return schemaAny.shape;
   }
 
   private static tools: ToolDefinition[] = [
@@ -746,6 +886,12 @@ export class ToolRegistry {
       handler: CreateEventHandler
     },
     {
+      name: "create-events",
+      description: "Create multiple calendar events in bulk. Accepts shared defaults (account, calendarId, timeZone) that apply to all events, with per-event overrides. Skips conflict and duplicate detection for speed.",
+      schema: ToolSchemas['create-events'],
+      handler: CreateEventsHandler
+    },
+    {
       name: "update-event",
       description: "Update an existing calendar event with recurring event modification scope support.",
       schema: ToolSchemas['update-event'],
@@ -779,9 +925,7 @@ export class ToolRegistry {
 
   static getToolsWithSchemas() {
     return this.tools.map(tool => {
-      const jsonSchema = tool.customInputSchema
-        ? zodToJsonSchema(z.object(tool.customInputSchema))
-        : zodToJsonSchema(tool.schema);
+      const jsonSchema = z.toJSONSchema(tool.schema, { io: 'input' });
       return {
         name: tool.name,
         description: tool.description,
@@ -797,13 +941,32 @@ export class ToolRegistry {
    */
   private static normalizeDateTimeFields(toolName: string, args: any): any {
     // Only normalize for tools that have datetime fields
-    const toolsWithDateTime = ['create-event', 'update-event'];
+    const toolsWithDateTime = ['create-event', 'update-event', 'create-events'];
     if (!toolsWithDateTime.includes(toolName)) {
       return args;
     }
 
     const normalized = { ...args };
     const dateTimeFields = ['start', 'end', 'originalStartTime', 'futureStartDate'];
+
+    // Handle nested events array for create-events
+    if (toolName === 'create-events' && Array.isArray(normalized.events)) {
+      normalized.events = normalized.events.map((event: any) => {
+        const normalizedEvent = { ...event };
+        for (const field of dateTimeFields) {
+          if (normalizedEvent[field] && typeof normalizedEvent[field] === 'object') {
+            const obj = normalizedEvent[field];
+            if (obj.date) {
+              normalizedEvent[field] = obj.date;
+            } else if (obj.dateTime) {
+              normalizedEvent[field] = obj.dateTime;
+            }
+          }
+        }
+        return normalizedEvent;
+      });
+      return normalized;
+    }
 
     for (const field of dateTimeFields) {
       if (normalized[field] && typeof normalized[field] === 'object') {
@@ -890,7 +1053,7 @@ export class ToolRegistry {
         tool.name,
         {
           description: tool.description,
-          inputSchema: tool.customInputSchema || this.extractSchemaShape(tool.schema)
+          inputSchema: this.extractSchemaShape(tool.schema)
         },
         async (args: any) => {
           // Preprocess: Normalize datetime fields (convert object format to string format)

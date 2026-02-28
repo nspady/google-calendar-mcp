@@ -6,13 +6,13 @@ import { CalendarRegistry } from '../../../services/CalendarRegistry.js';
 
 // Mock ConflictDetectionService to avoid calling Google APIs
 vi.mock('../../../services/conflict-detection/ConflictDetectionService.js', () => ({
-  ConflictDetectionService: vi.fn().mockImplementation(() => ({
-    checkConflicts: vi.fn().mockResolvedValue({
+  ConflictDetectionService: class {
+    checkConflicts = vi.fn().mockResolvedValue({
       hasConflicts: false,
       conflicts: [],
       duplicates: []
-    })
-  }))
+    });
+  }
 }));
 
 describe('CreateEventHandler - multi-account selection', () => {
