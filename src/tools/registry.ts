@@ -821,7 +821,7 @@ export class ToolRegistry {
     },
     {
       name: "create-events",
-      description: "Create multiple calendar events in bulk. Accepts shared defaults (account, calendarId, timeZone) that apply to all events, with per-event overrides. Skips duplicate detection for speed.",
+      description: "Create multiple calendar events in bulk. Accepts shared defaults (account, calendarId, timeZone) that apply to all events, with per-event overrides. Skips conflict and duplicate detection for speed.",
       schema: ToolSchemas['create-events'],
       handler: CreateEventsHandler
     },
