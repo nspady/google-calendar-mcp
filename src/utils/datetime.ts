@@ -132,9 +132,14 @@ export function createTimeObject(input: string, fallbackTimezone: string): { dat
                 return { date: obj.date };
             }
             if (obj.dateTime) {
-                // Validate timeZone is not empty if provided
-                if (obj.timeZone !== undefined && obj.timeZone.trim() === '') {
-                    throw new Error("timeZone cannot be empty - provide a valid IANA timezone (e.g., 'America/Los_Angeles') or omit the field");
+                // Validate timeZone type and value if provided
+                if (obj.timeZone !== undefined) {
+                    if (typeof obj.timeZone !== 'string') {
+                        throw new Error("timeZone must be a string (IANA timezone, e.g., 'America/Los_Angeles')");
+                    }
+                    if (obj.timeZone.trim() === '') {
+                        throw new Error("timeZone cannot be empty - provide a valid IANA timezone (e.g., 'America/Los_Angeles') or omit the field");
+                    }
                 }
                 // Timed event via JSON object format
                 if (hasTimezoneInDatetime(obj.dateTime)) {

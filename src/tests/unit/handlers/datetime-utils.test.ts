@@ -180,6 +180,13 @@ describe('Datetime Utilities', () => {
           .toThrow('timeZone cannot be empty');
       });
 
+      it('should throw error for non-string timeZone value', () => {
+        const input = '{"dateTime": "2024-01-01T10:00:00", "timeZone": 123}';
+
+        expect(() => createTimeObject(input, 'America/Los_Angeles'))
+          .toThrow('timeZone must be a string');
+      });
+
       it('should handle JSON with extra whitespace in values', () => {
         const input = '{"dateTime": "2024-01-01T10:00:00", "timeZone": "America/New_York"}';
         const result = createTimeObject(input, 'America/Los_Angeles');

@@ -56,8 +56,13 @@ const validateTimeInput = (val: string): string | true => {
       return ISO_DATE_ONLY.test(obj.date) ? true : "Invalid date format: must be YYYY-MM-DD (e.g., '2025-01-01')";
     }
     if (obj.dateTime !== undefined) {
-      if (obj.timeZone !== undefined && typeof obj.timeZone === 'string' && obj.timeZone.trim() === '') {
-        return "timeZone cannot be empty - provide a valid IANA timezone (e.g., 'America/Los_Angeles') or omit the field";
+      if (obj.timeZone !== undefined) {
+        if (typeof obj.timeZone !== 'string') {
+          return "timeZone must be a string (IANA timezone, e.g., 'America/Los_Angeles')";
+        }
+        if (obj.timeZone.trim() === '') {
+          return "timeZone cannot be empty - provide a valid IANA timezone (e.g., 'America/Los_Angeles') or omit the field";
+        }
       }
       return isValidIsoDateTime(obj.dateTime) ? true : "Invalid dateTime format: must be ISO 8601 (e.g., '2025-01-01T10:00:00')";
     }

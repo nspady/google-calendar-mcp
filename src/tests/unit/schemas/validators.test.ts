@@ -459,6 +459,17 @@ describe('Per-field timezone validation', () => {
       expect(() => CreateEventSchema.parse(input)).toThrow(/timeZone cannot be empty/);
     });
 
+    it('should reject non-string timeZone value', () => {
+      const input = {
+        calendarId: 'primary',
+        summary: 'Test',
+        start: '{"dateTime": "2024-01-01T10:00:00", "timeZone": 123}',
+        end: '2024-01-01T11:00:00'
+      };
+
+      expect(() => CreateEventSchema.parse(input)).toThrow(/timeZone must be a string/);
+    });
+
     it('should reject invalid JSON', () => {
       const input = {
         calendarId: 'primary',
