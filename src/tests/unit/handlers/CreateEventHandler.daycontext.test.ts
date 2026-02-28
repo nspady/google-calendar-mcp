@@ -81,6 +81,17 @@ describe('CreateEventHandler - Day Context Integration', () => {
       calendarId: 'primary',
       wasAutoSelected: true
     });
+
+    // Mock fetchDayEventsAllCalendars to return events from mockCalendar.events.list
+    vi.spyOn(handler as any, 'fetchDayEventsAllCalendars').mockImplementation(async () => {
+      const response = await mockCalendar.events.list();
+      const events = (response.data.items || []).map((event: any) => ({
+        ...event,
+        calendarId: 'primary',
+        accountId: 'test'
+      }));
+      return { events, colorContext: { eventPalette: {}, calendarColors: {}, calendarNames: {} } };
+    });
   });
 
   describe('Day Context in Response', () => {
@@ -251,7 +262,7 @@ describe('CreateEventHandler - Day Context Integration', () => {
 
       mockCalendar.events.insert.mockResolvedValue({ data: createdEvent });
       // Simulate failure when fetching day events
-      mockCalendar.events.list.mockRejectedValue(new Error('API Error'));
+      vi.spyOn(handler as any, 'fetchDayEventsAllCalendars').mockRejectedValue(new Error('API Error'));
 
       const result = await handler.runTool({
         calendarId: 'primary',

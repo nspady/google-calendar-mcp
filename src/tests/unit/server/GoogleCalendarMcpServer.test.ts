@@ -87,6 +87,11 @@ vi.mock('../../../transports/http.js', () => ({
   }
 }));
 
+vi.mock('../../../ui/register-ui-resources.js', () => ({
+  registerUIResources: vi.fn(),
+  DAY_VIEW_RESOURCE_URI: 'ui://day-view'
+}));
+
 import { GoogleCalendarMcpServer } from '../../../server.js';
 
 describe('GoogleCalendarMcpServer', () => {

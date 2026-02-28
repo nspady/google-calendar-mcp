@@ -127,6 +127,17 @@ describe('UpdateEventHandler', () => {
       calendarId: 'primary',
       wasAutoSelected: true
     });
+
+    // Mock fetchDayEventsAllCalendars to return events from mockCalendar.events.list
+    vi.spyOn(handler as any, 'fetchDayEventsAllCalendars').mockImplementation(async () => {
+      const response = await mockCalendar.events.list();
+      const events = (response?.data?.items || []).map((event: any) => ({
+        ...event,
+        calendarId: 'primary',
+        accountId: 'test'
+      }));
+      return { events, colorContext: { eventPalette: {}, calendarColors: {}, calendarNames: {} } };
+    });
   });
 
   describe('Basic Event Updates', () => {
