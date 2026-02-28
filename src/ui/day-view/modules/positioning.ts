@@ -3,81 +3,30 @@
  */
 
 import type { DayViewEvent, MultiDayViewEvent, OverlapPosition } from './types.js';
-
-function getTimePartsInZone(date: Date, timeZone?: string): { hour: number; minute: number } {
-  if (!timeZone) {
-    return { hour: date.getHours(), minute: date.getMinutes() };
-  }
-
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    }).formatToParts(date);
-    const hour = Number(parts.find(p => p.type === 'hour')?.value ?? 0);
-    const minute = Number(parts.find(p => p.type === 'minute')?.value ?? 0);
-    return { hour: hour === 24 ? 0 : hour, minute };
-  } catch {
-    return { hour: date.getHours(), minute: date.getMinutes() };
-  }
-}
-
-function getDateKeyInZone(date: Date, timeZone?: string): string {
-  if (!timeZone) {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
-
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    }).formatToParts(date);
-    const year = parts.find(p => p.type === 'year')?.value;
-    const month = parts.find(p => p.type === 'month')?.value;
-    const day = parts.find(p => p.type === 'day')?.value;
-    if (year && month && day) {
-      return `${year}-${month}-${day}`;
-    }
-  } catch {
-    // Fall back to local date key below.
-  }
-
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
+import { getMinutesSinceMidnight, getDateKeyInTimeZone } from './utilities.js';
 
 /**
- * Calculate event position in time grid
+ * Calculate event position in time grid (shared by day and multi-day views).
+ * @param rowHeight - Pixel height per hour row (48 for day view, 32 for compact multi-day)
  */
-export function calculateEventPosition(
-  event: DayViewEvent,
+function calculatePosition(
+  event: { start: string; end: string },
   startHour: number,
   endHour: number,
+  rowHeight: number,
   timeZone?: string
 ): { top: string; height: string } {
-  const ROW_HEIGHT = 48; // matches CSS --row-height
-
   const eventStart = new Date(event.start);
   const eventEnd = new Date(event.end);
 
-  const startParts = getTimePartsInZone(eventStart, timeZone);
-  const startMinutes = startParts.hour * 60 + startParts.minute;
+  const startMinutes = getMinutesSinceMidnight(event.start, timeZone);
   const rawDurationMinutes = (eventEnd.getTime() - eventStart.getTime()) / (1000 * 60);
   const durationMinutes = Number.isFinite(rawDurationMinutes) ? Math.max(0, Math.round(rawDurationMinutes)) : 0;
   const startHourFloat = startMinutes / 60;
   let endHourFloat = (startMinutes + durationMinutes) / 60;
 
   // If event spans into the next day, clamp visual end to midnight for this day view.
-  if (getDateKeyInZone(eventEnd, timeZone) !== getDateKeyInZone(eventStart, timeZone)) {
+  if (getDateKeyInTimeZone(eventEnd, timeZone) !== getDateKeyInTimeZone(eventStart, timeZone)) {
     endHourFloat = 24;
   } else {
     endHourFloat = Math.min(endHourFloat, 24);
@@ -90,13 +39,28 @@ export function calculateEventPosition(
     clampedEnd = Math.min(endHour, clampedStart + 0.5);
   }
 
-  const topOffset = (clampedStart - startHour) * ROW_HEIGHT;
-  const height = Math.max((clampedEnd - clampedStart) * ROW_HEIGHT, 24); // min 24px
+  const topOffset = (clampedStart - startHour) * rowHeight;
+  const height = Math.max((clampedEnd - clampedStart) * rowHeight, 24); // min 24px
 
   return {
     top: `${topOffset}px`,
     height: `${height}px`
   };
+}
+
+const DAY_VIEW_ROW_HEIGHT = 48;     // matches CSS --row-height
+const COMPACT_ROW_HEIGHT = 32;      // compact row height for multi-day expanded view
+
+/**
+ * Calculate event position in time grid (standard day view)
+ */
+export function calculateEventPosition(
+  event: DayViewEvent,
+  startHour: number,
+  endHour: number,
+  timeZone?: string
+): { top: string; height: string } {
+  return calculatePosition(event, startHour, endHour, DAY_VIEW_ROW_HEIGHT, timeZone);
 }
 
 /**
@@ -108,36 +72,7 @@ export function calculateMultiDayEventPosition(
   endHour: number,
   timeZone?: string
 ): { top: string; height: string } {
-  const ROW_HEIGHT = 32; // Compact row height for multi-day expanded view
-
-  const eventStart = new Date(event.start);
-  const eventEnd = new Date(event.end);
-
-  const startParts = getTimePartsInZone(eventStart, timeZone);
-  const startMinutes = startParts.hour * 60 + startParts.minute;
-  const rawDurationMinutes = (eventEnd.getTime() - eventStart.getTime()) / (1000 * 60);
-  const durationMinutes = Number.isFinite(rawDurationMinutes) ? Math.max(0, Math.round(rawDurationMinutes)) : 0;
-  const startHourFloat = startMinutes / 60;
-  let endHourFloat = (startMinutes + durationMinutes) / 60;
-  if (getDateKeyInZone(eventEnd, timeZone) !== getDateKeyInZone(eventStart, timeZone)) {
-    endHourFloat = 24;
-  } else {
-    endHourFloat = Math.min(endHourFloat, 24);
-  }
-
-  const clampedStart = Math.max(startHourFloat, startHour);
-  let clampedEnd = Math.min(endHourFloat, endHour);
-  if (clampedEnd <= clampedStart) {
-    clampedEnd = Math.min(endHour, clampedStart + 0.5);
-  }
-
-  const topOffset = (clampedStart - startHour) * ROW_HEIGHT;
-  const height = Math.max((clampedEnd - clampedStart) * ROW_HEIGHT, 24);
-
-  return {
-    top: `${topOffset}px`,
-    height: `${height}px`
-  };
+  return calculatePosition(event, startHour, endHour, COMPACT_ROW_HEIGHT, timeZone);
 }
 
 /**

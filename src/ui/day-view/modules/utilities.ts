@@ -34,7 +34,7 @@ export function openLink(url: string, appInstance: App | null): void {
   }
 }
 
-function getDateKeyInTimeZone(date: Date, timeZone?: string): string {
+export function getDateKeyInTimeZone(date: Date, timeZone?: string): string {
   if (!timeZone) {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -65,7 +65,7 @@ function getDateKeyInTimeZone(date: Date, timeZone?: string): string {
   return `${y}-${m}-${d}`;
 }
 
-function getMinutesSinceMidnight(value: string, timeZone?: string): number {
+export function getMinutesSinceMidnight(value: string, timeZone?: string): number {
   const date = new Date(value);
   if (isNaN(date.getTime())) {
     return 0;
