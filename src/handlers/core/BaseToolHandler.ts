@@ -328,6 +328,21 @@ export abstract class BaseToolHandler<TArgs = any> {
         return Array.isArray(accountIds) ? accountIds : [accountIds];
     }
 
+    /**
+     * Format a Google API error into a human-readable message without throwing.
+     * Useful when collecting errors in batch operations.
+     */
+    protected formatGoogleApiError(error: unknown): string {
+        try {
+            this.handleGoogleApiError(error);
+        } catch (mcpError: unknown) {
+            if (mcpError instanceof McpError) return mcpError.message;
+            if (mcpError instanceof Error) return mcpError.message;
+            return 'Unknown error';
+        }
+        return 'Unknown error';
+    }
+
     protected handleGoogleApiError(error: unknown): never {
         if (error instanceof GaxiosError) {
             const status = error.response?.status;
@@ -472,6 +487,7 @@ Original error: ${errorMessage}`
             supportsAttachments: requestBody.attachments !== undefined ? true : undefined,
         };
     }
+
 
     /**
      * Combined setup for calendar operations that need both OAuth2Client and Calendar API.

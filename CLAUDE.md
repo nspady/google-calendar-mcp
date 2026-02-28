@@ -162,6 +162,7 @@ npm run dev test:integration:direct
 **Multi-Day Context** (`src/services/multi-day-context/`):
 - `MultiDayContextService` - Groups events by date for multi-day/week UI views
 
+
 **Calendar Registry** (`src/services/CalendarRegistry.ts`):
 - Calendar deduplication across multiple accounts
 - Permission-based account auto-selection (read vs write)
@@ -231,6 +232,7 @@ tail -n 20 -F ~/Library/Logs/Claude/mcp*.log
 ```
 
 ### Structured Responses
+
 
 All tool outputs use a structured JSON response format. Types are defined in `src/types/structured-responses.ts` and responses are created via `createStructuredResponse()` from `src/utils/response-builder.ts`. When adding new handlers, ensure responses conform to these structured formats.
 
