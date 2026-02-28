@@ -140,11 +140,44 @@ describe('Datetime Utilities', () => {
           .toThrow('Invalid JSON in time input');
       });
 
+      it('should not echo raw input in invalid JSON error', () => {
+        const input = '{sensitive-data-here}';
+
+        try {
+          createTimeObject(input, 'America/Los_Angeles');
+          expect.fail('Expected error to be thrown');
+        } catch (e: any) {
+          expect(e.message).toBe('Invalid JSON in time input');
+          expect(e.message).not.toContain('sensitive-data-here');
+        }
+      });
+
       it('should throw error for JSON with neither date nor dateTime', () => {
         const input = '{"timeZone": "America/New_York"}';
 
         expect(() => createTimeObject(input, 'America/Los_Angeles'))
           .toThrow('Invalid time object: must have either dateTime or date');
+      });
+
+      it('should throw error for JSON with both date and dateTime', () => {
+        const input = '{"date": "2024-01-01", "dateTime": "2024-01-01T10:00:00"}';
+
+        expect(() => createTimeObject(input, 'America/Los_Angeles'))
+          .toThrow("Cannot specify both 'date' and 'dateTime'");
+      });
+
+      it('should throw error for empty timeZone string', () => {
+        const input = '{"dateTime": "2024-01-01T10:00:00", "timeZone": ""}';
+
+        expect(() => createTimeObject(input, 'America/Los_Angeles'))
+          .toThrow('timeZone cannot be empty');
+      });
+
+      it('should throw error for whitespace-only timeZone string', () => {
+        const input = '{"dateTime": "2024-01-01T10:00:00", "timeZone": "   "}';
+
+        expect(() => createTimeObject(input, 'America/Los_Angeles'))
+          .toThrow('timeZone cannot be empty');
       });
 
       it('should handle JSON with extra whitespace in values', () => {

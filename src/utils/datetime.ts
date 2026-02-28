@@ -124,11 +124,18 @@ export function createTimeObject(input: string, fallbackTimezone: string): { dat
         try {
             const obj: ParsedTimeObject = JSON.parse(trimmedInput);
 
+            if (obj.date !== undefined && obj.dateTime !== undefined) {
+                throw new Error("Cannot specify both 'date' and 'dateTime' in time input");
+            }
             if (obj.date) {
                 // All-day event via JSON object format
                 return { date: obj.date };
             }
             if (obj.dateTime) {
+                // Validate timeZone is not empty if provided
+                if (obj.timeZone !== undefined && obj.timeZone.trim() === '') {
+                    throw new Error("timeZone cannot be empty - provide a valid IANA timezone (e.g., 'America/Los_Angeles') or omit the field");
+                }
                 // Timed event via JSON object format
                 if (hasTimezoneInDatetime(obj.dateTime)) {
                     // Datetime already has timezone embedded - use as-is
@@ -145,7 +152,7 @@ export function createTimeObject(input: string, fallbackTimezone: string): { dat
             throw new Error('Invalid time object: must have either dateTime or date');
         } catch (e) {
             if (e instanceof SyntaxError) {
-                throw new Error(`Invalid JSON in time input: ${trimmedInput}`);
+                throw new Error('Invalid JSON in time input');
             }
             throw e;
         }
