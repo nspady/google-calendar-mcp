@@ -1,4 +1,4 @@
-import { CallToolResult, McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { CreateEventInput } from "../../tools/registry.js";
 import { BaseToolHandler } from "./BaseToolHandler.js";
@@ -8,17 +8,14 @@ import { validateEventId } from "../../utils/event-id-validator.js";
 import { ConflictDetectionService } from "../../services/conflict-detection/index.js";
 import { CONFLICT_DETECTION_CONFIG } from "../../services/conflict-detection/config.js";
 import { createStructuredResponse, convertConflictsToStructured, createWarningsArray } from "../../utils/response-builder.js";
-import { CreateEventResponse, convertGoogleEventToStructured, EventColorContext } from "../../types/structured-responses.js";
-import { DayContextService } from "../../services/day-context/index.js";
+import { CreateEventResponse } from "../../types/structured-responses.js";
 
 export class CreateEventHandler extends BaseToolHandler {
     private conflictDetectionService: ConflictDetectionService;
-    private dayContextService: DayContextService;
 
     constructor() {
         super();
         this.conflictDetectionService = new ConflictDetectionService();
-        this.dayContextService = new DayContextService();
     }
     
     async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
@@ -86,52 +83,10 @@ export class CreateEventHandler extends BaseToolHandler {
         const argsWithResolvedCalendar = { ...validArgs, calendarId: resolvedCalendarId };
         const event = await this.createEvent(oauth2Client, argsWithResolvedCalendar);
 
-        // Fetch color context for proper event display
-        const [eventPalette, calendarData] = await Promise.all([
-            this.getEventColorPalette(oauth2Client),
-            this.getCalendarColors(oauth2Client, [resolvedCalendarId])
-        ]);
-        const colorContext: EventColorContext = {
-            eventPalette,
-            calendarColors: calendarData.colors,
-            calendarNames: calendarData.names
-        };
-
-        // Convert created event to structured format
-        const structuredEvent = convertGoogleEventToStructured(event, resolvedCalendarId, selectedAccountId, colorContext);
-
-        // Fetch surrounding events for day view
-        let dayContext = undefined;
-        try {
-            const calendar = this.getCalendar(oauth2Client);
-            const eventDate = event.start?.dateTime || event.start?.date || '';
-            const dateOnly = eventDate.split('T')[0];
-            // Convert to RFC3339 format for Google Calendar API
-            const dayStart = convertToRFC3339(dateOnly + 'T00:00:00', timezone);
-            const dayEnd = convertToRFC3339(dateOnly + 'T23:59:59', timezone);
-
-            const dayEventsResponse = await calendar.events.list({
-                calendarId: resolvedCalendarId,
-                timeMin: dayStart,
-                timeMax: dayEnd,
-                singleEvents: true,
-                orderBy: 'startTime',
-            });
-
-            const dayEvents = (dayEventsResponse.data.items || [])
-                .filter(e => e.id !== event.id)
-                .map(e => convertGoogleEventToStructured(e, resolvedCalendarId, selectedAccountId, colorContext));
-
-            dayContext = this.dayContextService.buildDayContext(
-                structuredEvent,
-                dayEvents,
-                timezone
-            );
-        } catch (error) {
-            // Day context is optional - don't fail if we can't fetch it
-            const message = error instanceof Error ? error.message : String(error);
-            console.error(`[CreateEventHandler] Failed to build day context: ${message}`);
-        }
+        // Build day context with surrounding events across all calendars
+        const { structuredEvent, dayContext } = await this.buildEventDayContext(
+            event, resolvedCalendarId, selectedAccountId, timezone, accounts, oauth2Client
+        );
 
         // Generate structured response with conflict warnings
         const structuredConflicts = convertConflictsToStructured(conflicts);

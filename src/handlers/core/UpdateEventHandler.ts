@@ -1,31 +1,24 @@
-import { CallToolResult, McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { UpdateEventInput } from "../../tools/registry.js";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
 import { RecurringEventHelpers, RecurringEventError, RECURRING_EVENT_ERRORS } from './RecurringEventHelpers.js';
 import { ConflictDetectionService } from "../../services/conflict-detection/index.js";
-import { DayContextService } from "../../services/day-context/index.js";
-import { createTimeObject, convertToRFC3339 } from "../../utils/datetime.js";
+import { createTimeObject } from "../../utils/datetime.js";
 import {
     createStructuredResponse,
     convertConflictsToStructured,
     createWarningsArray
 } from "../../utils/response-builder.js";
-import {
-    UpdateEventResponse,
-    convertGoogleEventToStructured,
-    EventColorContext
-} from "../../types/structured-responses.js";
+import { UpdateEventResponse } from "../../types/structured-responses.js";
 
 export class UpdateEventHandler extends BaseToolHandler {
     private conflictDetectionService: ConflictDetectionService;
-    private dayContextService: DayContextService;
 
     constructor() {
         super();
         this.conflictDetectionService = new ConflictDetectionService();
-        this.dayContextService = new DayContextService();
     }
 
     async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
@@ -34,6 +27,9 @@ export class UpdateEventHandler extends BaseToolHandler {
         // Setup write operation: get client, calendar API, and resolve calendar name to ID
         const { client: oauth2Client, calendar, accountId: selectedAccountId, calendarId: resolvedCalendarId } =
             await this.setupOperation(args.account, validArgs.calendarId, accounts, 'write');
+
+        // Resolve timezone once for the entire method
+        const timezone = validArgs.timeZone || await this.getCalendarTimezone(oauth2Client, resolvedCalendarId);
 
         // Fetch existing event if needed for conflict checking or attendees merge
         const needsExistingEvent =
@@ -57,7 +53,6 @@ export class UpdateEventHandler extends BaseToolHandler {
         let conflicts = null;
         if (validArgs.checkConflicts !== false && (validArgs.start || validArgs.end) && existingEvent) {
             // Create updated event object for conflict checking
-            const timezone = validArgs.timeZone || await this.getCalendarTimezone(oauth2Client, resolvedCalendarId);
             const eventToCheck: calendar_v3.Schema$Event = {
                 ...existingEvent,
                 id: validArgs.eventId,
@@ -95,52 +90,10 @@ export class UpdateEventHandler extends BaseToolHandler {
         // Update the event with resolved calendar ID and merged attendees
         const updatedEvent = await this.updateEventWithScope(oauth2Client, argsWithMergedAttendees);
 
-        // Fetch color context for proper event display
-        const [eventPalette, calendarData] = await Promise.all([
-            this.getEventColorPalette(oauth2Client),
-            this.getCalendarColors(oauth2Client, [resolvedCalendarId])
-        ]);
-        const colorContext: EventColorContext = {
-            eventPalette,
-            calendarColors: calendarData.colors,
-            calendarNames: calendarData.names
-        };
-
-        // Convert updated event to structured format
-        const structuredEvent = convertGoogleEventToStructured(updatedEvent, resolvedCalendarId, selectedAccountId, colorContext);
-
-        // Fetch surrounding events for day view
-        let dayContext = undefined;
-        try {
-            const timezone = validArgs.timeZone || await this.getCalendarTimezone(oauth2Client, resolvedCalendarId);
-            const eventDate = updatedEvent.start?.dateTime || updatedEvent.start?.date || '';
-            const dateOnly = eventDate.split('T')[0];
-            // Convert to RFC3339 format for Google Calendar API
-            const dayStart = convertToRFC3339(dateOnly + 'T00:00:00', timezone);
-            const dayEnd = convertToRFC3339(dateOnly + 'T23:59:59', timezone);
-
-            const dayEventsResponse = await calendar.events.list({
-                calendarId: resolvedCalendarId,
-                timeMin: dayStart,
-                timeMax: dayEnd,
-                singleEvents: true,
-                orderBy: 'startTime',
-            });
-
-            const dayEvents = (dayEventsResponse.data.items || [])
-                .filter(e => e.id !== updatedEvent.id)
-                .map(e => convertGoogleEventToStructured(e, resolvedCalendarId, selectedAccountId, colorContext));
-
-            dayContext = this.dayContextService.buildDayContext(
-                structuredEvent,
-                dayEvents,
-                timezone
-            );
-        } catch (error) {
-            // Day context is optional - don't fail if we can't fetch it
-            const message = error instanceof Error ? error.message : String(error);
-            console.error(`[UpdateEventHandler] Failed to build day context: ${message}`);
-        }
+        // Build day context with surrounding events across all calendars
+        const { structuredEvent, dayContext } = await this.buildEventDayContext(
+            updatedEvent, resolvedCalendarId, selectedAccountId, timezone, accounts, oauth2Client
+        );
 
         // Create structured response
         const response: UpdateEventResponse = {

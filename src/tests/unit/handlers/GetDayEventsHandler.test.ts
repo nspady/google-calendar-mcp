@@ -81,7 +81,7 @@ describe('GetDayEventsHandler', () => {
     vi.spyOn(handler as any, 'getEventColorPalette').mockResolvedValue({});
 
     // Mock getCalendarColors
-    vi.spyOn(handler as any, 'getCalendarColors').mockResolvedValue({ colors: {}, names: {} });
+    vi.spyOn(handler as any, 'getCalendarColors').mockResolvedValue({ colors: {}, names: {}, eventPalette: {} });
   });
 
   function setupUnifiedCalendars(calendars: UnifiedCalendar[]): void {

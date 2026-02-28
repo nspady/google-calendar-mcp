@@ -22,24 +22,8 @@ export class GetDayEventsHandler extends BaseToolHandler {
     }
 
     async runTool(args: GetDayEventsArgs, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
-        // Get all accounts
-        const allAccounts = this.getClientsForAccounts(undefined, accounts);
-
-        // Get unified calendar list (cached, 5-min TTL)
-        const unifiedCalendars = await this.calendarRegistry.getUnifiedCalendars(allAccounts);
-
-        // Group calendars by preferredAccount to avoid duplicate fetches of shared calendars
-        const calendarsByAccount = new Map<string, string[]>();
-        for (const cal of unifiedCalendars) {
-            const accountId = cal.preferredAccount;
-            const existing = calendarsByAccount.get(accountId) || [];
-            existing.push(cal.calendarId);
-            calendarsByAccount.set(accountId, existing);
-        }
-
         // Determine timezone: use provided or get from primary calendar of first account
-        const firstAccountId = Array.from(allAccounts.keys()).sort()[0];
-        const firstClient = allAccounts.get(firstAccountId)!;
+        const firstClient = this.getClientForAccountOrFirst(undefined, accounts);
         const timezone = args.timeZone || await this.getCalendarTimezone(firstClient, 'primary');
 
         // Build time range for the full day

@@ -6,7 +6,10 @@ import { getCredentialsProjectId } from "../../auth/utils.js";
 import { CalendarRegistry } from "../../services/CalendarRegistry.js";
 import { validateAccountId } from "../../auth/paths.js";
 import { convertToRFC3339 } from "../../utils/datetime.js";
-import { EventColorContext } from "../../types/structured-responses.js";
+import { EventColorContext, ExtendedEvent, StructuredEvent, convertGoogleEventToStructured } from "../../types/structured-responses.js";
+import { BatchRequestHandler } from "./BatchRequestHandler.js";
+import { DayContextService } from "../../services/day-context/index.js";
+import { DayContext } from "../../types/day-context.js";
 
 
 export abstract class BaseToolHandler<TArgs = any> {
@@ -833,9 +836,11 @@ Original error: ${errorMessage}`
     ): Promise<{
         colors: Record<string, { background: string; foreground: string }>;
         names: Record<string, string>;
+        eventPalette: Record<string, { background: string; foreground: string }>;
     }> {
         const colors: Record<string, { background: string; foreground: string }> = {};
         const names: Record<string, string> = {};
+        const eventPalette: Record<string, { background: string; foreground: string }> = {};
 
         try {
             const calendarApi = this.getCalendar(client);
@@ -847,6 +852,16 @@ Original error: ${errorMessage}`
             ]);
 
             const calendars = calendarListResponse.data.items || [];
+
+            // Extract event color palette from the same response (avoids separate colors.get() call)
+            if (colorsResponse.data.event) {
+                for (const [id, color] of Object.entries(colorsResponse.data.event)) {
+                    eventPalette[id] = {
+                        background: color.background || '',
+                        foreground: color.foreground || ''
+                    };
+                }
+            }
 
             // Build calendar color palette for resolving colorId references
             const calendarPalette: Record<string, { background: string; foreground: string }> = {};
@@ -912,7 +927,7 @@ Original error: ${errorMessage}`
             console.error(`[getCalendarColors] Failed to fetch calendar colors: ${message}`);
         }
 
-        return { colors, names };
+        return { colors, names, eventPalette };
     }
 
     /**
@@ -927,17 +942,188 @@ Original error: ${errorMessage}`
         client: OAuth2Client,
         calendarIds: string[]
     ): Promise<EventColorContext> {
-        // Fetch both in parallel for efficiency
-        const [eventPalette, calendarData] = await Promise.all([
-            this.getEventColorPalette(client),
-            this.getCalendarColors(client, calendarIds)
-        ]);
+        // getCalendarColors returns event palette, calendar colors, and names from a single colors.get() call
+        const calendarData = await this.getCalendarColors(client, calendarIds);
 
         return {
-            eventPalette,
+            eventPalette: calendarData.eventPalette,
             calendarColors: calendarData.colors,
             calendarNames: calendarData.names
         };
+    }
+
+    /**
+     * Fetches all events for a given day across all calendars and accounts.
+     * Uses CalendarRegistry for deduplicated calendar list and BatchRequestHandler
+     * for efficient multi-calendar fetching.
+     *
+     * @param date Date string (YYYY-MM-DD)
+     * @param timezone IANA timezone string
+     * @param accounts All available accounts
+     * @returns Events sorted by start time and color context for all calendars
+     */
+    protected async fetchDayEventsAllCalendars(
+        date: string,
+        timezone: string,
+        accounts: Map<string, OAuth2Client>
+    ): Promise<{ events: ExtendedEvent[]; colorContext: EventColorContext }> {
+        const allAccounts = this.getClientsForAccounts(undefined, accounts);
+
+        // Get unified calendar list (cached, 5-min TTL)
+        const unifiedCalendars = await this.calendarRegistry.getUnifiedCalendars(allAccounts);
+
+        // Group calendars by preferredAccount to avoid duplicate fetches
+        const calendarsByAccount = new Map<string, string[]>();
+        for (const cal of unifiedCalendars) {
+            const accountId = cal.preferredAccount;
+            const existing = calendarsByAccount.get(accountId) || [];
+            existing.push(cal.calendarId);
+            calendarsByAccount.set(accountId, existing);
+        }
+
+        // Build time range for the full day (timeMax is exclusive per Google Calendar API)
+        const timeMin = convertToRFC3339(`${date}T00:00:00`, timezone);
+        const nextDate = new Date(`${date}T00:00:00`);
+        nextDate.setDate(nextDate.getDate() + 1);
+        const nextDateStr = nextDate.toISOString().split('T')[0];
+        const timeMax = convertToRFC3339(`${nextDateStr}T00:00:00`, timezone);
+
+        // Fetch events from all accounts in parallel
+        const eventsPerAccount: Array<{ accountId: string; calendarIds: string[]; events: ExtendedEvent[] }> = [];
+
+        await Promise.all(
+            Array.from(calendarsByAccount.entries()).map(async ([accountId, calendarIds]) => {
+                const client = allAccounts.get(accountId);
+                if (!client) return;
+
+                try {
+                    let events: ExtendedEvent[];
+                    if (calendarIds.length === 1) {
+                        const calendar = this.getCalendar(client);
+                        const response = await calendar.events.list({
+                            calendarId: calendarIds[0],
+                            timeMin,
+                            timeMax,
+                            singleEvents: true,
+                            orderBy: 'startTime'
+                        });
+                        events = (response.data.items || []).map(event => ({
+                            ...event,
+                            calendarId: calendarIds[0],
+                            accountId
+                        }));
+                    } else {
+                        const batchHandler = new BatchRequestHandler(client);
+                        const requests = calendarIds.map(calendarId => {
+                            const params = new URLSearchParams({
+                                singleEvents: 'true',
+                                orderBy: 'startTime',
+                                timeMin,
+                                timeMax
+                            });
+                            return {
+                                method: 'GET' as const,
+                                path: `/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`
+                            };
+                        });
+                        const responses = await batchHandler.executeBatch(requests);
+                        events = [];
+                        responses.forEach((response, index) => {
+                            const calendarId = calendarIds[index];
+                            if (response.statusCode === 200 && response.body?.items) {
+                                for (const event of response.body.items) {
+                                    events.push({ ...event, calendarId, accountId });
+                                }
+                            } else {
+                                const errorMessage = response.body?.error?.message || `HTTP ${response.statusCode}`;
+                                process.stderr.write(`[fetchDayEventsAllCalendars] Batch error for calendar "${calendarId}": ${errorMessage}\n`);
+                            }
+                        });
+                    }
+                    eventsPerAccount.push({ accountId, calendarIds, events });
+                } catch (error) {
+                    const reason = error instanceof Error ? error.message : String(error);
+                    process.stderr.write(`[fetchDayEventsAllCalendars] Failed to fetch events for account "${accountId}": ${reason}\n`);
+                    eventsPerAccount.push({ accountId, calendarIds, events: [] });
+                }
+            })
+        );
+
+        // Flatten and sort
+        const allEvents = eventsPerAccount.flatMap(r => r.events);
+        this.sortEventsByStartTime(allEvents);
+
+        // Build color context from all accounts (getCalendarColors returns event palette too)
+        const calendarColors: Record<string, { background: string; foreground: string }> = {};
+        const calendarNames: Record<string, string> = {};
+        let eventPalette: Record<string, { background: string; foreground: string }> = {};
+
+        await Promise.all(
+            eventsPerAccount
+                .filter(r => r.calendarIds.length > 0)
+                .map(async (r) => {
+                    const client = allAccounts.get(r.accountId);
+                    if (client) {
+                        const data = await this.getCalendarColors(client, r.calendarIds);
+                        Object.assign(calendarColors, data.colors);
+                        Object.assign(calendarNames, data.names);
+                        // Event palette is global (same for all accounts), take from first result
+                        if (Object.keys(eventPalette).length === 0 && Object.keys(data.eventPalette).length > 0) {
+                            eventPalette = data.eventPalette;
+                        }
+                    }
+                })
+        );
+
+        return {
+            events: allEvents,
+            colorContext: { eventPalette, calendarColors, calendarNames }
+        };
+    }
+
+    /**
+     * Build day context for a focus event (created or updated) with graceful fallback.
+     * Fetches surrounding events across all calendars, converts to structured format,
+     * and assembles the day context. Falls back to single-calendar color context on error.
+     */
+    protected async buildEventDayContext(
+        event: calendar_v3.Schema$Event,
+        calendarId: string,
+        accountId: string,
+        timezone: string,
+        accounts: Map<string, OAuth2Client>,
+        oauth2Client: OAuth2Client
+    ): Promise<{ structuredEvent: StructuredEvent; dayContext: DayContext | undefined }> {
+        const eventDate = event.start?.dateTime || event.start?.date || '';
+        const dateOnly = eventDate.split('T')[0];
+
+        const dayContextService = new DayContextService();
+        let dayContext: DayContext | undefined;
+        let structuredEvent: StructuredEvent | undefined;
+
+        try {
+            const { events: allDayEvents, colorContext } = await this.fetchDayEventsAllCalendars(
+                dateOnly, timezone, accounts
+            );
+
+            structuredEvent = convertGoogleEventToStructured(event, calendarId, accountId, colorContext);
+
+            const surroundingEvents = allDayEvents
+                .filter(e => e.id !== event.id)
+                .map(e => convertGoogleEventToStructured(e, e.calendarId, e.accountId, colorContext));
+
+            dayContext = dayContextService.buildDayContext(structuredEvent, surroundingEvents, timezone);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.error(`[buildEventDayContext] Failed to build day context: ${message}`);
+
+            if (!structuredEvent) {
+                const colorContext = await this.buildColorContext(oauth2Client, [calendarId]);
+                structuredEvent = convertGoogleEventToStructured(event, calendarId, accountId, colorContext);
+            }
+        }
+
+        return { structuredEvent: structuredEvent!, dayContext };
     }
 
 }
