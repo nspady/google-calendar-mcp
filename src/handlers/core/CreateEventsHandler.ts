@@ -1,8 +1,8 @@
-import { CallToolResult, McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { CreateEventsInput } from "../../tools/registry.js";
 import { BaseToolHandler } from "./BaseToolHandler.js";
-import { calendar_v3 } from 'googleapis';
+import type { calendar_v3 } from 'googleapis';
 import { createTimeObject } from "../../utils/datetime.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
 import { CreateEventsResponse, convertGoogleEventToStructured, StructuredEvent } from "../../types/structured-responses.js";
@@ -28,8 +28,9 @@ export class CreateEventsHandler extends BaseToolHandler {
             await this.getClientWithAutoSelection(defaultAccount, defaultCalendarId, accounts, 'write');
         }
 
-        // Caches for getClientWithAutoSelection and getCalendarTimezone per (account, calendarId)
+        // Caches per unique (account, calendarId) pair
         const clientCache = new Map<string, { client: OAuth2Client; accountId: string; calendarId: string }>();
+        const calendarCache = new Map<string, calendar_v3.Calendar>();
         const timezoneCache = new Map<string, string>();
 
         const created: StructuredEvent[] = [];
@@ -62,7 +63,12 @@ export class CreateEventsHandler extends BaseToolHandler {
 
                 const { client: oauth2Client, accountId: selectedAccountId, calendarId: resolvedCalendarId } = clientResult;
 
-                const calendar = this.getCalendar(oauth2Client);
+                // Cache getCalendar per unique (account, calendarId) — avoids redundant credential file reads
+                let calendar = calendarCache.get(cacheKey);
+                if (!calendar) {
+                    calendar = this.getCalendar(oauth2Client);
+                    calendarCache.set(cacheKey, calendar);
+                }
 
                 // Cache getCalendarTimezone per unique (account, calendarId)
                 let tz = timeZone;
@@ -116,26 +122,20 @@ export class CreateEventsHandler extends BaseToolHandler {
                 consecutiveFailures = 0;
                 lastErrorMessage = '';
             } catch (error: unknown) {
-                // Use handleGoogleApiError to get a well-formatted error message
-                let errorMessage: string;
-                try {
-                    this.handleGoogleApiError(error);
-                } catch (mcpError: unknown) {
-                    errorMessage = mcpError instanceof McpError ? mcpError.message : (mcpError instanceof Error ? mcpError.message : 'Unknown error');
-                }
+                const errorMessage = this.formatGoogleApiError(error);
 
                 failed.push({
                     index: i,
                     summary: eventInput.summary,
-                    error: errorMessage!,
+                    error: errorMessage,
                 });
 
                 // Circuit breaker: track consecutive identical failures
-                if (errorMessage! === lastErrorMessage) {
+                if (errorMessage === lastErrorMessage) {
                     consecutiveFailures++;
                 } else {
                     consecutiveFailures = 1;
-                    lastErrorMessage = errorMessage!;
+                    lastErrorMessage = errorMessage;
                 }
 
                 if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES && i < validArgs.events.length - 1) {
