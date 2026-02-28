@@ -31,6 +31,12 @@ jobs:
     - name: Check for undeclared dependencies
       run: npm run check:imports
 
+    - name: Type-check
+      run: npm run lint
+
+    - name: Build
+      run: npm run build
+
     - name: Run unit tests with coverage
       run: |
         echo "🧪 Running unit tests with coverage..."
@@ -249,4 +255,3 @@ jobs:
         issue-number: ${{ github.event.pull_request.number }}
         body-path: /tmp/comparison.md
         edit-mode: replace
-

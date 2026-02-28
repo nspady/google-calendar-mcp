@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { spawn, ChildProcess } from 'child_process';
 import { TestDataFactory } from './test-data-factory.js';
+import { createIntegrationClient } from './helpers/mcp-client.js';
 
 /**
  * Multi-Account Integration Tests for Google Calendar MCP
@@ -30,7 +29,6 @@ import { TestDataFactory } from './test-data-factory.js';
 
 describe('Google Calendar MCP - Multi-Account Integration Tests', () => {
   let client: Client;
-  let serverProcess: ChildProcess;
   let testFactory: TestDataFactory;
   let createdEventIds: Array<{ calendarId: string; eventId: string; account: string }> = [];
 
@@ -59,40 +57,10 @@ describe('Google Calendar MCP - Multi-Account Integration Tests', () => {
       console.log(`   Shared Calendar: ${SHARED_CALENDAR}`);
     }
 
-    // Build environment without GOOGLE_ACCOUNT_MODE to enable multi-account mode
-    const cleanEnv = Object.fromEntries(
-      Object.entries(process.env).filter(([key, value]) =>
-        value !== undefined && key !== 'GOOGLE_ACCOUNT_MODE'
-      )
-    ) as Record<string, string>;
-    cleanEnv.NODE_ENV = 'test';
-
-    serverProcess = spawn('node', ['build/index.js'], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: cleanEnv
-    });
-
-    // Wait for server to start
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    // Create MCP client
-    client = new Client({
+    client = await createIntegrationClient({
       name: "multi-account-test-client",
-      version: "1.0.0"
-    }, {
-      capabilities: {
-        tools: {}
-      }
+      excludeGoogleAccountMode: true
     });
-
-    // Connect to server
-    const transport = new StdioClientTransport({
-      command: 'node',
-      args: ['build/index.js'],
-      env: cleanEnv
-    });
-
-    await client.connect(transport);
     console.log('✅ Connected to MCP server');
 
     // Initialize test factory
@@ -126,13 +94,6 @@ describe('Google Calendar MCP - Multi-Account Integration Tests', () => {
     if (client) {
       await client.close();
       console.log('🔌 Closed MCP client connection');
-    }
-
-    // Terminate server process
-    if (serverProcess && !serverProcess.killed) {
-      serverProcess.kill();
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      console.log('🛑 Terminated MCP server process');
     }
 
     console.log('✅ Multi-account test cleanup completed\n');

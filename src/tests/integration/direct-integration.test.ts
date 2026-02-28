@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { spawn, ChildProcess } from 'child_process';
 import { TestDataFactory, TestEvent } from './test-data-factory.js';
+import { createIntegrationClient } from './helpers/mcp-client.js';
 
 /**
  * Comprehensive Integration Tests for Google Calendar MCP
@@ -36,7 +35,6 @@ import { TestDataFactory, TestEvent } from './test-data-factory.js';
 
 describe('Google Calendar MCP - Direct Integration Tests', () => {
   let client: Client;
-  let serverProcess: ChildProcess;
   let testFactory: TestDataFactory;
   let createdEventIds: string[] = [];
   
@@ -46,39 +44,7 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
   beforeAll(async () => {
     // Start the MCP server
     console.log('🚀 Starting Google Calendar MCP server...');
-    
-    // Filter out undefined values from process.env and set NODE_ENV=test
-    const cleanEnv = Object.fromEntries(
-      Object.entries(process.env).filter(([_, value]) => value !== undefined)
-    ) as Record<string, string>;
-    cleanEnv.NODE_ENV = 'test';
-    
-    serverProcess = spawn('node', ['build/index.js'], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: cleanEnv
-    });
-
-    // Wait for server to start
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    // Create MCP client
-    client = new Client({
-      name: "integration-test-client",
-      version: "1.0.0"
-    }, {
-      capabilities: {
-        tools: {}
-      }
-    });
-
-    // Connect to server
-    const transport = new StdioClientTransport({
-      command: 'node',
-      args: ['build/index.js'],
-      env: cleanEnv
-    });
-    
-    await client.connect(transport);
+    client = await createIntegrationClient({ name: "integration-test-client" });
     console.log('✅ Connected to MCP server');
 
     // Initialize test factory
@@ -101,13 +67,6 @@ describe('Google Calendar MCP - Direct Integration Tests', () => {
     if (client) {
       await client.close();
       console.log('🔌 Closed MCP client connection');
-    }
-    
-    // Terminate server process
-    if (serverProcess && !serverProcess.killed) {
-      serverProcess.kill();
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      console.log('🛑 Terminated MCP server process');
     }
 
     // Log performance summary

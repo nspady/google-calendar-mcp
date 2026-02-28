@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { spawn, ChildProcess } from 'child_process';
+import { createIntegrationClient } from './helpers/mcp-client.js';
 
 const MULTI_ACCOUNT_IDS = (process.env.MULTI_ACCOUNT_IDS || '')
   .split(',')
@@ -22,38 +21,10 @@ const describeIfEnabled = MULTI_ACCOUNT_TESTS_ENABLED ? describe : describe.skip
 
 describeIfEnabled('Multi-account integration (stdio transport)', () => {
   let client: Client;
-  let serverProcess: ChildProcess;
   const createdEvents: Array<{ accountId: string; calendarId: string; eventId: string }> = [];
 
   beforeAll(async () => {
-    const cleanEnv = Object.fromEntries(
-      Object.entries(process.env).filter(([_, value]) => value !== undefined)
-    ) as Record<string, string>;
-    cleanEnv.NODE_ENV = 'test';
-
-    serverProcess = spawn('node', ['build/index.js'], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: cleanEnv
-    });
-
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    client = new Client({
-      name: "multi-account-integration",
-      version: "1.0.0"
-    }, {
-      capabilities: {
-        tools: {}
-      }
-    });
-
-    const transport = new StdioClientTransport({
-      command: 'node',
-      args: ['build/index.js'],
-      env: cleanEnv
-    });
-
-    await client.connect(transport);
+    client = await createIntegrationClient({ name: "multi-account-integration" });
   }, 40000);
 
   afterAll(async () => {
@@ -74,11 +45,6 @@ describeIfEnabled('Multi-account integration (stdio transport)', () => {
 
     if (client) {
       await client.close();
-    }
-
-    if (serverProcess && !serverProcess.killed) {
-      serverProcess.kill();
-      await new Promise(resolve => setTimeout(resolve, 500));
     }
   }, 40000);
 

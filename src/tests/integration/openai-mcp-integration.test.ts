@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import OpenAI from 'openai';
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { spawn, ChildProcess } from 'child_process';
 import { TestDataFactory } from './test-data-factory.js';
+import { createIntegrationClient } from './helpers/mcp-client.js';
 
 /**
  * Complete OpenAI GPT + MCP Integration Tests
@@ -452,7 +451,6 @@ class RealOpenAIMCPClient implements OpenAIMCPClient {
 describe('Complete OpenAI GPT + MCP Integration Tests', () => {
   let openaiMCPClient: RealOpenAIMCPClient;
   let mcpClient: Client;
-  let serverProcess: ChildProcess;
   let createdEventIds: string[] = [];
   
   const TEST_CALENDAR_ID = process.env.TEST_CALENDAR_ID;
@@ -470,41 +468,9 @@ describe('Complete OpenAI GPT + MCP Integration Tests', () => {
       throw new Error('INVITEE_1 and INVITEE_2 environment variables are required for testing event invitations');
     }
 
-    // Start the MCP server
+    // Start and connect MCP server
     console.log('🔌 Starting MCP server...');
-    
-    // Filter out undefined values from process.env and set NODE_ENV=test
-    const cleanEnv = Object.fromEntries(
-      Object.entries(process.env).filter(([_, value]) => value !== undefined)
-    ) as Record<string, string>;
-    cleanEnv.NODE_ENV = 'test';
-    
-    serverProcess = spawn('node', ['build/index.js'], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: cleanEnv
-    });
-
-    // Wait for server to start
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    // Create MCP client
-    mcpClient = new Client({
-      name: "openai-mcp-integration-client",
-      version: "1.0.0"
-    }, {
-      capabilities: {
-        tools: {}
-      }
-    });
-
-    // Connect to MCP server
-    const transport = new StdioClientTransport({
-      command: 'node',
-      args: ['build/index.js'],
-      env: cleanEnv
-    });
-    
-    await mcpClient.connect(transport);
+    mcpClient = await createIntegrationClient({ name: "openai-mcp-integration-client" });
     console.log('✅ Connected to MCP server');
 
     // Initialize OpenAI MCP client
@@ -536,11 +502,6 @@ describe('Complete OpenAI GPT + MCP Integration Tests', () => {
     // Close connections
     if (mcpClient) {
       await mcpClient.close();
-    }
-    
-    if (serverProcess && !serverProcess.killed) {
-      serverProcess.kill();
-      await new Promise(resolve => setTimeout(resolve, 1000));
     }
     
     console.log('🧹 Complete OpenAI GPT + MCP integration test cleanup completed');
