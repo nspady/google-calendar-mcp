@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.5.0](https://github.com/nspady/google-calendar-mcp/compare/v2.4.1...v2.5.0) (2026-02-28)
+
+
+### Features
+
+* add create-events bulk tool for batch event creation ([#169](https://github.com/nspady/google-calendar-mcp/issues/169)) ([fa7ab34](https://github.com/nspady/google-calendar-mcp/commit/fa7ab34daaec48ed953b16bb4ebe53d5ca912b36))
+* per-field timezone support for start/end times ([#171](https://github.com/nspady/google-calendar-mcp/issues/171)) ([6394e36](https://github.com/nspady/google-calendar-mcp/commit/6394e36bb66cc85c8ab301c0e76995e962412a0c))
+
+
+### Bug Fixes
+
+* clean up create-events handler error handling and caching ([f4265c9](https://github.com/nspady/google-calendar-mcp/commit/f4265c980094dcc82abf633ec20ea0ac5de9d28e))
+* detect recurring event instances via recurringEventId ([#164](https://github.com/nspady/google-calendar-mcp/issues/164)) ([a26140c](https://github.com/nspady/google-calendar-mcp/commit/a26140ce19b93d08dbbada70e768bd9ba8fa9463))
+
 ## [2.4.1](https://github.com/nspady/google-calendar-mcp/compare/v2.4.0...v2.4.1) (2026-01-18)
 
 
