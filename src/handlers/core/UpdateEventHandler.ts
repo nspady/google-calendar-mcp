@@ -87,8 +87,8 @@ export class UpdateEventHandler extends BaseToolHandler {
             };
         }
 
-        // Update the event with resolved calendar ID and merged attendees
-        const updatedEvent = await this.updateEventWithScope(oauth2Client, argsWithMergedAttendees);
+        // Update the event with resolved calendar ID, merged attendees, and pre-resolved timezone
+        const updatedEvent = await this.updateEventWithScope(oauth2Client, { ...argsWithMergedAttendees, timeZone: timezone });
 
         // Build day context with surrounding events across all calendars
         const { structuredEvent, dayContext } = await this.buildEventDayContext(
@@ -125,8 +125,8 @@ export class UpdateEventHandler extends BaseToolHandler {
             const calendar = this.getCalendar(client);
             const helpers = new RecurringEventHelpers(calendar);
             
-            // Get calendar's default timezone if not provided
-            const defaultTimeZone = await this.getCalendarTimezone(client, args.calendarId);
+            // Use pre-resolved timezone from runTool, or fetch as fallback
+            const defaultTimeZone = args.timeZone || await this.getCalendarTimezone(client, args.calendarId);
             
             // Detect event type and validate scope usage
             const eventType = await helpers.detectEventType(args.eventId, args.calendarId);
@@ -176,15 +176,13 @@ export class UpdateEventHandler extends BaseToolHandler {
         const instanceId = helpers.formatInstanceId(args.eventId, args.originalStartTime);
 
         const requestBody = helpers.buildUpdateRequestBody(args, defaultTimeZone);
-        const conferenceDataVersion = requestBody.conferenceData !== undefined ? 1 : undefined;
-        const supportsAttachments = requestBody.attachments !== undefined ? true : undefined;
+        const flags = this.getApiFlags(requestBody);
 
         const response = await calendar.events.patch({
             calendarId: args.calendarId,
             eventId: instanceId,
             requestBody,
-            ...(conferenceDataVersion && { conferenceDataVersion }),
-            ...(supportsAttachments && { supportsAttachments })
+            ...flags
         });
 
         if (!response.data) throw new Error('Failed to update event instance');
@@ -199,15 +197,13 @@ export class UpdateEventHandler extends BaseToolHandler {
         const calendar = helpers.getCalendar();
 
         const requestBody = helpers.buildUpdateRequestBody(args, defaultTimeZone);
-        const conferenceDataVersion = requestBody.conferenceData !== undefined ? 1 : undefined;
-        const supportsAttachments = requestBody.attachments !== undefined ? true : undefined;
+        const flags = this.getApiFlags(requestBody);
 
         const response = await calendar.events.patch({
             calendarId: args.calendarId,
             eventId: args.eventId,
             requestBody,
-            ...(conferenceDataVersion && { conferenceDataVersion }),
-            ...(supportsAttachments && { supportsAttachments })
+            ...flags
         });
 
         if (!response.data) throw new Error('Failed to update event');
@@ -273,14 +269,12 @@ export class UpdateEventHandler extends BaseToolHandler {
             }
         };
 
-        const conferenceDataVersion = newEvent.conferenceData !== undefined ? 1 : undefined;
-        const supportsAttachments = newEvent.attachments !== undefined ? true : undefined;
+        const flags = this.getApiFlags(newEvent);
 
         const response = await calendar.events.insert({
             calendarId: args.calendarId,
             requestBody: newEvent,
-            ...(conferenceDataVersion && { conferenceDataVersion }),
-            ...(supportsAttachments && { supportsAttachments })
+            ...flags
         });
 
         if (!response.data) throw new Error('Failed to create new recurring event');

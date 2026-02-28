@@ -1,6 +1,7 @@
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { BaseToolHandler } from "./BaseToolHandler.js";
+import { createStructuredResponse } from "../../utils/response-builder.js";
 
 /**
  * Handler for highlight-events tool.
@@ -15,15 +16,10 @@ export class HighlightEventsHandler extends BaseToolHandler<{
     args: { eventIds?: string[]; label?: string },
     _accounts: Map<string, OAuth2Client>
   ): Promise<CallToolResult> {
-    return {
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
-          action: 'highlight',
-          eventIds: args.eventIds || [],
-          label: args.label
-        })
-      }]
-    };
+    return createStructuredResponse({
+      action: 'highlight',
+      eventIds: args.eventIds || [],
+      label: args.label
+    });
   }
 }

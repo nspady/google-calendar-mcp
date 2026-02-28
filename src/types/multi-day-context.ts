@@ -1,28 +1,13 @@
 import { StructuredEvent } from './structured-responses.js';
+import { BaseViewEvent, toBaseViewEvent } from './view-event.js';
 
 /**
- * Simplified event for multi-day view display
+ * Simplified event for multi-day view display.
+ * Extends BaseViewEvent with foreground color for multi-day rendering.
  */
-export interface MultiDayViewEvent {
-  id: string;
-  summary: string;
-  start: string;           // ISO datetime or date
-  end: string;             // ISO datetime or date
-  isAllDay: boolean;
-  location?: string;
-  htmlLink: string;
-  /** Resolved background color (hex, e.g., "#7986cb") - from event colorId or calendar default */
-  backgroundColor?: string;
+export interface MultiDayViewEvent extends BaseViewEvent {
   /** Resolved foreground/text color (hex, e.g., "#ffffff") */
   foregroundColor?: string;
-  calendarId: string;
-  calendarName?: string;
-  accountId?: string;
-  attendeeCount?: number;
-  selfResponseStatus?: string;
-  hasConferenceLink?: boolean;
-  eventType?: string;
-  isRecurring?: boolean;
 }
 
 /**
@@ -51,24 +36,8 @@ export interface MultiDayContext {
  * Converts a StructuredEvent to MultiDayViewEvent
  */
 export function toMultiDayViewEvent(event: StructuredEvent): MultiDayViewEvent {
-  const isAllDay = !event.start.dateTime && !!event.start.date;
   return {
-    id: event.id,
-    summary: event.summary || '(No title)',
-    start: event.start.dateTime || event.start.date || '',
-    end: event.end.dateTime || event.end.date || '',
-    isAllDay,
-    location: event.location,
-    htmlLink: event.htmlLink || '',
-    backgroundColor: event.backgroundColor,
+    ...toBaseViewEvent(event),
     foregroundColor: event.foregroundColor,
-    calendarId: event.calendarId || '',
-    calendarName: event.calendarName,
-    accountId: event.accountId,
-    attendeeCount: event.attendees?.length,
-    selfResponseStatus: event.attendees?.find(a => a.self)?.responseStatus,
-    hasConferenceLink: !!event.conferenceData?.entryPoints?.some(ep => ep.entryPointType === 'video'),
-    eventType: event.eventType !== 'default' ? event.eventType : undefined,
-    isRecurring: !!event.recurringEventId,
   };
 }

@@ -6,7 +6,6 @@ import { BatchRequestHandler } from "./BatchRequestHandler.js";
 import { buildListFieldMask } from "../../utils/field-mask-builder.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
 import { ListEventsResponse, StructuredEvent, convertGoogleEventToStructured, ExtendedEvent } from "../../types/structured-responses.js";
-import { DayContextService } from "../../services/day-context/index.js";
 import { MultiDayContextService } from "../../services/multi-day-context/index.js";
 
 interface ListEventsArgs {
@@ -24,12 +23,10 @@ interface ListEventsArgs {
 const SINGLE_DAY_MAX_HOURS = 24;
 
 export class ListEventsHandler extends BaseToolHandler {
-    private dayContextService: DayContextService;
     private multiDayContextService: MultiDayContextService;
 
     constructor() {
         super();
-        this.dayContextService = new DayContextService();
         this.multiDayContextService = new MultiDayContextService();
     }
 

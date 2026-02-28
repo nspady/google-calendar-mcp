@@ -79,8 +79,8 @@ export class CreateEventHandler extends BaseToolHandler {
             );
         }
 
-        // Create the event with resolved calendar ID
-        const argsWithResolvedCalendar = { ...validArgs, calendarId: resolvedCalendarId };
+        // Create the event with resolved calendar ID, passing already-resolved timezone
+        const argsWithResolvedCalendar = { ...validArgs, calendarId: resolvedCalendarId, timeZone: timezone };
         const event = await this.createEvent(oauth2Client, argsWithResolvedCalendar);
 
         // Build day context with surrounding events across all calendars
@@ -113,8 +113,8 @@ export class CreateEventHandler extends BaseToolHandler {
                 validateEventId(args.eventId);
             }
             
-            // Use provided timezone or calendar's default timezone
-            const timezone = args.timeZone || await this.getCalendarTimezone(client, args.calendarId);
+            // Use provided timezone (already resolved by runTool) or calendar's default
+            const timezone = args.timeZone || await this.getCalendarTimezone(client, args.calendarId!);
 
             // Determine transparency and visibility based on event type
             const { transparency, visibility } = this.getEventTypeDefaults(args);
@@ -151,16 +151,11 @@ export class CreateEventHandler extends BaseToolHandler {
                 ...(args.eventType === 'workingLocation' && { workingLocationProperties: this.buildWorkingLocationProperties(args) })
             };
             
-            // Determine if we need to enable conference data or attachments
-            const conferenceDataVersion = args.conferenceData ? 1 : undefined;
-            const supportsAttachments = args.attachments ? true : undefined;
-            
             const response = await calendar.events.insert({
                 calendarId: args.calendarId,
                 requestBody: requestBody,
                 sendUpdates: args.sendUpdates,
-                ...(conferenceDataVersion && { conferenceDataVersion }),
-                ...(supportsAttachments && { supportsAttachments })
+                ...this.getApiFlags(requestBody)
             });
             
             if (!response.data) throw new Error('Failed to create event, no data returned');

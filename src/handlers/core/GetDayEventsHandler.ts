@@ -3,7 +3,6 @@ import { OAuth2Client } from "google-auth-library";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
 import { convertGoogleEventToStructured, StructuredEvent } from "../../types/structured-responses.js";
-import { DayContextService } from "../../services/day-context/index.js";
 
 interface GetDayEventsArgs {
     date: string;
@@ -12,13 +11,6 @@ interface GetDayEventsArgs {
 }
 
 export class GetDayEventsHandler extends BaseToolHandler {
-    private dayContextService: DayContextService;
-
-    constructor() {
-        super();
-        this.dayContextService = new DayContextService();
-    }
-
     async runTool(args: GetDayEventsArgs, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
         // Determine timezone: use provided or get from primary calendar of first account
         const firstClient = this.getClientForAccountOrFirst(undefined, accounts);
@@ -34,15 +26,10 @@ export class GetDayEventsHandler extends BaseToolHandler {
             convertGoogleEventToStructured(event, event.calendarId, event.accountId, colorContext)
         );
 
-        // Build day context
+        // Build day context (pass focusEventId if provided)
         const dayContext = this.dayContextService.buildDayContextForList(
-            structuredEvents, args.date, timezone
+            structuredEvents, args.date, timezone, args.focusEventId
         );
-
-        // Override focusEventId if provided
-        if (args.focusEventId) {
-            dayContext.focusEventId = args.focusEventId;
-        }
 
         return createStructuredResponse({ dayContext });
     }

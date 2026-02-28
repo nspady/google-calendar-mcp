@@ -1,5 +1,6 @@
 import { StructuredEvent } from '../../types/structured-responses.js';
 import { MultiDayContext, MultiDayViewEvent, toMultiDayViewEvent } from '../../types/multi-day-context.js';
+import { sortViewEvents, buildCalendarLink } from '../../types/view-event.js';
 
 interface BuildOptions {
   timeRange?: { start: string; end: string };
@@ -75,35 +76,6 @@ export class MultiDayContextService {
   }
 
   /**
-   * Sort events within a single date group.
-   * All-day events come first, then events are sorted by start time.
-   */
-  sortEventsWithinDate(events: MultiDayViewEvent[]): MultiDayViewEvent[] {
-    return [...events].sort((a, b) => {
-      // All-day events come first
-      if (a.isAllDay && !b.isAllDay) return -1;
-      if (!a.isAllDay && b.isAllDay) return 1;
-
-      // Sort by start time
-      return a.start.localeCompare(b.start);
-    });
-  }
-
-  /**
-   * Build a Google Calendar link for a date range.
-   * Links to the week view with the start date.
-   */
-  private buildCalendarLink(dates: string[]): string {
-    if (dates.length === 0) {
-      return 'https://calendar.google.com/calendar';
-    }
-
-    // Link to the first date in week view
-    const firstDate = dates[0];
-    return `https://calendar.google.com/calendar/r/week/${firstDate.replace(/-/g, '/')}`;
-  }
-
-  /**
    * Build the multi-day context for UI display.
    *
    * @param events - Array of structured events to display
@@ -124,14 +96,11 @@ export class MultiDayContextService {
 
     // Sort events within each date group
     for (const date of Object.keys(eventsByDate)) {
-      eventsByDate[date] = this.sortEventsWithinDate(eventsByDate[date]);
+      eventsByDate[date] = sortViewEvents(eventsByDate[date]);
     }
 
     // Get sorted list of dates
     const dates = Object.keys(eventsByDate).sort();
-
-    // Build calendar link
-    const calendarLink = this.buildCalendarLink(dates);
 
     return {
       dates,
@@ -141,7 +110,9 @@ export class MultiDayContextService {
       focusEventId: options.focusEventId,
       timeRange: options.timeRange,
       query: options.query,
-      calendarLink
+      calendarLink: dates.length > 0
+        ? buildCalendarLink(dates[0], 'week')
+        : 'https://calendar.google.com/calendar'
     };
   }
 }

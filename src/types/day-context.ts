@@ -1,28 +1,12 @@
 import { StructuredEvent } from './structured-responses.js';
+import { BaseViewEvent, toBaseViewEvent } from './view-event.js';
 
 /**
- * Simplified event for day view display
+ * Simplified event for day view display.
+ * Extends BaseViewEvent with day-view-specific color fields.
  */
-export interface DayViewEvent {
-  id: string;
-  summary: string;
-  start: string;           // ISO datetime or date
-  end: string;             // ISO datetime or date
-  isAllDay: boolean;
-  location?: string;
-  htmlLink: string;
+export interface DayViewEvent extends BaseViewEvent {
   colorId?: string;
-  /** Resolved background color (hex, e.g., "#7986cb") - from event colorId or calendar default */
-  backgroundColor?: string;
-  calendarId: string;
-  /** Calendar display name (user's summaryOverride or calendar's summary) */
-  calendarName?: string;
-  accountId?: string;
-  attendeeCount?: number;
-  selfResponseStatus?: string;
-  hasConferenceLink?: boolean;
-  eventType?: string;
-  isRecurring?: boolean;
 }
 
 /**
@@ -52,24 +36,8 @@ export interface DayContext {
  * Converts a StructuredEvent to DayViewEvent
  */
 export function toDayViewEvent(event: StructuredEvent): DayViewEvent {
-  const isAllDay = !event.start.dateTime && !!event.start.date;
   return {
-    id: event.id,
-    summary: event.summary || '(No title)',
-    start: event.start.dateTime || event.start.date || '',
-    end: event.end.dateTime || event.end.date || '',
-    isAllDay,
-    location: event.location,
-    htmlLink: event.htmlLink || '',
+    ...toBaseViewEvent(event),
     colorId: event.colorId,
-    backgroundColor: event.backgroundColor,
-    calendarId: event.calendarId || '',
-    calendarName: event.calendarName,
-    accountId: event.accountId,
-    attendeeCount: event.attendees?.length,
-    selfResponseStatus: event.attendees?.find(a => a.self)?.responseStatus,
-    hasConferenceLink: !!event.conferenceData?.entryPoints?.some(ep => ep.entryPointType === 'video'),
-    eventType: event.eventType !== 'default' ? event.eventType : undefined,
-    isRecurring: !!event.recurringEventId,
   };
 }

@@ -1,5 +1,6 @@
 import { StructuredEvent } from '../../types/structured-responses.js';
 import { DayContext, DayViewEvent, toDayViewEvent } from '../../types/day-context.js';
+import { sortViewEvents, buildCalendarLink } from '../../types/view-event.js';
 
 const DEFAULT_START_HOUR = 8;
 const DEFAULT_END_HOUR = 18;
@@ -70,21 +71,11 @@ export class DayContextService {
     timezone: string,
     focusEventId: string
   ): DayContext {
-    // Convert to day view events
-    const dayViewEvents: DayViewEvent[] = events.map(toDayViewEvent);
-
-    // Sort: all-day first, then by start time
-    dayViewEvents.sort((a, b) => {
-      if (a.isAllDay && !b.isAllDay) return -1;
-      if (!a.isAllDay && b.isAllDay) return 1;
-      return a.start.localeCompare(b.start);
-    });
+    // Convert to day view events and sort
+    const dayViewEvents: DayViewEvent[] = sortViewEvents(events.map(toDayViewEvent));
 
     // Calculate time range
     const timeRange = this.calculateTimeRange(events);
-
-    // Build Google Calendar day link
-    const dayLink = `https://calendar.google.com/calendar/r/day/${date.replace(/-/g, '/')}`;
 
     return {
       date,
@@ -92,21 +83,21 @@ export class DayContextService {
       events: dayViewEvents,
       focusEventId,
       timeRange,
-      dayLink,
+      dayLink: buildCalendarLink(date, 'day'),
     };
   }
 
   /**
-   * Build the day context for list operations (no focus event).
+   * Build the day context for list operations (no focus event by default).
    * Used when listing events for a single day.
    */
   buildDayContextForList(
     events: StructuredEvent[],
     date: string,
-    timezone: string
+    timezone: string,
+    focusEventId: string = ''
   ): DayContext {
-    // No focus event for list operations — empty string means no highlight
-    return this._buildCommonDayContext(events, date, timezone, '');
+    return this._buildCommonDayContext(events, date, timezone, focusEventId);
   }
 
   /**

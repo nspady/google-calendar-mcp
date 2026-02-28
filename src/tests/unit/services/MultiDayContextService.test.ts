@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { MultiDayContextService } from '../../../services/multi-day-context/MultiDayContextService.js';
+import { sortViewEvents } from '../../../types/view-event.js';
 import { StructuredEvent } from '../../../types/structured-responses.js';
 
 describe('MultiDayContextService', () => {
@@ -171,14 +172,14 @@ describe('MultiDayContextService', () => {
     });
   });
 
-  describe('sortEventsWithinDate', () => {
+  describe('sortViewEvents (shared utility)', () => {
     it('should put all-day events first', () => {
       const events = [
         { id: '1', summary: 'Timed', start: '2025-01-15T10:00:00', end: '2025-01-15T11:00:00', isAllDay: false, htmlLink: '', calendarId: 'primary' },
         { id: '2', summary: 'All Day', start: '2025-01-15', end: '2025-01-16', isAllDay: true, htmlLink: '', calendarId: 'primary' },
       ];
 
-      const sorted = service.sortEventsWithinDate(events);
+      const sorted = sortViewEvents(events);
 
       expect(sorted[0].summary).toBe('All Day');
       expect(sorted[1].summary).toBe('Timed');
@@ -190,7 +191,7 @@ describe('MultiDayContextService', () => {
         { id: '2', summary: 'Early', start: '2025-01-15T08:00:00', end: '2025-01-15T09:00:00', isAllDay: false, htmlLink: '', calendarId: 'primary' },
       ];
 
-      const sorted = service.sortEventsWithinDate(events);
+      const sorted = sortViewEvents(events);
 
       expect(sorted[0].summary).toBe('Early');
       expect(sorted[1].summary).toBe('Late');
@@ -202,7 +203,7 @@ describe('MultiDayContextService', () => {
         { id: '2', summary: 'Early', start: '2025-01-15T08:00:00', end: '2025-01-15T09:00:00', isAllDay: false, htmlLink: '', calendarId: 'primary' },
       ];
 
-      service.sortEventsWithinDate(events);
+      sortViewEvents(events);
 
       expect(events[0].summary).toBe('Late'); // Original unchanged
     });

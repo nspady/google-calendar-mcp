@@ -14,6 +14,7 @@ import { DayContext } from "../../types/day-context.js";
 
 export abstract class BaseToolHandler<TArgs = any> {
     protected calendarRegistry: CalendarRegistry = CalendarRegistry.getInstance();
+    protected dayContextService: DayContextService = new DayContextService();
 
     abstract runTool(args: TArgs, accounts: Map<string, OAuth2Client>): Promise<CallToolResult>;
 
@@ -456,6 +457,20 @@ Original error: ${errorMessage}`
         }
 
         return google.calendar(config);
+    }
+
+    /**
+     * Returns API flags for conferenceData and attachments support.
+     * Extracts the repeated pattern of conditionally enabling these features.
+     */
+    protected getApiFlags(requestBody: calendar_v3.Schema$Event): {
+        conferenceDataVersion?: number;
+        supportsAttachments?: boolean;
+    } {
+        return {
+            conferenceDataVersion: requestBody.conferenceData !== undefined ? 1 : undefined,
+            supportsAttachments: requestBody.attachments !== undefined ? true : undefined,
+        };
     }
 
     /**
@@ -946,8 +961,8 @@ Original error: ${errorMessage}`
                         const data = await this.getCalendarColors(client, entry.calendarIds);
                         Object.assign(calendarColors, data.colors);
                         Object.assign(calendarNames, data.names);
-                        // Event palette is global (same for all accounts), take from first result
-                        if (Object.keys(eventPalette).length === 0 && Object.keys(data.eventPalette).length > 0) {
+                        // Event palette is global (same for all accounts) — always assign, last write wins
+                        if (Object.keys(data.eventPalette).length > 0) {
                             eventPalette = data.eventPalette;
                         }
                     }
@@ -1080,7 +1095,6 @@ Original error: ${errorMessage}`
         const eventDate = event.start?.dateTime || event.start?.date || '';
         const dateOnly = eventDate.split('T')[0];
 
-        const dayContextService = new DayContextService();
         let dayContext: DayContext | undefined;
         let structuredEvent: StructuredEvent | undefined;
 
@@ -1095,18 +1109,24 @@ Original error: ${errorMessage}`
                 .filter(e => e.id !== event.id)
                 .map(e => convertGoogleEventToStructured(e, e.calendarId, e.accountId, colorContext));
 
-            dayContext = dayContextService.buildDayContext(structuredEvent, surroundingEvents, timezone);
+            dayContext = this.dayContextService.buildDayContext(structuredEvent, surroundingEvents, timezone);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             console.error(`[buildEventDayContext] Failed to build day context: ${message}`);
+        }
 
-            if (!structuredEvent) {
+        // Fallback: if day context fetch failed, convert with single-calendar colors
+        if (!structuredEvent) {
+            try {
                 const colorContext = await this.buildColorContext(oauth2Client, [calendarId]);
                 structuredEvent = convertGoogleEventToStructured(event, calendarId, accountId, colorContext);
+            } catch {
+                // Last resort: convert without color context
+                structuredEvent = convertGoogleEventToStructured(event, calendarId, accountId, { eventPalette: {}, calendarColors: {}, calendarNames: {} });
             }
         }
 
-        return { structuredEvent: structuredEvent!, dayContext };
+        return { structuredEvent, dayContext };
     }
 
 }
