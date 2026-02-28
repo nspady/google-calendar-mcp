@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.0](https://github.com/nspady/google-calendar-mcp/compare/v2.5.0...v2.6.0) (2026-02-28)
+
+
+### Features
+
+* add PKCE and state parameter validation for OAuth security ([#173](https://github.com/nspady/google-calendar-mcp/issues/173)) ([c688a5c](https://github.com/nspady/google-calendar-mcp/commit/c688a5caa87222924e2b7d34fd6512e610daef25))
+
 ## [2.5.0](https://github.com/nspady/google-calendar-mcp/compare/v2.4.1...v2.5.0) (2026-02-28)
 
 
