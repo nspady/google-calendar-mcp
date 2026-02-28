@@ -226,10 +226,8 @@ describe('CreateEventsHandler', () => {
       expect(response.failed[0].error).toContain('API error for event 2');
     });
 
-    it('should use handleGoogleApiError to format error messages', async () => {
-      const handleSpy = vi.spyOn(handler as any, 'handleGoogleApiError').mockImplementation(() => {
-        throw new McpError(ErrorCode.InvalidRequest, 'Bad Request: Invalid time range');
-      });
+    it('should use formatGoogleApiError to format error messages', async () => {
+      const formatSpy = vi.spyOn(handler as any, 'formatGoogleApiError').mockReturnValue('Bad Request: Invalid time range');
 
       mockCalendar.events.insert.mockRejectedValueOnce(new Error('raw error'));
 
@@ -241,7 +239,7 @@ describe('CreateEventsHandler', () => {
 
       const result = await handler.runTool(args, mockAccounts);
 
-      expect(handleSpy).toHaveBeenCalled();
+      expect(formatSpy).toHaveBeenCalled();
       const response = JSON.parse(result.content[0].text);
       expect(response.failed[0].error).toContain('Bad Request: Invalid time range');
     });
