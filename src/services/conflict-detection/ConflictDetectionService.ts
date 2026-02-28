@@ -68,8 +68,7 @@ export class ConflictDetectionService {
 
     // Extract timezone if present (prefer start time's timezone)
     const timezone = normalizedEvent.start?.timeZone || normalizedEvent.end?.timeZone;
-    
-    
+
     // The Google Calendar API requires RFC3339 format for timeMin/timeMax
     // If we have timezone-naive datetimes with a timezone field, convert them to proper RFC3339
     // Check for minus but exclude the date separator (e.g., 2025-09-05)
@@ -82,22 +81,16 @@ export class ConflictDetectionService {
       timeMin = convertToRFC3339(timeMin, timezone);
       timeMax = convertToRFC3339(timeMax, timezone);
     }
-    
-    
-    // Use the exact time range provided for searching
-    // This ensures duplicate detection only flags events that actually overlap
-    const searchTimeMin = timeMin;
-    const searchTimeMax = timeMax;
 
     // Check each calendar
     for (const checkCalendarId of calendarsToCheck) {
       try {
-        // Get events in the search time range, passing timezone for proper interpretation
+        // Get events in the time range, passing timezone for proper interpretation
         const events = await this.getEventsInTimeRange(
           oauth2Client,
           checkCalendarId,
-          searchTimeMin,
-          searchTimeMax,
+          timeMin,
+          timeMax,
           timezone || undefined
         );
 
@@ -201,7 +194,6 @@ export class ConflictDetectionService {
   ): InternalDuplicateInfo[] {
     const duplicates: InternalDuplicateInfo[] = [];
 
-
     for (const existingEvent of existingEvents) {
       // Skip if it's the same event (for updates)
       if (existingEvent.id === newEvent.id) continue;
@@ -210,8 +202,7 @@ export class ConflictDetectionService {
       if (existingEvent.status === 'cancelled') continue;
 
       const similarity = this.similarityChecker.checkSimilarity(newEvent, existingEvent);
-      
-      
+
       if (similarity >= threshold) {
         duplicates.push({
           event: {
@@ -228,7 +219,6 @@ export class ConflictDetectionService {
         });
       }
     }
-
 
     return duplicates;
   }
@@ -274,56 +264,4 @@ export class ConflictDetectionService {
     return conflicts;
   }
 
-  /**
-   * Check for conflicts using free/busy data (alternative method)
-   */
-  async checkConflictsWithFreeBusy(
-    oauth2Client: OAuth2Client,
-    eventToCheck: calendar_v3.Schema$Event,
-    calendarsToCheck: string[]
-  ): Promise<InternalConflictInfo[]> {
-    const conflicts: InternalConflictInfo[] = [];
-    
-    if (!eventToCheck.start || !eventToCheck.end) return conflicts;
-    
-    const timeMin = eventToCheck.start.dateTime || eventToCheck.start.date;
-    const timeMax = eventToCheck.end.dateTime || eventToCheck.end.date;
-    
-    if (!timeMin || !timeMax) return conflicts;
-
-    const calendar = google.calendar({ version: "v3", auth: oauth2Client });
-    
-    try {
-      const freeBusyResponse = await calendar.freebusy.query({
-        requestBody: {
-          timeMin,
-          timeMax,
-          items: calendarsToCheck.map(id => ({ id }))
-        }
-      });
-
-      for (const [calendarId, calendarInfo] of Object.entries(freeBusyResponse.data.calendars || {})) {
-        if (calendarInfo.busy && calendarInfo.busy.length > 0) {
-          for (const busySlot of calendarInfo.busy) {
-            if (this.similarityChecker.checkBusyConflict(eventToCheck, busySlot)) {
-              conflicts.push({
-                type: 'overlap',
-                calendar: calendarId,
-                event: {
-                  id: 'busy-time',
-                  title: 'Busy (details unavailable)',
-                  start: busySlot.start || undefined,
-                  end: busySlot.end || undefined
-                }
-              });
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Failed to check free/busy:', error);
-    }
-
-    return conflicts;
-  }
 }

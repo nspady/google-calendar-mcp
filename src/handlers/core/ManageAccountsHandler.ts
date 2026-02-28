@@ -1,5 +1,4 @@
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult, McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { google } from "googleapis";
 import { AuthServer } from "../../auth/server.js";
