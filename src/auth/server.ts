@@ -15,6 +15,12 @@ export interface StartForMcpToolResult {
   error?: string;
 }
 
+interface PendingAuthFlow {
+  codeVerifier: string;
+  codeChallenge: string;
+  state: string;
+}
+
 export class AuthServer {
   private baseOAuth2Client: OAuth2Client; // Used by TokenManager for validation/refresh
   private flowOAuth2Client: OAuth2Client | null = null; // Used specifically for the auth code flow
@@ -25,9 +31,7 @@ export class AuthServer {
   public authCompletedSuccessfully = false; // Flag for standalone script
   private mcpToolTimeout: ReturnType<typeof setTimeout> | null = null; // Timeout for MCP tool auth flow
   private autoShutdownOnSuccess = false; // Whether to auto-shutdown after successful auth
-  private pendingCodeVerifier: string | null = null; // PKCE code verifier for OAuth flow
-  private pendingCodeChallenge: string | null = null; // PKCE code challenge (generated once per flow)
-  private pendingState: string | null = null; // CSRF protection state for OAuth flow
+  private pendingAuthFlow: PendingAuthFlow | null = null; // PKCE + state for current OAuth flow
 
   constructor(oauth2Client: OAuth2Client) {
     this.baseOAuth2Client = oauth2Client;
@@ -53,19 +57,16 @@ export class AuthServer {
    * Requires that PKCE credentials and state have been pre-generated via preparePkceAndState().
    */
   private generateOAuthUrl(client: OAuth2Client): string {
-    if (!this.pendingCodeChallenge || !this.pendingCodeVerifier) {
-      throw new Error('PKCE credentials not initialized. Call preparePkceAndState() before generating auth URL.');
-    }
-    if (!this.pendingState) {
-      throw new Error('OAuth state not initialized. Call preparePkceAndState() before generating auth URL.');
+    if (!this.pendingAuthFlow) {
+      throw new Error('Auth flow not initialized. Call preparePkceAndState() before generating auth URL.');
     }
     return client.generateAuthUrl({
       access_type: 'offline',
       scope: ['https://www.googleapis.com/auth/calendar'],
       prompt: 'consent',
       code_challenge_method: CodeChallengeMethod.S256,
-      code_challenge: this.pendingCodeChallenge,
-      state: this.pendingState
+      code_challenge: this.pendingAuthFlow.codeChallenge,
+      state: this.pendingAuthFlow.state
     });
   }
 
@@ -76,9 +77,20 @@ export class AuthServer {
    */
   private async preparePkceAndState(client: OAuth2Client): Promise<void> {
     const { codeVerifier, codeChallenge } = await client.generateCodeVerifierAsync();
-    this.pendingCodeVerifier = codeVerifier;
-    this.pendingCodeChallenge = codeChallenge;
-    this.pendingState = crypto.randomBytes(32).toString('hex');
+    if (!codeChallenge) {
+      throw new Error('Failed to generate PKCE code challenge');
+    }
+    this.pendingAuthFlow = {
+      codeVerifier,
+      codeChallenge,
+      state: crypto.randomBytes(32).toString('hex')
+    };
+  }
+
+  private async sendErrorPage(res: http.ServerResponse, statusCode: number, errorMessage: string): Promise<void> {
+    const errorHtml = await renderAuthError({ errorMessage });
+    res.writeHead(statusCode, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(errorHtml);
   }
 
   private createServer(): http.Server {
@@ -93,66 +105,48 @@ export class AuthServer {
 
       } else if (url.pathname === '/') {
         // Root route - show auth link (reuses pre-generated PKCE + state)
-        const clientForUrl = this.flowOAuth2Client || this.baseOAuth2Client;
-        const authUrl = this.generateOAuthUrl(clientForUrl);
-        const accountMode = getAccountMode();
+        try {
+          const clientForUrl = this.flowOAuth2Client || this.baseOAuth2Client;
+          const authUrl = this.generateOAuthUrl(clientForUrl);
+          const accountMode = getAccountMode();
 
-        const landingHtml = await renderAuthLanding({
-          accountId: accountMode,
-          authUrl: authUrl
-        });
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end(landingHtml);
+          const landingHtml = await renderAuthLanding({
+            accountId: accountMode,
+            authUrl: authUrl
+          });
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(landingHtml);
+        } catch (error) {
+          await this.sendErrorPage(res, 500, 'Authentication flow not ready. Please restart the auth process.');
+        }
 
       } else if (url.pathname === '/oauth2callback') {
         // OAuth callback route
         const code = url.searchParams.get('code');
         if (!code) {
-          const errorHtml = await renderAuthError({
-            errorMessage: 'Authorization code missing'
-          });
-          res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end(errorHtml);
+          await this.sendErrorPage(res, 400, 'Authorization code missing');
           return;
         }
 
         // Validate state parameter for CSRF protection
         const returnedState = url.searchParams.get('state');
-        if (!returnedState || returnedState !== this.pendingState) {
-          const errorHtml = await renderAuthError({
-            errorMessage: 'Invalid state parameter. This may indicate a CSRF attack or an expired authentication session. Please try authenticating again.'
-          });
-          res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end(errorHtml);
+        if (!this.pendingAuthFlow || !returnedState || returnedState !== this.pendingAuthFlow.state) {
+          process.stderr.write(`✗ OAuth callback rejected: invalid state parameter (possible CSRF attempt)\n`);
+          await this.sendErrorPage(res, 403, 'Invalid state parameter. This may indicate a CSRF attack or an expired authentication session. Please try authenticating again.');
           return;
         }
-        this.pendingState = null; // Clear after successful validation
 
         if (!this.flowOAuth2Client) {
-          const errorHtml = await renderAuthError({
-            errorMessage: 'Authentication flow not properly initiated.'
-          });
-          res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end(errorHtml);
+          await this.sendErrorPage(res, 500, 'Authentication flow not properly initiated.');
           return;
         }
 
-        if (!this.pendingCodeVerifier) {
-          const errorHtml = await renderAuthError({
-            errorMessage: 'PKCE code verifier missing. The authentication session may have expired. Please try authenticating again.'
-          });
-          res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end(errorHtml);
-          return;
-        }
-        
         try {
           const { tokens } = await this.flowOAuth2Client.getToken({
             code,
-            codeVerifier: this.pendingCodeVerifier
+            codeVerifier: this.pendingAuthFlow.codeVerifier
           });
-          this.pendingCodeVerifier = null; // Clear after use
-          this.pendingCodeChallenge = null; // Clear after use
+          this.pendingAuthFlow = null; // Clear after use
           await this.tokenManager.saveTokens(tokens);
           this.authCompletedSuccessfully = true;
 
@@ -180,14 +174,11 @@ export class AuthServer {
           res.end(successHtml);
         } catch (error: unknown) {
           this.authCompletedSuccessfully = false;
+          this.pendingAuthFlow = null; // Clear on failure to prevent stale state
           const message = error instanceof Error ? error.message : 'Unknown error';
           process.stderr.write(`✗ Token save failed: ${message}\n`);
 
-          const errorHtml = await renderAuthError({
-            errorMessage: message
-          });
-          res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end(errorHtml);
+          await this.sendErrorPage(res, 500, message);
         }
       } else {
         // 404 for other routes
@@ -236,14 +227,21 @@ export class AuthServer {
     try {
       this.flowOAuth2Client = await this.createFlowOAuth2Client(port);
     } catch (error) {
-        // Could not load credentials, cannot proceed with auth flow
-        this.authCompletedSuccessfully = false;
-        await this.stop(); // Stop the server we just started
-        return false;
+      process.stderr.write(`✗ Failed to load OAuth credentials: ${error instanceof Error ? error.message : 'Unknown error'}\n`);
+      this.authCompletedSuccessfully = false;
+      await this.stop(); // Stop the server we just started
+      return false;
     }
 
     // Generate PKCE credentials and state once for this flow
-    await this.preparePkceAndState(this.flowOAuth2Client);
+    try {
+      await this.preparePkceAndState(this.flowOAuth2Client);
+    } catch (error) {
+      process.stderr.write(`✗ Failed to initialize PKCE: ${error instanceof Error ? error.message : 'Unknown error'}\n`);
+      this.authCompletedSuccessfully = false;
+      await this.stop();
+      return false;
+    }
 
     // Generate Auth URL using the newly created flow client
     const authorizeUrl = this.generateOAuthUrl(this.flowOAuth2Client);
@@ -315,6 +313,7 @@ export class AuthServer {
       this.mcpToolTimeout = null;
     }
     this.autoShutdownOnSuccess = false;
+    this.pendingAuthFlow = null;
 
     return new Promise((resolve, reject) => {
       if (this.server) {
@@ -388,7 +387,15 @@ export class AuthServer {
     }
 
     // Generate PKCE credentials and state once for this flow
-    await this.preparePkceAndState(this.flowOAuth2Client);
+    try {
+      await this.preparePkceAndState(this.flowOAuth2Client);
+    } catch (error) {
+      await this.stop();
+      return {
+        success: false,
+        error: `Failed to initialize PKCE: ${error instanceof Error ? error.message : 'Unknown error'}`
+      };
+    }
 
     // Generate Auth URL
     const authUrl = this.generateOAuthUrl(this.flowOAuth2Client);
