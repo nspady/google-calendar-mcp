@@ -31,6 +31,36 @@ jobs:
     - name: Check for undeclared dependencies
       run: npm run check:imports
 
+    - name: Type-check
+      run: npm run lint
+
+    - name: Build
+      run: npm run build
+
+    - name: Smoke test built server startup
+      run: |
+        set -euo pipefail
+        PORT=3100
+        NODE_ENV=test node build/index.js start --transport http --port ${PORT} --host 127.0.0.1 > /tmp/mcp-smoke.log 2>&1 &
+        SERVER_PID=$!
+        cleanup() {
+          kill "${SERVER_PID}" >/dev/null 2>&1 || true
+          wait "${SERVER_PID}" >/dev/null 2>&1 || true
+        }
+        trap cleanup EXIT
+
+        for _ in {1..15}; do
+          if curl -fsS "http://127.0.0.1:${PORT}/health" >/dev/null; then
+            echo "✅ Built server started and responded on /health"
+            exit 0
+          fi
+          sleep 1
+        done
+
+        echo "❌ Smoke test failed. Server logs:"
+        cat /tmp/mcp-smoke.log
+        exit 1
+
     - name: Run unit tests with coverage
       run: |
         echo "🧪 Running unit tests with coverage..."
@@ -249,4 +279,3 @@ jobs:
         issue-number: ${{ github.event.pull_request.number }}
         body-path: /tmp/comparison.md
         edit-mode: replace
-

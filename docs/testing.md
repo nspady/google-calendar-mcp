@@ -4,8 +4,9 @@
 
 ```bash
 npm test                 # Unit tests (no auth required)
-npm run test:integration # Integration tests (requires Google auth)
-npm run test:all         # All tests (requires Google auth + LLM API keys)
+npm run test:integration # Direct integration tests only (requires Google auth)
+npm run test:integration:all # All integration tests (direct + multi-account + LLM + docker)
+npm run test:all         # Unit + all integration tests
 ```
 
 ## Test Structure
@@ -98,16 +99,18 @@ export OPENAI_MODEL="gpt-4o-mini"                   # Default
 ### Running Specific Integration Test Types
 
 ```bash
-# Run only direct Google Calendar integration tests
-npm run test:integration -- direct-integration.test.ts
-
-# Run only LLM integration tests (requires API keys)
-npm run test:integration -- claude-mcp-integration.test.ts
-npm run test:integration -- openai-mcp-integration.test.ts
-
-# Run all integration tests (requires both Google auth + LLM API keys)
+# Default integration run (direct tests only; no LLM credits)
 npm run test:integration
+
+# Explicit categories
+npm run test:integration:direct
+npm run test:integration:multi-account
+npm run test:integration:llm
+npm run test:integration:docker
+npm run test:integration:all
 ```
+
+All `test:integration:*` scripts build the project first, so `build/index.js` is always up to date for integration runs.
 
 ## Environment Configuration
 
@@ -176,14 +179,14 @@ npm run dev auth:test
 npm run dev account:status
 
 # Run a simple integration test
-npm run test:integration -- direct-integration.test.ts
+npm run test:integration:direct
 ```
 
 5. **Run multi-account integration tests (optional):**
 ```bash
 export MULTI_ACCOUNT_TESTS=true
 export MULTI_ACCOUNT_IDS=work,personal
-vitest run src/tests/integration/multi-account.test.ts
+npm run test:integration:multi-account
 ```
 These tests verify cross-account list-events merging. Each account listed in `MULTI_ACCOUNT_IDS` must already be authenticated.
 
@@ -234,7 +237,7 @@ These tests verify cross-account list-events merging. Each account listed in `MU
 - Unit tests: ~2 seconds
 - Direct integration tests: ~30-60 seconds  
 - LLM integration tests: ~2-5 minutes (due to AI processing)
-- Full test suite: ~5-10 minutes
+- Full test suite: ~5-10 minutes (can be longer when Docker/LLM tests are included)
 
 **Parallel Execution:**
 - Unit tests run in parallel by default
@@ -254,7 +257,7 @@ export DEBUG_LLM_INTERACTIONS=true
 2. **Run Single Test:**
 ```bash
 # Run specific test by name pattern
-npm run test:integration -- -t "should handle timezone"
+npm run test:integration:direct -- -t "should handle timezone"
 ```
 
 3. **Interactive Testing:**
