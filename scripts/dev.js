@@ -73,30 +73,40 @@ const commands = {
     cmd: 'npm',
     args: ['test']
   },
-  'test:integration:direct': {
-    description: 'Run core integration tests (recommended for development)',
-    cmd: 'npx',
-    args: ['vitest', 'run', 'src/tests/integration/direct-integration.test.ts']
-  },
-  'test:integration:claude': {
-    description: 'Run Claude + MCP integration tests',
-    cmd: 'npx',
-    args: ['vitest', 'run', 'src/tests/integration/claude-mcp-integration.test.ts']
-  },
-  'test:integration:openai': {
-    description: 'Run OpenAI + MCP integration tests',
-    cmd: 'npx',
-    args: ['vitest', 'run', 'src/tests/integration/openai-mcp-integration.test.ts']
-  },
-  'test:integration:all': {
-    description: 'Run complete integration test suite',
+  'test:integration': {
+    description: 'Run default integration tests (direct API only)',
     cmd: 'npm',
     args: ['run', 'test:integration']
   },
+  'test:integration:direct': {
+    description: 'Run core integration tests (recommended for development)',
+    cmd: 'npm',
+    args: ['run', 'test:integration:direct']
+  },
   'test:integration:multi-account': {
     description: 'Run multi-account integration tests (requires 2 authenticated accounts)',
-    cmd: 'npx',
-    args: ['vitest', 'run', 'src/tests/integration/multi-account-integration.test.ts']
+    cmd: 'npm',
+    args: ['run', 'test:integration:multi-account']
+  },
+  'test:integration:claude': {
+    description: 'Run Claude + MCP integration tests',
+    cmd: 'npm',
+    args: ['run', 'test:integration:claude']
+  },
+  'test:integration:openai': {
+    description: 'Run OpenAI + MCP integration tests',
+    cmd: 'npm',
+    args: ['run', 'test:integration:openai']
+  },
+  'test:integration:llm': {
+    description: 'Run all LLM integration tests',
+    cmd: 'npm',
+    args: ['run', 'test:integration:llm']
+  },
+  'test:integration:all': {
+    description: 'Run complete integration test suite (direct + multi-account + LLM + docker)',
+    cmd: 'npm',
+    args: ['run', 'test:integration:all']
   },
   'test:watch:all': {
     description: 'Run all tests in watch mode',
@@ -164,7 +174,7 @@ function showHelp() {
     'HTTP Transport': ['http', 'http:public'],
     'Authentication': ['auth', 'auth:test', 'account:status', 'account:clear:normal', 'account:clear:test'],
     'Unit Testing': ['test'],
-    'Integration Testing': ['test:integration:direct', 'test:integration:claude', 'test:integration:openai', 'test:integration:all', 'test:watch:all'],
+    'Integration Testing': ['test:integration', 'test:integration:direct', 'test:integration:multi-account', 'test:integration:claude', 'test:integration:openai', 'test:integration:llm', 'test:integration:all', 'test:watch:all'],
     'Docker Operations': ['docker:build', 'docker:up', 'docker:up:http', 'docker:auth', 'docker:logs', 'docker:down', 'docker:exec', 'docker:test:quick'],
     'Coverage & Analysis': ['coverage']
   };
