@@ -5,7 +5,7 @@ import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
 import { buildListFieldMask } from "../../utils/field-mask-builder.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
-import { SearchEventsResponse, StructuredEvent, convertGoogleEventToStructured, ExtendedEvent, EventColorContext } from "../../types/structured-responses.js";
+import { SearchEventsResponse, StructuredEvent, convertGoogleEventToStructured, ExtendedEvent } from "../../types/structured-responses.js";
 import { MultiDayContextService } from "../../services/multi-day-context/index.js";
 
 // Internal args type for searchEvents with single calendarId (after normalization)
@@ -106,10 +106,9 @@ export class SearchEventsHandler extends BaseToolHandler {
         this.sortEventsByStartTime(allEvents);
 
         // Build color context for resolving event display colors
-        const colorContext = await this.buildSearchColorContext(
-            accountCalendarMap,
-            selectedAccounts,
-            queriedCalendarIds
+        const colorContext = await this.buildMultiAccountColorContext(
+            Array.from(accountCalendarMap.entries()).map(([accountId, calendarIds]) => ({ accountId, calendarIds })),
+            selectedAccounts
         );
 
         // Convert to structured format with resolved colors
@@ -190,34 +189,4 @@ export class SearchEventsHandler extends BaseToolHandler {
         }
     }
 
-    /**
-     * Builds color context for search queries across multiple calendars/accounts.
-     */
-    private async buildSearchColorContext(
-        accountCalendarMap: Map<string, string[]>,
-        selectedAccounts: Map<string, OAuth2Client>,
-        queriedCalendarIds: string[]
-    ): Promise<EventColorContext> {
-        // Get first available account for event palette (it's global/same for all)
-        const firstAccountId = selectedAccounts.keys().next().value as string;
-        const firstClient = selectedAccounts.get(firstAccountId)!;
-        const eventPalette = await this.getEventColorPalette(firstClient);
-
-        // Collect calendar colors and names from each account that has those calendars
-        const calendarColors: Record<string, { background: string; foreground: string }> = {};
-        const calendarNames: Record<string, string> = {};
-
-        await Promise.all(
-            Array.from(accountCalendarMap.entries()).map(async ([accountId, calendarIds]) => {
-                const client = selectedAccounts.get(accountId);
-                if (client && calendarIds.length > 0) {
-                    const calendarData = await this.getCalendarColors(client, calendarIds);
-                    Object.assign(calendarColors, calendarData.colors);
-                    Object.assign(calendarNames, calendarData.names);
-                }
-            })
-        );
-
-        return { eventPalette, calendarColors, calendarNames };
-    }
 }

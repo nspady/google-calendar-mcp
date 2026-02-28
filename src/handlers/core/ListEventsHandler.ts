@@ -5,7 +5,7 @@ import { calendar_v3 } from 'googleapis';
 import { BatchRequestHandler } from "./BatchRequestHandler.js";
 import { buildListFieldMask } from "../../utils/field-mask-builder.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
-import { ListEventsResponse, StructuredEvent, convertGoogleEventToStructured, ExtendedEvent, EventColorContext } from "../../types/structured-responses.js";
+import { ListEventsResponse, StructuredEvent, convertGoogleEventToStructured, ExtendedEvent } from "../../types/structured-responses.js";
 import { DayContextService } from "../../services/day-context/index.js";
 import { MultiDayContextService } from "../../services/multi-day-context/index.js";
 
@@ -146,12 +146,7 @@ export class ListEventsHandler extends BaseToolHandler {
         this.sortEventsByStartTime(allEvents);
 
         // Build color context for resolving event display colors
-        // Use first available account for event palette (global), collect calendar colors from all accounts
-        const colorContext = await this.buildMultiAccountColorContext(
-            eventsPerAccount,
-            selectedAccounts,
-            allQueriedCalendarIds
-        );
+        const colorContext = await this.buildMultiAccountColorContext(eventsPerAccount, selectedAccounts);
 
         // Convert extended events to structured format with resolved colors
         const structuredEvents: StructuredEvent[] = allEvents.map(event =>
@@ -343,37 +338,4 @@ export class ListEventsHandler extends BaseToolHandler {
         return { events, errors };
     }
 
-    /**
-     * Builds color context for multi-account event queries.
-     * Fetches event palette once (global) and collects calendar colors/names from all accounts.
-     */
-    private async buildMultiAccountColorContext(
-        eventsPerAccount: Array<{ accountId: string; calendarIds: string[]; events: ExtendedEvent[] }>,
-        selectedAccounts: Map<string, OAuth2Client>,
-        allCalendarIds: string[]
-    ): Promise<EventColorContext> {
-        // Get first available account for event palette (it's global/same for all)
-        const firstAccountId = selectedAccounts.keys().next().value as string;
-        const firstClient = selectedAccounts.get(firstAccountId)!;
-        const eventPalette = await this.getEventColorPalette(firstClient);
-
-        // Collect calendar colors and names from each account that has those calendars
-        const calendarColors: Record<string, { background: string; foreground: string }> = {};
-        const calendarNames: Record<string, string> = {};
-
-        await Promise.all(
-            eventsPerAccount
-                .filter(result => result.calendarIds.length > 0)
-                .map(async (result) => {
-                    const client = selectedAccounts.get(result.accountId);
-                    if (client) {
-                        const calendarData = await this.getCalendarColors(client, result.calendarIds);
-                        Object.assign(calendarColors, calendarData.colors);
-                        Object.assign(calendarNames, calendarData.names);
-                    }
-                })
-        );
-
-        return { eventPalette, calendarColors, calendarNames };
-    }
 }

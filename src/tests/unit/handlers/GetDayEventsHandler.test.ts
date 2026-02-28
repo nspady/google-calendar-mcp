@@ -77,9 +77,6 @@ describe('GetDayEventsHandler', () => {
     // Mock getCalendarTimezone
     vi.spyOn(handler as any, 'getCalendarTimezone').mockResolvedValue('America/Los_Angeles');
 
-    // Mock getEventColorPalette
-    vi.spyOn(handler as any, 'getEventColorPalette').mockResolvedValue({});
-
     // Mock getCalendarColors
     vi.spyOn(handler as any, 'getCalendarColors').mockResolvedValue({ colors: {}, names: {}, eventPalette: {} });
   });

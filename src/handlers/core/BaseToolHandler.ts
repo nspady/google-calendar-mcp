@@ -789,37 +789,6 @@ Original error: ${errorMessage}`
     }
 
     /**
-     * Fetches the event color palette from Google Calendar API.
-     * Colors are global (same for all users), so this only needs to be called once per request.
-     *
-     * @param client OAuth2Client
-     * @returns Event color palette mapping colorId to hex colors
-     */
-    protected async getEventColorPalette(client: OAuth2Client): Promise<Record<string, { background: string; foreground: string }>> {
-        try {
-            const calendar = this.getCalendar(client);
-            const response = await calendar.colors.get();
-            const colors = response.data;
-
-            const palette: Record<string, { background: string; foreground: string }> = {};
-            if (colors.event) {
-                for (const [id, color] of Object.entries(colors.event)) {
-                    palette[id] = {
-                        background: color.background || '',
-                        foreground: color.foreground || ''
-                    };
-                }
-            }
-            return palette;
-        } catch (error) {
-            // Non-fatal: return empty palette, but log for debugging
-            const message = error instanceof Error ? error.message : String(error);
-            console.error(`[getEventColorPalette] Failed to fetch event color palette: ${message}`);
-            return {};
-        }
-    }
-
-    /**
      * Fetches calendar default colors for multiple calendars.
      * Returns a map of calendarId to background/foreground colors.
      *
@@ -953,6 +922,42 @@ Original error: ${errorMessage}`
     }
 
     /**
+     * Builds color context across multiple accounts by collecting calendar colors/names
+     * and event palette from getCalendarColors (single colors.get() call per account).
+     *
+     * @param accountCalendars Array of { accountId, calendarIds } to fetch colors for
+     * @param accounts Map of available OAuth2 clients
+     * @returns Complete EventColorContext for use with convertGoogleEventToStructured
+     */
+    protected async buildMultiAccountColorContext(
+        accountCalendars: Array<{ accountId: string; calendarIds: string[] }>,
+        accounts: Map<string, OAuth2Client>
+    ): Promise<EventColorContext> {
+        const calendarColors: Record<string, { background: string; foreground: string }> = {};
+        const calendarNames: Record<string, string> = {};
+        let eventPalette: Record<string, { background: string; foreground: string }> = {};
+
+        await Promise.all(
+            accountCalendars
+                .filter(entry => entry.calendarIds.length > 0)
+                .map(async (entry) => {
+                    const client = accounts.get(entry.accountId);
+                    if (client) {
+                        const data = await this.getCalendarColors(client, entry.calendarIds);
+                        Object.assign(calendarColors, data.colors);
+                        Object.assign(calendarNames, data.names);
+                        // Event palette is global (same for all accounts), take from first result
+                        if (Object.keys(eventPalette).length === 0 && Object.keys(data.eventPalette).length > 0) {
+                            eventPalette = data.eventPalette;
+                        }
+                    }
+                })
+        );
+
+        return { eventPalette, calendarColors, calendarNames };
+    }
+
+    /**
      * Fetches all events for a given day across all calendars and accounts.
      * Uses CalendarRegistry for deduplicated calendar list and BatchRequestHandler
      * for efficient multi-calendar fetching.
@@ -1053,32 +1058,10 @@ Original error: ${errorMessage}`
         const allEvents = eventsPerAccount.flatMap(r => r.events);
         this.sortEventsByStartTime(allEvents);
 
-        // Build color context from all accounts (getCalendarColors returns event palette too)
-        const calendarColors: Record<string, { background: string; foreground: string }> = {};
-        const calendarNames: Record<string, string> = {};
-        let eventPalette: Record<string, { background: string; foreground: string }> = {};
+        // Build color context from all accounts
+        const colorContext = await this.buildMultiAccountColorContext(eventsPerAccount, allAccounts);
 
-        await Promise.all(
-            eventsPerAccount
-                .filter(r => r.calendarIds.length > 0)
-                .map(async (r) => {
-                    const client = allAccounts.get(r.accountId);
-                    if (client) {
-                        const data = await this.getCalendarColors(client, r.calendarIds);
-                        Object.assign(calendarColors, data.colors);
-                        Object.assign(calendarNames, data.names);
-                        // Event palette is global (same for all accounts), take from first result
-                        if (Object.keys(eventPalette).length === 0 && Object.keys(data.eventPalette).length > 0) {
-                            eventPalette = data.eventPalette;
-                        }
-                    }
-                })
-        );
-
-        return {
-            events: allEvents,
-            colorContext: { eventPalette, calendarColors, calendarNames }
-        };
+        return { events: allEvents, colorContext };
     }
 
     /**
