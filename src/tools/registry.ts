@@ -35,6 +35,53 @@ const isValidIsoDateTime = (val: string): boolean =>
 const isValidIsoDateOrDateTime = (val: string): boolean =>
   ISO_DATE_ONLY.test(val) || isValidIsoDateTime(val);
 
+// Time input validation: accepts ISO 8601 string or JSON-encoded object with per-field timezone
+// JSON object format enables different timezones for start/end (e.g., flights departing/arriving in different timezones)
+// Examples:
+//   String: "2025-01-01T10:00:00" or "2025-01-01"
+//   JSON object: '{"dateTime": "2025-01-01T10:00:00", "timeZone": "America/Los_Angeles"}'
+const validateTimeInput = (val: string): string | true => {
+  const trimmed = val.trim();
+  if (trimmed.startsWith('{')) {
+    let obj;
+    try {
+      obj = JSON.parse(trimmed);
+    } catch {
+      return "Invalid JSON format in time input";
+    }
+    if (obj.date !== undefined && obj.dateTime !== undefined) {
+      return "Cannot specify both 'date' and 'dateTime' in time input";
+    }
+    if (obj.date !== undefined) {
+      return ISO_DATE_ONLY.test(obj.date) ? true : "Invalid date format: must be YYYY-MM-DD (e.g., '2025-01-01')";
+    }
+    if (obj.dateTime !== undefined) {
+      if (obj.timeZone !== undefined) {
+        if (typeof obj.timeZone !== 'string') {
+          return "timeZone must be a string (IANA timezone, e.g., 'America/Los_Angeles')";
+        }
+        if (obj.timeZone.trim() === '') {
+          return "timeZone cannot be empty - provide a valid IANA timezone (e.g., 'America/Los_Angeles') or omit the field";
+        }
+      }
+      return isValidIsoDateTime(obj.dateTime) ? true : "Invalid dateTime format: must be ISO 8601 (e.g., '2025-01-01T10:00:00')";
+    }
+    return "JSON time object must have either 'dateTime' or 'date' field";
+  }
+  return isValidIsoDateOrDateTime(trimmed) ? true : "Must be ISO 8601 format: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events";
+};
+
+const isValidTimeInput = (val: string): boolean => validateTimeInput(val) === true;
+
+// superRefine handler for time input validation with dynamic error messages
+// Zod 4's .refine() doesn't support function-based error messages, so we use .superRefine()
+const superRefineTimeInput = (val: string, ctx: z.RefinementCtx) => {
+  const result = validateTimeInput(val);
+  if (typeof result === 'string') {
+    ctx.addIssue({ code: 'custom', message: result });
+  }
+};
+
 // ============================================================================
 // SHARED ENUMS
 // ============================================================================
@@ -287,11 +334,21 @@ export const ToolSchemas = {
     summary: z.string().describe("Title of the event"),
     description: z.string().optional().describe("Description/notes for the event"),
     start: z.string()
-      .refine(isValidIsoDateOrDateTime, "Must be ISO 8601 format: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events")
-      .describe("Event start time: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events. Also accepts Google Calendar API object format: {date: '2025-01-01'} or {dateTime: '2025-01-01T10:00:00', timeZone: 'America/Los_Angeles'}"),
+      .superRefine(superRefineTimeInput)
+      .describe(
+        "Event start time. String format: '2025-01-01T10:00:00' (timed) or '2025-01-01' (all-day). " +
+        "For per-field timezone, use JSON: '{\"dateTime\": \"2025-01-01T10:00:00\", \"timeZone\": \"America/Los_Angeles\"}'. " +
+        "Per-field timezone is useful for events spanning multiple timezones (e.g., flights). " +
+        "Note: If the dateTime already includes a timezone offset (e.g., 'Z' or '+05:00'), the embedded timezone takes precedence over the timeZone field."
+      ),
     end: z.string()
-      .refine(isValidIsoDateOrDateTime, "Must be ISO 8601 format: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events")
-      .describe("Event end time: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events (exclusive). Also accepts Google Calendar API object format: {date: '2025-01-02'} or {dateTime: '2025-01-01T11:00:00', timeZone: 'America/Los_Angeles'}"),
+      .superRefine(superRefineTimeInput)
+      .describe(
+        "Event end time. String format: '2025-01-01T11:00:00' (timed) or '2025-01-02' (all-day, exclusive). " +
+        "For per-field timezone, use JSON: '{\"dateTime\": \"2025-01-01T11:00:00\", \"timeZone\": \"America/New_York\"}'. " +
+        "Per-field timezone is useful for events spanning multiple timezones (e.g., flights). " +
+        "Note: If the dateTime already includes a timezone offset (e.g., 'Z' or '+05:00'), the embedded timezone takes precedence over the timeZone field."
+      ),
     timeZone: z.string().optional().describe(
       "Timezone as IANA Time Zone Database name (e.g., America/Los_Angeles). Takes priority over calendar's default timezone. Only used for timezone-naive datetime strings."
     ),
@@ -398,7 +455,20 @@ export const ToolSchemas = {
     (data) => {
       // Validate that focusTime and outOfOffice events use dateTime (not all-day date format)
       if (data.eventType === 'focusTime' || data.eventType === 'outOfOffice') {
-        if (ISO_DATE_ONLY.test(data.start) || ISO_DATE_ONLY.test(data.end)) {
+        // Helper to check if a time value is all-day format
+        const isAllDay = (val: string): boolean => {
+          const trimmed = val.trim();
+          if (trimmed.startsWith('{')) {
+            try {
+              const obj = JSON.parse(trimmed);
+              return obj.date !== undefined;
+            } catch {
+              return false;
+            }
+          }
+          return ISO_DATE_ONLY.test(trimmed);
+        };
+        if (isAllDay(data.start) || isAllDay(data.end)) {
           return false;
         }
       }
@@ -417,12 +487,20 @@ export const ToolSchemas = {
     summary: z.string().optional().describe("Updated title of the event"),
     description: z.string().optional().describe("Updated description/notes"),
     start: z.string()
-      .refine(isValidIsoDateOrDateTime, "Must be ISO 8601 format: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events")
-      .describe("Updated start time: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events. Also accepts Google Calendar API object format: {date: '2025-01-01'} or {dateTime: '2025-01-01T10:00:00', timeZone: 'America/Los_Angeles'}")
+      .superRefine(superRefineTimeInput)
+      .describe(
+        "Updated start time. String format: '2025-01-01T10:00:00' (timed) or '2025-01-01' (all-day). " +
+        "For per-field timezone, use JSON: '{\"dateTime\": \"2025-01-01T10:00:00\", \"timeZone\": \"America/Los_Angeles\"}'. " +
+        "Note: If the dateTime already includes a timezone offset, the embedded timezone takes precedence over the timeZone field."
+      )
       .optional(),
     end: z.string()
-      .refine(isValidIsoDateOrDateTime, "Must be ISO 8601 format: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events")
-      .describe("Updated end time: '2025-01-01T11:00:00' for timed events or '2025-01-02' for all-day events (exclusive). Also accepts Google Calendar API object format: {date: '2025-01-02'} or {dateTime: '2025-01-01T11:00:00', timeZone: 'America/Los_Angeles'}")
+      .superRefine(superRefineTimeInput)
+      .describe(
+        "Updated end time. String format: '2025-01-01T11:00:00' (timed) or '2025-01-02' (all-day, exclusive). " +
+        "For per-field timezone, use JSON: '{\"dateTime\": \"2025-01-01T11:00:00\", \"timeZone\": \"America/New_York\"}'. " +
+        "Note: If the dateTime already includes a timezone offset, the embedded timezone takes precedence over the timeZone field."
+      )
       .optional(),
     timeZone: z.string().optional().describe("Updated timezone as IANA Time Zone Database name. If not provided, uses the calendar's default timezone."),
     location: z.string().optional().describe("Updated location"),

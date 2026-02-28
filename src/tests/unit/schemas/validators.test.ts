@@ -411,6 +411,151 @@ describe('ListEventsArgumentsSchema JSON String Handling', () => {
   });
 });
 
+describe('Per-field timezone validation', () => {
+  const CreateEventSchema = ToolSchemas['create-event'];
+
+  describe('JSON object format for start/end times', () => {
+    it('should accept JSON object with dateTime and timeZone', () => {
+      const input = {
+        calendarId: 'primary',
+        summary: 'Flight LAX > JFK',
+        start: '{"dateTime": "2024-01-15T08:00:00", "timeZone": "America/Los_Angeles"}',
+        end: '{"dateTime": "2024-01-15T16:30:00", "timeZone": "America/New_York"}'
+      };
+
+      expect(() => CreateEventSchema.parse(input)).not.toThrow();
+    });
+
+    it('should accept JSON object with date for all-day events', () => {
+      const input = {
+        calendarId: 'primary',
+        summary: 'Vacation',
+        start: '{"date": "2024-01-15"}',
+        end: '{"date": "2024-01-20"}'
+      };
+
+      expect(() => CreateEventSchema.parse(input)).not.toThrow();
+    });
+
+    it('should reject JSON with both date and dateTime', () => {
+      const input = {
+        calendarId: 'primary',
+        summary: 'Test',
+        start: '{"date": "2024-01-01", "dateTime": "2024-01-01T10:00:00"}',
+        end: '2024-01-01T11:00:00'
+      };
+
+      expect(() => CreateEventSchema.parse(input)).toThrow(/Cannot specify both/);
+    });
+
+    it('should reject empty timeZone string', () => {
+      const input = {
+        calendarId: 'primary',
+        summary: 'Test',
+        start: '{"dateTime": "2024-01-01T10:00:00", "timeZone": ""}',
+        end: '2024-01-01T11:00:00'
+      };
+
+      expect(() => CreateEventSchema.parse(input)).toThrow(/timeZone cannot be empty/);
+    });
+
+    it('should reject non-string timeZone value', () => {
+      const input = {
+        calendarId: 'primary',
+        summary: 'Test',
+        start: '{"dateTime": "2024-01-01T10:00:00", "timeZone": 123}',
+        end: '2024-01-01T11:00:00'
+      };
+
+      expect(() => CreateEventSchema.parse(input)).toThrow(/timeZone must be a string/);
+    });
+
+    it('should reject invalid JSON', () => {
+      const input = {
+        calendarId: 'primary',
+        summary: 'Test',
+        start: '{not valid json}',
+        end: '2024-01-01T11:00:00'
+      };
+
+      expect(() => CreateEventSchema.parse(input)).toThrow(/Invalid JSON/);
+    });
+
+    it('should reject JSON missing both date and dateTime', () => {
+      const input = {
+        calendarId: 'primary',
+        summary: 'Test',
+        start: '{"timeZone": "America/New_York"}',
+        end: '2024-01-01T11:00:00'
+      };
+
+      expect(() => CreateEventSchema.parse(input)).toThrow(/must have either/);
+    });
+  });
+
+  describe('focusTime and outOfOffice events with JSON format', () => {
+    it('should accept focusTime event with JSON dateTime format', () => {
+      const input = {
+        calendarId: 'primary',
+        summary: 'Focus Time',
+        eventType: 'focusTime',
+        start: '{"dateTime": "2024-01-15T09:00:00", "timeZone": "America/Los_Angeles"}',
+        end: '{"dateTime": "2024-01-15T11:00:00", "timeZone": "America/Los_Angeles"}'
+      };
+
+      expect(() => CreateEventSchema.parse(input)).not.toThrow();
+    });
+
+    it('should accept outOfOffice event with JSON dateTime format', () => {
+      const input = {
+        calendarId: 'primary',
+        summary: 'Out of Office',
+        eventType: 'outOfOffice',
+        start: '{"dateTime": "2024-01-15T09:00:00", "timeZone": "America/New_York"}',
+        end: '{"dateTime": "2024-01-15T17:00:00", "timeZone": "America/New_York"}'
+      };
+
+      expect(() => CreateEventSchema.parse(input)).not.toThrow();
+    });
+
+    it('should reject focusTime event with JSON date (all-day) format', () => {
+      const input = {
+        calendarId: 'primary',
+        summary: 'Focus Time',
+        eventType: 'focusTime',
+        start: '{"date": "2024-01-15"}',
+        end: '{"date": "2024-01-16"}'
+      };
+
+      expect(() => CreateEventSchema.parse(input)).toThrow(/cannot be all-day/);
+    });
+
+    it('should reject outOfOffice event with JSON date (all-day) format', () => {
+      const input = {
+        calendarId: 'primary',
+        summary: 'Out of Office',
+        eventType: 'outOfOffice',
+        start: '{"date": "2024-01-15"}',
+        end: '{"date": "2024-01-16"}'
+      };
+
+      expect(() => CreateEventSchema.parse(input)).toThrow(/cannot be all-day/);
+    });
+
+    it('should reject focusTime with mixed formats (JSON date start, string end)', () => {
+      const input = {
+        calendarId: 'primary',
+        summary: 'Focus Time',
+        eventType: 'focusTime',
+        start: '{"date": "2024-01-15"}',
+        end: '2024-01-15T17:00:00'
+      };
+
+      expect(() => CreateEventSchema.parse(input)).toThrow(/cannot be all-day/);
+    });
+  });
+});
+
 // Use the create-event and search-events schemas for testing array preprocessing
 const CreateEventSchema = ToolSchemas['create-event'];
 const SearchEventsSchema = ToolSchemas['search-events'];
