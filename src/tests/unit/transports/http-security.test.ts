@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isLocalhostOrigin } from '../../../transports/http.js';
+import { isAllowedOrigin as isLocalhostOrigin } from '../../../transports/http.js';
 
 describe('isLocalhostOrigin', () => {
   describe('valid localhost origins', () => {

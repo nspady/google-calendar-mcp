@@ -1,9 +1,8 @@
 import { OAuth2Client } from 'google-auth-library';
-import * as fs from 'fs/promises';
-import { getKeysFilePath, generateCredentialsErrorMessage, OAuthCredentials } from './utils.js';
+import { loadCredentialsContent, generateCredentialsErrorMessage, OAuthCredentials } from './utils.js';
 
 async function loadCredentialsFromFile(): Promise<OAuthCredentials> {
-  const keysContent = await fs.readFile(getKeysFilePath(), "utf-8");
+  const keysContent = loadCredentialsContent();
   const keys = JSON.parse(keysContent);
 
   if (keys.installed) {

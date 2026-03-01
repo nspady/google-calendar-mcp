@@ -42,7 +42,7 @@ npm run start:http:public
 ### Environment Variables
 
 ```bash
-PORT=3000                    # Server port
+PORT=3000                   # Server port
 HOST=localhost              # Bind address
 TRANSPORT=http              # Transport mode
 ```
