@@ -8,3 +8,5 @@ coverage/
 coverage/
 settings.local.json
 .env
+.claude/settings.json
+.worktrees/
