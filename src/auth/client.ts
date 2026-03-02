@@ -1,24 +1,56 @@
 import { OAuth2Client } from 'google-auth-library';
 import { loadCredentialsContent, generateCredentialsErrorMessage, OAuthCredentials } from './utils.js';
 
+function normalizeKeys(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(normalizeKeys);
+  }
+
+  if (value && typeof value === 'object') {
+    const normalized: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      normalized[key.trim()] = normalizeKeys(child);
+    }
+    return normalized;
+  }
+
+  return value;
+}
+
+function resolveRedirectUris(redirectUris: unknown): string[] {
+  if (Array.isArray(redirectUris)) {
+    const validUris = redirectUris.filter((uri): uri is string => typeof uri === 'string' && uri.length > 0);
+    if (validUris.length > 0) {
+      return validUris;
+    }
+  }
+
+  const baseUrl = process.env.OAUTH_REDIRECT_BASE_URL;
+  if (baseUrl) {
+    return [`${baseUrl.replace(/\/+$/, '')}/oauth2callback`];
+  }
+
+  return ['http://localhost:3000/oauth2callback'];
+}
+
 async function loadCredentialsFromFile(): Promise<OAuthCredentials> {
   const keysContent = loadCredentialsContent();
-  const keys = JSON.parse(keysContent);
+  const keys = normalizeKeys(JSON.parse(keysContent)) as Record<string, any>;
 
   if (keys.installed) {
     // Desktop app OAuth credentials
     const { client_id, client_secret, redirect_uris } = keys.installed;
-    return { client_id, client_secret, redirect_uris };
+    return { client_id, client_secret, redirect_uris: resolveRedirectUris(redirect_uris) };
   } else if (keys.web) {
     // Web app OAuth credentials
     const { client_id, client_secret, redirect_uris } = keys.web;
-    return { client_id, client_secret, redirect_uris: redirect_uris || [] };
+    return { client_id, client_secret, redirect_uris: resolveRedirectUris(redirect_uris) };
   } else if (keys.client_id && keys.client_secret) {
     // Direct format
     return {
       client_id: keys.client_id,
       client_secret: keys.client_secret,
-      redirect_uris: keys.redirect_uris || ['http://localhost:3000/oauth2callback']
+      redirect_uris: resolveRedirectUris(keys.redirect_uris)
     };
   } else {
     throw new Error('Invalid credentials file format. Expected "installed", "web", or direct client_id/client_secret fields.');

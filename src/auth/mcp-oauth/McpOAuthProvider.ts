@@ -93,6 +93,7 @@ export class McpOAuthProvider implements OAuthServerProvider {
       state: params.state,
       createdAt: Date.now(),
     });
+    process.stderr.write(`MCP OAuth authorize: client=${client.client_id} session=${sessionId}\n`);
 
     // Build Google OAuth URL
     const { client_id, client_secret } = await loadCredentials();
@@ -264,6 +265,7 @@ export class McpOAuthProvider implements OAuthServerProvider {
   ): Promise<void> {
     const session = this.pendingSessions.get(sessionId);
     if (!session) {
+      process.stderr.write(`MCP OAuth callback rejected: session not found session=${sessionId}\n`);
       res.status(400).send('Invalid or expired MCP auth session');
       return;
     }
@@ -313,8 +315,12 @@ export class McpOAuthProvider implements OAuthServerProvider {
         redirectUrl.searchParams.set('state', session.state);
       }
 
+      process.stderr.write(`MCP OAuth callback success: client=${session.clientId} session=${sessionId} account=${accountId}\n`);
       res.redirect(redirectUrl.toString());
     } catch (error) {
+      process.stderr.write(
+        `MCP OAuth callback failed: session=${sessionId} account=${accountId} error=${error instanceof Error ? error.stack || error.message : String(error)}\n`
+      );
       try {
         const redirectUrl = new URL(session.redirectUri);
         redirectUrl.searchParams.set('error', 'server_error');
