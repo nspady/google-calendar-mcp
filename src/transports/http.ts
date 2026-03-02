@@ -185,6 +185,7 @@ export class HttpTransportHandler {
       app.use(mcpAuthRouter({
         provider: mcpOAuthProvider,
         issuerUrl: new URL(issuerUrl),
+        resourceServerUrl: new URL(`${issuerUrl}/mcp`),
         serviceDocumentationUrl: new URL('https://github.com/nspady/google-calendar-mcp'),
       }));
 
