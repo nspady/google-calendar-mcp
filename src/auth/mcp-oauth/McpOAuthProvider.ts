@@ -7,6 +7,8 @@ import type { OAuthRegisteredClientsStore } from '@modelcontextprotocol/sdk/serv
 import type { OAuthClientInformationFull, OAuthTokens, OAuthTokenRevocationRequest } from '@modelcontextprotocol/sdk/shared/auth.js';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 
+import { InvalidTokenError, InvalidGrantError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
+
 import { McpClientsStore } from './McpClientsStore.js';
 import { McpTokenStore } from './McpTokenStore.js';
 import { MCP_AUTH_STATE_TYPE, isSessionExpired } from './persistence.js';
@@ -122,7 +124,7 @@ export class McpOAuthProvider implements OAuthServerProvider {
   ): Promise<string> {
     const stored = this._tokenStore.getAuthCode(authorizationCode);
     if (!stored) {
-      throw new Error('Invalid or expired authorization code');
+      throw new InvalidGrantError('Invalid or expired authorization code');
     }
     return stored.codeChallenge;
   }
@@ -139,11 +141,11 @@ export class McpOAuthProvider implements OAuthServerProvider {
   ): Promise<OAuthTokens> {
     const stored = this._tokenStore.consumeAuthCode(authorizationCode);
     if (!stored) {
-      throw new Error('Invalid or expired authorization code');
+      throw new InvalidGrantError('Invalid or expired authorization code');
     }
 
     if (stored.clientId !== client.client_id) {
-      throw new Error('Authorization code was not issued to this client');
+      throw new InvalidGrantError('Authorization code was not issued to this client');
     }
 
     const refreshToken = this._tokenStore.createRefreshToken(client.client_id, []);
@@ -172,11 +174,11 @@ export class McpOAuthProvider implements OAuthServerProvider {
   ): Promise<OAuthTokens> {
     const stored = this._tokenStore.getRefreshToken(refreshToken);
     if (!stored) {
-      throw new Error('Invalid or expired refresh token');
+      throw new InvalidGrantError('Invalid or expired refresh token');
     }
 
     if (stored.clientId !== client.client_id) {
-      throw new Error('Refresh token was not issued to this client');
+      throw new InvalidGrantError('Refresh token was not issued to this client');
     }
 
     const accessToken = this._tokenStore.createAccessToken(
@@ -198,7 +200,7 @@ export class McpOAuthProvider implements OAuthServerProvider {
   async verifyAccessToken(token: string): Promise<AuthInfo> {
     const stored = this._tokenStore.getAccessToken(token);
     if (!stored) {
-      throw new Error('Invalid or expired access token');
+      throw new InvalidTokenError('Invalid or expired access token');
     }
 
     return {
