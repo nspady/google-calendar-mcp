@@ -6,9 +6,13 @@ async function loadCredentialsFromFile(): Promise<OAuthCredentials> {
   const keys = JSON.parse(keysContent);
 
   if (keys.installed) {
-    // Standard OAuth credentials file format
+    // Desktop app OAuth credentials
     const { client_id, client_secret, redirect_uris } = keys.installed;
     return { client_id, client_secret, redirect_uris };
+  } else if (keys.web) {
+    // Web app OAuth credentials
+    const { client_id, client_secret, redirect_uris } = keys.web;
+    return { client_id, client_secret, redirect_uris: redirect_uris || [] };
   } else if (keys.client_id && keys.client_secret) {
     // Direct format
     return {
@@ -17,7 +21,7 @@ async function loadCredentialsFromFile(): Promise<OAuthCredentials> {
       redirect_uris: keys.redirect_uris || ['http://localhost:3000/oauth2callback']
     };
   } else {
-    throw new Error('Invalid credentials file format. Expected either "installed" object or direct client_id/client_secret fields.');
+    throw new Error('Invalid credentials file format. Expected "installed", "web", or direct client_id/client_secret fields.');
   }
 }
 
