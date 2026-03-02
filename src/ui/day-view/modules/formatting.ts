@@ -1,8 +1,6 @@
 /**
- * Formatting functions for day view and multi-day view
+ * Formatting functions for day view
  */
-
-import type { MultiDayViewEvent, MultiDayContext } from './types.js';
 
 // Host context for locale/timezone formatting
 let hostLocale: string | undefined;
@@ -108,52 +106,6 @@ export function formatAllDayRange(startStr: string, endStr: string): { text: str
 }
 
 /**
- * Format date for multi-day view header (e.g., "22 OCT 2025, WED")
- */
-export function formatMultiDayDate(dateStr: string): { day: string; monthYearDay: string } {
-  const date = parseDateOnly(dateStr);
-  const day = date.toLocaleDateString('en-US', { day: 'numeric', timeZone: 'UTC' });
-  const month = date.toLocaleDateString(hostLocale || 'en-US', { month: 'short', timeZone: 'UTC' }).toUpperCase();
-  const year = date.toLocaleDateString('en-US', { year: 'numeric', timeZone: 'UTC' });
-  const weekday = date.toLocaleDateString(hostLocale || 'en-US', { weekday: 'short', timeZone: 'UTC' }).toUpperCase();
-
-  return {
-    day,
-    monthYearDay: `${month} ${year}, ${weekday}`
-  };
-}
-
-/**
- * Format time for multi-day event display (e.g., "3:30 - 5pm")
- */
-export function formatMultiDayEventTime(event: MultiDayViewEvent): string {
-  if (event.isAllDay) {
-    return 'All day';
-  }
-
-  const startDate = new Date(event.start);
-  const endDate = new Date(event.end);
-
-  // Format start time
-  const startOptions: Intl.DateTimeFormatOptions = {
-    hour: 'numeric',
-    minute: startDate.getMinutes() > 0 ? '2-digit' : undefined,
-    timeZone: hostTimeZone
-  };
-  const startStr = startDate.toLocaleTimeString(hostLocale || 'en-US', startOptions);
-
-  // Format end time (simpler, just hour + am/pm)
-  const endOptions: Intl.DateTimeFormatOptions = {
-    hour: 'numeric',
-    minute: endDate.getMinutes() > 0 ? '2-digit' : undefined,
-    timeZone: hostTimeZone
-  };
-  const endStr = endDate.toLocaleTimeString(hostLocale || 'en-US', endOptions);
-
-  return `${startStr} - ${endStr}`;
-}
-
-/**
  * Format the calendar display name.
  * Shows calendarName if available, otherwise a friendly version of calendarId.
  */
@@ -200,34 +152,6 @@ export function formatDuration(minutes: number): string {
     return `${hours}h`;
   }
   return `${hours}h ${mins}m`;
-}
-
-/**
- * Format time range for multi-day view subheading
- */
-export function formatTimeRangeSubheading(context: MultiDayContext): string {
-  const parts: string[] = [];
-
-  if (context.query) {
-    parts.push(`Search: "${context.query}"`);
-  }
-
-  if (context.timeRange?.start && context.timeRange?.end) {
-    const startDate = new Date(context.timeRange.start);
-    const endDate = new Date(context.timeRange.end);
-    const formatOptions: Intl.DateTimeFormatOptions = {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    };
-    const startStr = startDate.toLocaleDateString(hostLocale || 'en-US', formatOptions);
-    const endStr = endDate.toLocaleDateString(hostLocale || 'en-US', formatOptions);
-    parts.push(`${startStr} - ${endStr}`);
-  }
-
-  parts.push(`${context.totalEventCount} event${context.totalEventCount !== 1 ? 's' : ''}`);
-
-  return parts.join(' · ');
 }
 
 /**

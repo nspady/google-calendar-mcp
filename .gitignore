@@ -9,3 +9,5 @@ coverage/
 settings.local.json
 .env
 .worktrees/
+.claude/
+.entire/

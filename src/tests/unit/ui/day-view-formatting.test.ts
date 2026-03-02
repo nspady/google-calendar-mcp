@@ -2,8 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   setHostContext,
   formatDateHeading,
-  formatAllDayRange,
-  formatMultiDayDate
+  formatAllDayRange
 } from '../../../ui/day-view/modules/formatting.js';
 
 describe('day-view formatting date-only behavior', () => {
@@ -28,11 +27,4 @@ describe('day-view formatting date-only behavior', () => {
     expect(multiDay.dateRange).toContain('Jan 3');
   });
 
-  it('formatMultiDayDate keeps YYYY-MM-DD day number stable', () => {
-    setHostContext('en-US', 'America/Adak');
-
-    const formatted = formatMultiDayDate('2026-01-01');
-    expect(formatted.day).toBe('1');
-    expect(formatted.monthYearDay).toContain('JAN 2026');
-  });
 });

@@ -6,7 +6,6 @@ import { calendar_v3 } from 'googleapis';
 import { buildListFieldMask } from "../../utils/field-mask-builder.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
 import { SearchEventsResponse, StructuredEvent, convertGoogleEventToStructured, ExtendedEvent } from "../../types/structured-responses.js";
-import { MultiDayContextService } from "../../services/multi-day-context/index.js";
 
 // Internal args type for searchEvents with single calendarId (after normalization)
 interface SearchEventsArgs {
@@ -21,13 +20,6 @@ interface SearchEventsArgs {
 }
 
 export class SearchEventsHandler extends BaseToolHandler {
-    private multiDayContextService: MultiDayContextService;
-
-    constructor() {
-        super();
-        this.multiDayContextService = new MultiDayContextService();
-    }
-
     async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
         const validArgs = args as SearchEventsInput;
 
@@ -140,20 +132,6 @@ export class SearchEventsHandler extends BaseToolHandler {
                 end: timeMax || ''
             };
         }
-
-        // Build multi-day context for search results (always include for MCP Apps UI)
-        // Include even when empty so UI can show "no results found" state
-        const timezone = validArgs.timeZone ||
-            structuredEvents[0]?.start?.timeZone ||
-            'UTC';
-        response.multiDayContext = this.multiDayContextService.buildMultiDayContext(
-            structuredEvents,
-            timezone,
-            {
-                query: validArgs.query,
-                timeRange: response.timeRange
-            }
-        );
 
         return createStructuredResponse(response);
     }

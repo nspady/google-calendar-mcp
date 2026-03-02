@@ -1,12 +1,10 @@
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { BaseToolHandler } from "./BaseToolHandler.js";
-import { calendar_v3 } from 'googleapis';
 import { BatchRequestHandler } from "./BatchRequestHandler.js";
 import { buildListFieldMask } from "../../utils/field-mask-builder.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
 import { ListEventsResponse, StructuredEvent, convertGoogleEventToStructured, ExtendedEvent } from "../../types/structured-responses.js";
-import { MultiDayContextService } from "../../services/multi-day-context/index.js";
 
 interface ListEventsArgs {
   calendarId: string | string[];
@@ -23,13 +21,6 @@ interface ListEventsArgs {
 const SINGLE_DAY_MAX_HOURS = 24;
 
 export class ListEventsHandler extends BaseToolHandler {
-    private multiDayContextService: MultiDayContextService;
-
-    constructor() {
-        super();
-        this.multiDayContextService = new MultiDayContextService();
-    }
-
     /**
      * Check if the time range represents a single day (24 hours or less).
      * Returns the date string (YYYY-MM-DD) if it's a single day, null otherwise.
@@ -169,31 +160,18 @@ export class ListEventsHandler extends BaseToolHandler {
             }
         }
 
-        // Build context for MCP Apps UI visualization
+        // Build day context for MCP Apps UI visualization (single-day queries only)
         let dayContext = undefined;
-        let multiDayContext = undefined;
         const singleDayDate = this.isSingleDayQuery(args.timeMin, args.timeMax);
 
-        // Determine timezone: use provided timezone, or extract from first event, or default to UTC
-        const timezone = args.timeZone ||
-            structuredEvents[0]?.start?.timeZone ||
-            'UTC';
-
         if (singleDayDate) {
-            // Single-day query: use day context (time grid view)
-            // Always include context even when empty so UI can show "no events" state
+            const timezone = args.timeZone ||
+                structuredEvents[0]?.start?.timeZone ||
+                'UTC';
             dayContext = this.dayContextService.buildDayContextForList(
                 structuredEvents,
                 singleDayDate,
                 timezone
-            );
-        } else {
-            // Multi-day query (span > 24 hours): use multi-day context (list view)
-            // Always include context even when empty so UI can show "no events" state
-            multiDayContext = this.multiDayContextService.buildMultiDayContext(
-                structuredEvents,
-                timezone,
-                { timeRange: args.timeMin && args.timeMax ? { start: args.timeMin, end: args.timeMax } : undefined }
             );
         }
 
@@ -205,8 +183,7 @@ export class ListEventsHandler extends BaseToolHandler {
             ...(warnings.length > 0 && { warnings }),
             ...(selectedAccounts.size > 1 && { accounts: Array.from(selectedAccounts.keys()) }),
             ...(note && { note }),
-            ...(dayContext && { dayContext }),
-            ...(multiDayContext && { multiDayContext })
+            ...(dayContext && { dayContext })
         };
 
         return createStructuredResponse(response);

@@ -2,7 +2,7 @@
  * Context extraction functions for tool results
  */
 
-import type { DayContext, MultiDayContext } from './types.js';
+import type { DayContext } from './types.js';
 
 type ToolResultParams = { content?: Array<{ type: string; text?: string }> };
 
@@ -47,11 +47,4 @@ export function isCreateUpdateResponse(params: ToolResultParams): {
     }
     return null;
   });
-}
-
-/**
- * Extract multi-day context from tool result
- */
-export function extractMultiDayContext(params: ToolResultParams): MultiDayContext | null {
-  return findInToolResult(params, parsed => parsed.multiDayContext as MultiDayContext ?? null);
 }

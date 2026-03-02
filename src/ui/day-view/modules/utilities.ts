@@ -1,9 +1,9 @@
 /**
- * Utility functions for day view and multi-day view
+ * Utility functions for day view
  */
 
 import type { App } from '@modelcontextprotocol/ext-apps';
-import type { MultiDayViewEvent, CalendarSummary, AvailableSlot, DayViewEvent, CalendarFilter } from './types.js';
+import type { AvailableSlot, DayViewEvent, CalendarFilter } from './types.js';
 import { formatCalendarName } from './formatting.js';
 
 /**
@@ -99,51 +99,11 @@ export function isToday(dateStr: string, timeZone?: string): boolean {
 }
 
 /**
- * Compute calendar summary for a day's events (for collapsed view)
- * Groups by calendar (calendarId) and shows the actual calendar name
- */
-export function computeCalendarSummary(events: MultiDayViewEvent[]): CalendarSummary[] {
-  const byCalendar = new Map<string, { summary: CalendarSummary; accountId?: string }>();
-
-  for (const event of events) {
-    // Use account+calendar composite key to avoid collapsing distinct "primary" calendars.
-    const key = event.accountId ? `${event.accountId}:${event.calendarId}` : event.calendarId;
-    const existing = byCalendar.get(key);
-    if (existing) {
-      existing.summary.count++;
-    } else {
-      byCalendar.set(key, {
-        summary: {
-          calendarId: event.calendarId,
-          calendarName: event.calendarName || formatCalendarName(event.calendarId, event.calendarName),
-          backgroundColor: event.backgroundColor || 'var(--accent-color)',
-          count: 1
-        },
-        accountId: event.accountId
-      });
-    }
-  }
-
-  const summary = Array.from(byCalendar.values());
-  const nameCounts = new Map<string, number>();
-  for (const item of summary) {
-    nameCounts.set(item.summary.calendarName, (nameCounts.get(item.summary.calendarName) || 0) + 1);
-  }
-
-  return summary.map((item) => {
-    if (item.accountId && (nameCounts.get(item.summary.calendarName) || 0) > 1) {
-      return { ...item.summary, calendarName: `${item.accountId} · ${item.summary.calendarName}` };
-    }
-    return item.summary;
-  });
-}
-
-/**
  * Calculate available time slots from events for scheduling mode
  * Finds gaps between events that can fit meetings of the specified duration
  */
 export function calculateAvailableSlots(
-  events: DayViewEvent[] | MultiDayViewEvent[],
+  events: DayViewEvent[],
   durationMinutes: number,
   workStartHour: number = 9,
   workEndHour: number = 17,
@@ -269,7 +229,7 @@ export function computeCalendarFilters(events: DayViewEvent[], hiddenCalendarIds
 /**
  * Filter events based on calendar visibility
  */
-export function filterVisibleEvents<T extends DayViewEvent | MultiDayViewEvent>(
+export function filterVisibleEvents<T extends DayViewEvent>(
   events: T[],
   filters: CalendarFilter[]
 ): T[] {

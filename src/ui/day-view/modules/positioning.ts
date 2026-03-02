@@ -2,12 +2,12 @@
  * Positioning and sizing functions for event display
  */
 
-import type { DayViewEvent, MultiDayViewEvent, OverlapPosition } from './types.js';
+import type { DayViewEvent, OverlapPosition } from './types.js';
 import { getMinutesSinceMidnight, getDateKeyInTimeZone } from './utilities.js';
 
 /**
- * Calculate event position in time grid (shared by day and multi-day views).
- * @param rowHeight - Pixel height per hour row (48 for day view, 32 for compact multi-day)
+ * Calculate event position in time grid.
+ * @param rowHeight - Pixel height per hour row (48 for day view)
  */
 function calculatePosition(
   event: { start: string; end: string },
@@ -49,7 +49,6 @@ function calculatePosition(
 }
 
 const DAY_VIEW_ROW_HEIGHT = 48;     // matches CSS --row-height
-const COMPACT_ROW_HEIGHT = 32;      // compact row height for multi-day expanded view
 
 /**
  * Calculate event position in time grid (standard day view)
@@ -61,83 +60,6 @@ export function calculateEventPosition(
   timeZone?: string
 ): { top: string; height: string } {
   return calculatePosition(event, startHour, endHour, DAY_VIEW_ROW_HEIGHT, timeZone);
-}
-
-/**
- * Calculate event position for multi-day time grid (uses compact row height)
- */
-export function calculateMultiDayEventPosition(
-  event: MultiDayViewEvent,
-  startHour: number,
-  endHour: number,
-  timeZone?: string
-): { top: string; height: string } {
-  return calculatePosition(event, startHour, endHour, COMPACT_ROW_HEIGHT, timeZone);
-}
-
-/**
- * Calculate time range for a day's events (for expanded time grid view)
- */
-export function calculateDayTimeRange(events: MultiDayViewEvent[]): { startHour: number; endHour: number } {
-  const timedEvents = events.filter(e => !e.isAllDay);
-
-  if (timedEvents.length === 0) {
-    return { startHour: 8, endHour: 18 }; // Default business hours
-  }
-
-  let minHour = 24;
-  let maxHour = 0;
-
-  for (const event of timedEvents) {
-    const start = new Date(event.start);
-    const end = new Date(event.end);
-    minHour = Math.min(minHour, start.getHours());
-    const spansIntoNextDay = end.getFullYear() !== start.getFullYear() ||
-      end.getMonth() !== start.getMonth() ||
-      end.getDate() !== start.getDate();
-    if (spansIntoNextDay) {
-      maxHour = 24;
-    } else {
-      maxHour = Math.max(maxHour, end.getHours() + (end.getMinutes() > 0 ? 1 : 0));
-    }
-  }
-
-  // Add padding and clamp
-  return {
-    startHour: Math.max(0, minHour - 1),
-    endHour: Math.min(24, maxHour + 1)
-  };
-}
-
-/**
- * Calculate event duration in minutes
- */
-export function getEventDurationMinutes(event: MultiDayViewEvent): number {
-  const start = new Date(event.start).getTime();
-  const end = new Date(event.end).getTime();
-  return Math.round((end - start) / (1000 * 60));
-}
-
-/**
- * Calculate proportional height for event based on duration
- * Min: 30 minutes = 44px (base height)
- * Max: 180 minutes (3 hours) = 120px
- * Scale linearly between those values
- */
-export function calculateEventHeight(durationMinutes: number): { height: number; continues: boolean } {
-  const MIN_DURATION = 30;  // 30 minutes
-  const MAX_DURATION = 180; // 3 hours
-  const MIN_HEIGHT = 44;    // pixels
-  const MAX_HEIGHT = 120;   // pixels
-
-  const continues = durationMinutes > MAX_DURATION;
-  const clampedDuration = Math.min(Math.max(durationMinutes, MIN_DURATION), MAX_DURATION);
-
-  // Linear interpolation
-  const ratio = (clampedDuration - MIN_DURATION) / (MAX_DURATION - MIN_DURATION);
-  const height = MIN_HEIGHT + ratio * (MAX_HEIGHT - MIN_HEIGHT);
-
-  return { height: Math.round(height), continues };
 }
 
 /**
