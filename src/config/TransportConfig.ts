@@ -4,10 +4,16 @@ export interface TransportConfig {
   host?: string;
 }
 
+export interface McpOAuthConfig {
+  enabled: boolean;
+  issuerUrl?: string;
+}
+
 export interface ServerConfig {
   transport: TransportConfig;
   debug?: boolean;
   enabledTools?: string[];
+  mcpOAuth?: McpOAuthConfig;
 }
 
 function parseEnabledTools(value: string | undefined, source: string): string[] | undefined {
@@ -26,6 +32,7 @@ function parseEnabledTools(value: string | undefined, source: string): string[] 
 
 export function parseArgs(args: string[]): ServerConfig {
   // Start with environment variables as base config
+  const mcpOAuthEnabled = process.env.MCP_OAUTH_ENABLED === 'true';
   const config: ServerConfig = {
     transport: {
       type: (process.env.TRANSPORT as 'stdio' | 'http') || 'stdio',
@@ -33,7 +40,11 @@ export function parseArgs(args: string[]): ServerConfig {
       host: process.env.HOST || '127.0.0.1'
     },
     debug: process.env.DEBUG === 'true' || false,
-    enabledTools: parseEnabledTools(process.env.ENABLED_TOOLS, 'ENABLED_TOOLS')
+    enabledTools: parseEnabledTools(process.env.ENABLED_TOOLS, 'ENABLED_TOOLS'),
+    mcpOAuth: {
+      enabled: mcpOAuthEnabled,
+      issuerUrl: process.env.MCP_ISSUER_URL
+    }
   };
 
   for (let i = 0; i < args.length; i++) {

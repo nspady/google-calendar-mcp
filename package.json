@@ -58,6 +58,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.0",
+    "express": "^5.2.1",
     "gaxios": "^7.1.3",
     "google-auth-library": "^10.5.0",
     "googleapis": "^171.4.0",
@@ -66,6 +67,7 @@
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@types/express": "^5.0.6",
     "@types/node": "^22.19.11",
     "@vitest/coverage-v8": "^4.0.18",
     "esbuild": "^0.27.2",

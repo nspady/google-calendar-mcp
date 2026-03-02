@@ -1,9 +1,8 @@
-import { EventEmitter } from 'events';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
-  requestHandler: undefined as ((req: any, res: any) => Promise<void>) | undefined,
   transport: undefined as { handleRequest: ReturnType<typeof vi.fn> } | undefined,
+  expressApp: undefined as any,
   listen: vi.fn(),
   clearCache: vi.fn(),
   renderAuthSuccess: vi.fn(async () => '<html>success</html>'),
@@ -26,16 +25,43 @@ vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
   StdioServerTransport: class MockStdioServerTransport {}
 }));
 
-vi.mock('http', () => ({
-  default: {
-    createServer: vi.fn((handler: any) => {
-      state.requestHandler = handler;
-      return {
-        listen: state.listen
-      };
-    })
-  }
-}));
+// Mock express to capture the app
+vi.mock('express', () => {
+  const routes: { method: string; path: string | string[]; handlers: Function[] }[] = [];
+  const middlewares: Function[] = [];
+
+  const app: any = {
+    use: vi.fn((...args: any[]) => {
+      // Global middleware (no path)
+      if (typeof args[0] === 'function') {
+        middlewares.push(args[0]);
+      }
+    }),
+    get: vi.fn((path: string | string[], ...handlers: Function[]) => {
+      routes.push({ method: 'GET', path, handlers });
+    }),
+    post: vi.fn((path: string, ...handlers: Function[]) => {
+      routes.push({ method: 'POST', path, handlers });
+    }),
+    delete: vi.fn((path: string, ...handlers: Function[]) => {
+      routes.push({ method: 'DELETE', path, handlers });
+    }),
+    all: vi.fn((path: string, ...handlers: Function[]) => {
+      routes.push({ method: 'ALL', path, handlers });
+    }),
+    listen: vi.fn((_port: number, _host: string, callback?: () => void) => {
+      if (callback) callback();
+    }),
+    _routes: routes,
+    _middlewares: middlewares,
+  };
+
+  const expressFn: any = () => app;
+  expressFn.json = vi.fn(() => (_req: any, _res: any, next: Function) => next());
+
+  state.expressApp = app;
+  return { default: expressFn };
+});
 
 vi.mock('../../../web/templates.js', () => ({
   renderAuthSuccess: state.renderAuthSuccess,
@@ -72,59 +98,118 @@ import { HttpTransportHandler } from '../../../transports/http.js';
 import { StdioTransportHandler } from '../../../transports/stdio.js';
 
 function createMockResponse() {
-  return {
-    headers: {} as Record<string, string>,
-    statusCode: 0,
-    body: '',
+  const res: any = {
+    _status: 200,
+    _headers: {} as Record<string, string>,
+    _body: '',
+    _ended: false,
     headersSent: false,
-    setHeader: vi.fn(function (this: any, key: string, value: string) {
-      this.headers[key] = value;
+    status: vi.fn(function (this: any, code: number) {
+      this._status = code;
+      return this;
     }),
+    json: vi.fn(function (this: any, data: any) {
+      this._body = JSON.stringify(data);
+      this.headersSent = true;
+      return this;
+    }),
+    type: vi.fn(function (this: any, _type: string) {
+      return this;
+    }),
+    send: vi.fn(function (this: any, body: string) {
+      this._body = body;
+      this.headersSent = true;
+      return this;
+    }),
+    end: vi.fn(function (this: any) {
+      this._ended = true;
+      return this;
+    }),
+    setHeader: vi.fn(function (this: any, key: string, value: string) {
+      this._headers[key] = value;
+    }),
+    // For compatibility with raw http patterns
     writeHead: vi.fn(function (this: any, statusCode: number, headers?: Record<string, string>) {
-      this.statusCode = statusCode;
+      this._status = statusCode;
       this.headersSent = true;
       if (headers) {
-        Object.assign(this.headers, headers);
-      }
-    }),
-    end: vi.fn(function (this: any, chunk?: string) {
-      if (chunk) {
-        this.body += chunk;
+        Object.assign(this._headers, headers);
       }
     }),
   };
+  return res;
 }
 
 function createMockRequest(input: {
   method: string;
   url: string;
   headers?: Record<string, string>;
+  body?: any;
+  params?: Record<string, string>;
+  query?: Record<string, string>;
 }) {
-  const req = new EventEmitter() as any;
-  req.method = input.method;
-  req.url = input.url;
-  req.headers = input.headers ?? {};
-  return req;
+  return {
+    method: input.method,
+    url: input.url,
+    headers: input.headers ?? {},
+    body: input.body,
+    params: input.params ?? {},
+    query: input.query ?? {},
+  } as any;
 }
 
-async function invokeHandler(req: any, res: any): Promise<void> {
-  const handler = state.requestHandler;
-  if (!handler) {
-    throw new Error('Request handler was not initialized');
+/**
+ * Find route handler and run middleware + handler chain
+ */
+async function invokeRoute(
+  method: string,
+  url: string,
+  req: any,
+  res: any
+): Promise<void> {
+  const app = state.expressApp;
+  if (!app) throw new Error('Express app not initialized');
+
+  // Run global middlewares first
+  for (const mw of app._middlewares) {
+    let nextCalled = false;
+    await mw(req, res, () => { nextCalled = true; });
+    if (!nextCalled) return; // Middleware short-circuited
   }
-  await handler(req, res);
+
+  // Find matching route (exact match preferred, parameterized as fallback)
+  const route = app._routes.find((r: any) => {
+    const methodMatch = r.method === 'ALL' || r.method === method;
+    if (!methodMatch) return false;
+    if (Array.isArray(r.path)) {
+      return r.path.some((p: string) => p === url);
+    }
+    // Handle parameterized routes like /api/accounts/:id
+    const pathPattern = r.path.replace(/:[\w]+/g, '[^/]+');
+    const regex = new RegExp(`^${pathPattern}$`);
+    return regex.test(url);
+  });
+
+  if (!route) throw new Error(`No route found for ${method} ${url}`);
+
+  // Run all handlers in the chain
+  for (const handler of route.handlers) {
+    let nextCalled = false;
+    await handler(req, res, () => { nextCalled = true; });
+    if (!nextCalled && handler !== route.handlers[route.handlers.length - 1]) {
+      return; // Handler short-circuited without calling next
+    }
+  }
 }
 
 describe('Transport Handlers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    state.requestHandler = undefined;
     state.transport = undefined;
-    state.listen.mockImplementation((_port: number, _host: string, callback?: () => void) => {
-      if (callback) {
-        callback();
-      }
-    });
+    if (state.expressApp) {
+      state.expressApp._routes.length = 0;
+      state.expressApp._middlewares.length = 0;
+    }
   });
 
   it('connects stdio transport through server.connect', async () => {
@@ -149,10 +234,10 @@ describe('Transport Handlers', () => {
     });
     const res = createMockResponse();
 
-    await invokeHandler(req, res);
+    await invokeRoute('GET', '/health', req, res);
 
-    expect(res.statusCode).toBe(403);
-    expect(res.body).toContain('Invalid origin');
+    expect(res._status).toBe(403);
+    expect(res._body).toContain('Invalid origin');
   });
 
   it('returns health payload and sets localhost CORS defaults', async () => {
@@ -168,11 +253,11 @@ describe('Transport Handlers', () => {
     });
     const res = createMockResponse();
 
-    await invokeHandler(req, res);
+    await invokeRoute('GET', '/health', req, res);
 
-    expect(res.statusCode).toBe(200);
-    expect(res.headers['Access-Control-Allow-Origin']).toBe('http://127.0.0.1:4001');
-    expect(JSON.parse(res.body).status).toBe('healthy');
+    expect(res._headers['Access-Control-Allow-Origin']).toBe('http://127.0.0.1:4001');
+    const body = JSON.parse(res._body);
+    expect(body.status).toBe('healthy');
   });
 
   it('returns account list via API endpoint', async () => {
@@ -194,11 +279,11 @@ describe('Transport Handlers', () => {
     });
     const res = createMockResponse();
 
-    await invokeHandler(req, res);
+    await invokeRoute('GET', '/api/accounts', req, res);
 
     expect(tokenManager.listAccounts).toHaveBeenCalledTimes(1);
-    expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body).accounts).toEqual([{ id: 'work', status: 'active' }]);
+    const body = JSON.parse(res._body);
+    expect(body.accounts).toEqual([{ id: 'work', status: 'active' }]);
   });
 
   it('creates OAuth URL for POST /api/accounts', async () => {
@@ -210,20 +295,17 @@ describe('Transport Handlers', () => {
     const req = createMockRequest({
       method: 'POST',
       url: '/api/accounts',
-      headers: { origin: 'http://localhost', accept: 'application/json', 'content-length': '25' }
+      headers: { origin: 'http://localhost', accept: 'application/json', 'content-length': '25' },
+      body: { accountId: 'work' }
     });
     const res = createMockResponse();
 
-    const pending = invokeHandler(req, res);
-    req.emit('data', Buffer.from(JSON.stringify({ accountId: 'work' })));
-    req.emit('end');
-    await pending;
+    await invokeRoute('POST', '/api/accounts', req, res);
 
     expect(state.validateAccountId).toHaveBeenCalledWith('work');
-    expect(res.statusCode).toBe(200);
-    const payload = JSON.parse(res.body);
-    expect(payload.accountId).toBe('work');
-    expect(payload.authUrl).toBe('https://auth.example.com');
+    const body = JSON.parse(res._body);
+    expect(body.accountId).toBe('work');
+    expect(body.authUrl).toBe('https://auth.example.com');
   });
 
   it('returns 500 when MCP transport request handling throws', async () => {
@@ -240,13 +322,13 @@ describe('Transport Handlers', () => {
     const req = createMockRequest({
       method: 'POST',
       url: '/mcp',
-      headers: { origin: 'http://localhost', accept: 'application/json' }
+      headers: { origin: 'http://localhost', accept: 'application/json', 'content-type': 'application/json' }
     });
     const res = createMockResponse();
 
-    await invokeHandler(req, res);
+    await invokeRoute('ALL', '/mcp', req, res);
 
-    expect(res.statusCode).toBe(500);
-    expect(res.body).toContain('Internal server error');
+    expect(res._status).toBe(500);
+    expect(res._body).toContain('Internal server error');
   });
 });
