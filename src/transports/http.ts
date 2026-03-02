@@ -153,6 +153,7 @@ export class HttpTransportHandler {
     await this.server.connect(transport);
 
     const app = express();
+    app.set('trust proxy', 1);
     app.use(express.json({ limit: '10mb' }));
 
     // --- MCP OAuth setup (when enabled) ---

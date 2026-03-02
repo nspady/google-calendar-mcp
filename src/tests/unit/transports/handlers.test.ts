@@ -31,6 +31,7 @@ vi.mock('express', () => {
   const middlewares: Function[] = [];
 
   const app: any = {
+    set: vi.fn(),
     use: vi.fn((...args: any[]) => {
       // Global middleware (no path)
       if (typeof args[0] === 'function') {
