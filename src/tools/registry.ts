@@ -20,7 +20,7 @@ import { FreeBusyEventHandler } from "../handlers/core/FreeBusyEventHandler.js";
 import { GetCurrentTimeHandler } from "../handlers/core/GetCurrentTimeHandler.js";
 import { RespondToEventHandler } from "../handlers/core/RespondToEventHandler.js";
 import { GetDayEventsHandler } from "../handlers/core/GetDayEventsHandler.js";
-import { HighlightEventsHandler } from "../handlers/core/HighlightEventsHandler.js";
+
 
 // ============================================================================
 // SHARED VALIDATION PATTERNS
@@ -341,11 +341,6 @@ export const ToolSchemas = {
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("Date to fetch events for (YYYY-MM-DD)"),
     timeZone: z.string().optional().describe("IANA timezone (e.g., 'America/Los_Angeles')"),
     focusEventId: z.string().optional().describe("Event ID to highlight in the day view"),
-  }),
-
-  'highlight-events': z.object({
-    eventIds: z.array(z.string()).describe("Event IDs to keep visible in the UI. Use empty array to clear the filter."),
-    label: z.string().optional().describe("Display label for the filter chip (e.g., 'Travel events', '1:1 meetings')")
   }),
 
   'list-colors': z.object({
@@ -946,15 +941,6 @@ export class ToolRegistry {
       schema: ToolSchemas['ui-get-day-events'],
       handler: GetDayEventsHandler,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
-      hasUI: true,
-      uiVisibility: ['app']
-    },
-    {
-      name: "highlight-events",
-      description: "After list-events or search-events returns many results, call this to filter the calendar UI to only the events you discuss in your answer. Read through the returned events, pick the ones relevant to the user's question, and pass their IDs from the result data. Always call this when your answer covers a subset of the returned events.",
-      schema: ToolSchemas['highlight-events'],
-      handler: HighlightEventsHandler,
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
       hasUI: true,
       uiVisibility: ['app']
     },

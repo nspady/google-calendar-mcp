@@ -4,65 +4,90 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Google Calendar MCP - Account Management</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
     <style>
-        /* Page-specific styles for account management */
+        /* ── Page-specific: Account Management ──── */
+        body {
+            background:
+                radial-gradient(ellipse at 25% 0%, rgba(99, 102, 241, 0.05) 0%, transparent 50%),
+                radial-gradient(ellipse at 75% 100%, rgba(167, 139, 250, 0.03) 0%, transparent 50%),
+                var(--bg-base);
+        }
+
         .container {
-            max-width: 720px;
+            max-width: 700px;
             margin: 0 auto;
-            padding: 3rem 1.5rem;
+            padding: 3.5rem 1.5rem 4rem;
         }
 
         header {
             text-align: center;
             margin-bottom: 2.5rem;
+            animation: fadeInUp 0.5s ease both;
         }
 
-        h1 {
-            margin-bottom: 0.5rem;
+        header h1 {
+            margin-bottom: 0.4rem;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
         .subtitle {
             color: var(--text-muted);
-            font-size: 0.95rem;
-            font-weight: 400;
+            font-size: 0.9rem;
         }
 
-        /* Card overrides for this page */
+        /* Card layout overrides */
         .card {
-            padding: 1.75rem;
-            margin-bottom: 1.25rem;
+            padding: 1.5rem 1.75rem;
+            margin-bottom: 1rem;
             box-shadow: var(--shadow-md);
             text-align: left;
             min-width: auto;
             max-width: none;
         }
+        .card:nth-of-type(1) { animation-delay: 0.06s; }
+        .card:nth-of-type(2) { animation-delay: 0.14s; }
 
         .card h2 {
-            font-size: 1rem;
+            font-family: 'Figtree', sans-serif;
+            font-size: 0.78rem;
             font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
             margin-bottom: 1.25rem;
-            color: var(--text-primary);
-            letter-spacing: -0.01em;
+            color: var(--text-muted);
+        }
+
+        /* Add account form */
+        .add-account-form {
+            display: flex;
+            gap: 0.75rem;
+            align-items: flex-end;
         }
 
         /* Account list */
         .account-list {
             display: flex;
             flex-direction: column;
-            gap: 0.75rem;
+            gap: 1.25rem;
         }
 
         .account-item {
-            background: var(--bg-warm);
+            background: var(--bg-elevated);
             border-radius: var(--radius-md);
-            border: 1px solid var(--border-warm);
+            border: 1px solid var(--border-subtle);
             overflow: hidden;
-            transition: box-shadow 0.2s ease, border-color 0.2s ease;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            animation: fadeInUp 0.35s ease both;
         }
-
         .account-item:hover {
-            box-shadow: var(--shadow-sm);
+            border-color: var(--border-hover);
         }
 
         .account-header {
@@ -71,157 +96,158 @@
             padding: 0.75rem 1rem;
             cursor: pointer;
             transition: background 0.15s ease;
-            gap: 0.75rem;
+            gap: 0.6rem;
         }
-
         .account-header:hover {
-            background: var(--bg-warm-dark);
+            background: var(--bg-hover);
         }
-
         .account-header.expanded {
-            border-bottom: 1px solid var(--border-warm);
-            background: var(--bg-warm-dark);
+            background: var(--bg-hover);
+            border-bottom: 1px solid var(--border-subtle);
         }
 
         .account-info {
             display: flex;
             align-items: center;
-            gap: 0.75rem;
+            gap: 0.6rem;
+            flex: 1;
+            min-width: 0;
         }
 
         .account-expand {
             color: var(--text-muted);
-            transition: transform 0.2s ease;
-            font-size: 0.7rem;
-            opacity: 0.7;
+            font-size: 0.55rem;
+            transition: transform 0.25s ease;
+            flex-shrink: 0;
+            width: 14px;
+            text-align: center;
         }
-
         .account-expand.expanded {
             transform: rotate(90deg);
         }
 
         .account-details {
             flex: 1;
+            min-width: 0;
         }
 
         .account-title {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.4rem;
             flex-wrap: wrap;
         }
 
         .account-email {
-            font-weight: 500;
+            font-weight: 600;
+            font-size: 0.88rem;
             color: var(--text-primary);
-            font-size: 0.95rem;
         }
 
         .account-separator {
             color: var(--text-muted);
-            font-size: 0.9rem;
+            font-size: 0.8rem;
         }
 
         .account-id {
             color: var(--text-secondary);
-            font-size: 0.9rem;
+            font-size: 0.85rem;
+            font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
             font-weight: 400;
         }
 
         .account-meta {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            margin-top: 0.25rem;
-            flex-wrap: wrap;
+            gap: 0.4rem;
+            margin-top: 0.15rem;
         }
 
         .account-status {
             display: inline-flex;
             align-items: center;
-            padding: 0.15rem 0.5rem;
+            padding: 0.1rem 0.45rem;
             border-radius: 20px;
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             font-weight: 500;
-            text-transform: lowercase;
+            letter-spacing: 0.02em;
         }
-
         .status-active {
-            background: var(--accent-success-light);
-            color: var(--accent-success);
+            background: var(--success-bg);
+            color: var(--success);
+            border: 1px solid var(--success-border);
         }
-
         .status-expired {
-            background: var(--accent-warning-light);
-            color: var(--accent-warning);
+            background: var(--warning-bg);
+            color: var(--warning);
+            border: 1px solid var(--warning-border);
         }
 
         .calendar-count {
             color: var(--text-muted);
-            font-size: 0.8rem;
+            font-size: 0.75rem;
         }
 
         .account-actions {
             display: flex;
-            gap: 0.5rem;
+            gap: 0.4rem;
             margin-left: auto;
+            flex-shrink: 0;
+        }
+        .account-actions button {
+            padding: 0.4rem 0.85rem;
+            font-size: 0.78rem;
         }
 
-        /* Calendar list */
+        /* Calendar list — smooth expand/collapse */
         .calendar-list {
-            display: none;
-            padding: 0.5rem 1rem 0.75rem;
-            background: var(--card-bg);
-            max-height: 280px;
-            overflow-y: auto;
+            max-height: 0;
+            overflow: hidden;
+            opacity: 0;
+            transition: max-height 0.3s ease, opacity 0.25s ease;
+            background: var(--bg-surface);
         }
-
         .calendar-list.expanded {
-            display: block;
+            max-height: 320px;
+            opacity: 1;
+            overflow-y: auto;
+            padding: 0.25rem 0.75rem 0.5rem;
         }
 
-        .calendar-list::-webkit-scrollbar {
-            width: 5px;
-        }
-
-        .calendar-list::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
+        .calendar-list::-webkit-scrollbar { width: 4px; }
+        .calendar-list::-webkit-scrollbar-track { background: transparent; }
         .calendar-list::-webkit-scrollbar-thumb {
-            background: var(--border-warm);
-            border-radius: 3px;
+            background: var(--border-default);
+            border-radius: 2px;
         }
 
         .calendar-item {
             display: flex;
             align-items: center;
-            padding: 0.35rem 0.5rem;
-            border-radius: 4px;
+            padding: 0.3rem 0.45rem;
+            border-radius: 6px;
             transition: background 0.12s ease;
         }
-
         .calendar-item:hover {
-            background: var(--bg-warm);
+            background: var(--bg-elevated);
         }
 
         .calendar-color {
-            width: 8px;
-            height: 8px;
+            width: 7px;
+            height: 7px;
             border-radius: 2px;
-            margin-right: 0.6rem;
+            margin-right: 0.55rem;
             flex-shrink: 0;
         }
 
         .calendar-name {
-            font-size: 0.8rem;
+            font-size: 0.78rem;
             color: var(--text-secondary);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            margin-right: 0.4rem;
+            margin-right: 0.35rem;
         }
-
         .calendar-name.primary {
             color: var(--text-primary);
             font-weight: 500;
@@ -229,94 +255,47 @@
 
         .calendar-badges {
             display: flex;
-            gap: 0.25rem;
+            gap: 0.2rem;
             flex-shrink: 0;
+            margin-left: auto;
         }
 
         .access-badge {
-            padding: 0.1rem 0.35rem;
+            padding: 0.05rem 0.3rem;
             border-radius: 3px;
             font-size: 0.6rem;
             font-weight: 500;
-            text-transform: lowercase;
             letter-spacing: 0.01em;
-            opacity: 0.7;
         }
-
-        .access-owner {
-            background: transparent;
-            color: var(--text-muted);
-        }
-
-        .access-writer {
-            background: transparent;
-            color: var(--accent-success);
-        }
-
-        .access-reader {
-            background: transparent;
-            color: var(--text-muted);
-        }
-
-        .access-freeBusyReader {
-            background: transparent;
-            color: var(--text-muted);
-            font-size: 0.55rem;
-        }
+        .access-owner  { color: var(--text-muted); }
+        .access-writer { color: var(--success); opacity: 0.7; }
+        .access-reader { color: var(--text-muted); }
+        .access-freeBusyReader { color: var(--text-muted); font-size: 0.55rem; }
 
         .primary-badge {
-            background: var(--accent-primary);
-            color: white;
-            opacity: 1;
+            background: var(--accent-gradient);
+            color: #fff;
+            padding: 0.08rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.58rem;
+            font-weight: 600;
+            letter-spacing: 0.03em;
         }
 
-        .calendar-loading {
-            text-align: center;
-            padding: 1rem;
-            color: var(--text-muted);
-            font-size: 0.8rem;
-        }
-
+        .calendar-loading,
         .calendar-error {
             text-align: center;
-            padding: 1rem;
-            color: var(--accent-danger);
-            font-size: 0.8rem;
+            padding: 0.75rem;
+            font-size: 0.78rem;
         }
-
-        /* Button size overrides for inline buttons */
-        .account-actions button {
-            padding: 0.6rem 1.1rem;
-            font-size: 0.85rem;
-        }
-
-        /* Add account form */
-        .add-account-form {
-            display: flex;
-            gap: 1rem;
-            align-items: flex-end;
-        }
+        .calendar-loading { color: var(--text-muted); }
+        .calendar-error   { color: var(--danger); }
 
         @media (max-width: 600px) {
-            .container {
-                padding: 2rem 1rem;
-            }
-
-            .add-account-form {
-                flex-direction: column;
-                align-items: stretch;
-            }
-
-            .account-header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 0.75rem;
-            }
-
-            .account-actions {
-                width: 100%;
-                justify-content: flex-end;
-            }
+            .container { padding: 2rem 1rem; }
+            .add-account-form { flex-direction: column; align-items: stretch; }
+            .account-header { flex-direction: column; align-items: flex-start; gap: 0.6rem; }
+            .account-actions { width: 100%; justify-content: flex-end; }
         }
     </style>
 </head>
@@ -377,68 +356,140 @@
 
                 const response = await fetch(API_BASE);
                 if (!response.ok) {
-                    throw new Error(`Failed to load accounts: ${response.statusText}`);
+                    throw new Error('Failed to load accounts: ' + response.statusText);
                 }
                 const data = await response.json();
                 renderAccounts(data.accounts);
             } catch (error) {
-                document.getElementById('accountList').innerHTML =
-                    `<div class="message-error">Error loading accounts: ${error.message}</div>`;
+                const list = document.getElementById('accountList');
+                list.classList.remove('loading');
+                list.textContent = '';
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'message-error';
+                errorDiv.textContent = 'Error loading accounts: ' + error.message;
+                list.appendChild(errorDiv);
             }
         }
 
         function renderAccounts(accounts) {
             const accountList = document.getElementById('accountList');
+            accountList.classList.remove('loading');
 
             if (!accounts || accounts.length === 0) {
-                accountList.innerHTML = '<div class="empty-state">No accounts authenticated yet</div>';
+                accountList.textContent = '';
+                const emptyDiv = document.createElement('div');
+                emptyDiv.className = 'empty-state';
+                emptyDiv.textContent = 'No accounts authenticated yet';
+                accountList.appendChild(emptyDiv);
                 return;
             }
 
-            accountList.innerHTML = accounts.map(account => {
+            // Build DOM elements safely
+            accountList.textContent = '';
+            accounts.forEach((account, index) => {
                 const calendars = account.calendars || [];
                 const owned = calendars.filter(c => c.accessRole === 'owner').length;
                 const shared = calendars.length - owned;
                 const calendarSummary = calendars.length > 0
-                    ? `${calendars.length} calendars (${owned} owned, ${shared} shared)`
+                    ? calendars.length + ' calendars (' + owned + ' owned, ' + shared + ' shared)'
                     : '';
 
-                return `
-                <div class="account-item" data-account-id="${escapeHtml(account.id)}">
-                    <div class="account-header" onclick="toggleAccount('${escapeHtml(account.id)}')">
-                        <div class="account-info">
-                            <span class="account-expand">▶</span>
-                            <div class="account-details">
-                                <div class="account-title">
-                                    <span class="account-email">${escapeHtml(account.email)}</span>
-                                    <span class="account-separator">–</span>
-                                    <span class="account-id">${escapeHtml(account.id)}</span>
-                                    <span class="account-status status-${account.status}">${account.status}</span>
-                                </div>
-                                <div class="account-meta">
-                                    <span class="calendar-count">${calendarSummary}</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="account-actions" onclick="event.stopPropagation()">
-                            ${account.status === 'expired' ?
-                                `<button class="btn-warning" onclick="reauthAccount('${escapeHtml(account.id)}')">Re-auth</button>` :
-                                ''}
-                            <button class="btn-danger" onclick="removeAccount('${escapeHtml(account.id)}')">Remove</button>
-                        </div>
-                    </div>
-                    <div class="calendar-list" id="calendars-${escapeHtml(account.id)}">
-                        ${renderCalendarsHTML(calendars)}
-                    </div>
-                </div>
-            `}).join('');
+                const item = document.createElement('div');
+                item.className = 'account-item';
+                item.dataset.accountId = account.id;
+                item.style.animationDelay = (index * 0.06) + 's';
+
+                const header = document.createElement('div');
+                header.className = 'account-header';
+                header.addEventListener('click', () => toggleAccount(account.id));
+
+                // Account info section
+                const info = document.createElement('div');
+                info.className = 'account-info';
+
+                const expand = document.createElement('span');
+                expand.className = 'account-expand';
+                expand.textContent = '\u25B6';
+
+                const details = document.createElement('div');
+                details.className = 'account-details';
+
+                const title = document.createElement('div');
+                title.className = 'account-title';
+
+                const emailSpan = document.createElement('span');
+                emailSpan.className = 'account-email';
+                emailSpan.textContent = account.email;
+
+                const sep = document.createElement('span');
+                sep.className = 'account-separator';
+                sep.textContent = '\u2013';
+
+                const idSpan = document.createElement('span');
+                idSpan.className = 'account-id';
+                idSpan.textContent = account.id;
+
+                const statusSpan = document.createElement('span');
+                statusSpan.className = 'account-status status-' + account.status;
+                statusSpan.textContent = account.status;
+
+                title.appendChild(emailSpan);
+                title.appendChild(sep);
+                title.appendChild(idSpan);
+                title.appendChild(statusSpan);
+
+                const meta = document.createElement('div');
+                meta.className = 'account-meta';
+                const countSpan = document.createElement('span');
+                countSpan.className = 'calendar-count';
+                countSpan.textContent = calendarSummary;
+                meta.appendChild(countSpan);
+
+                details.appendChild(title);
+                details.appendChild(meta);
+                info.appendChild(expand);
+                info.appendChild(details);
+
+                // Actions section
+                const actions = document.createElement('div');
+                actions.className = 'account-actions';
+                actions.addEventListener('click', (e) => e.stopPropagation());
+
+                if (account.status === 'expired') {
+                    const reauthBtn = document.createElement('button');
+                    reauthBtn.className = 'btn-warning';
+                    reauthBtn.textContent = 'Re-auth';
+                    reauthBtn.addEventListener('click', () => reauthAccount(account.id));
+                    actions.appendChild(reauthBtn);
+                }
+
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'btn-danger';
+                removeBtn.textContent = 'Remove';
+                removeBtn.addEventListener('click', () => removeAccount(account.id));
+                actions.appendChild(removeBtn);
+
+                header.appendChild(info);
+                header.appendChild(actions);
+
+                // Calendar list
+                const calList = document.createElement('div');
+                calList.className = 'calendar-list';
+                calList.id = 'calendars-' + account.id;
+                renderCalendarsDOM(calList, calendars);
+
+                item.appendChild(header);
+                item.appendChild(calList);
+                accountList.appendChild(item);
+            });
         }
 
         function toggleAccount(accountId) {
-            const item = document.querySelector(`[data-account-id="${accountId}"]`);
+            const item = document.querySelector('[data-account-id="' + CSS.escape(accountId) + '"]');
+            if (!item) return;
             const header = item.querySelector('.account-header');
             const expand = item.querySelector('.account-expand');
-            const calendarList = document.getElementById(`calendars-${accountId}`);
+            const calendarList = document.getElementById('calendars-' + accountId);
 
             const isExpanded = calendarList.classList.contains('expanded');
 
@@ -453,23 +504,47 @@
             }
         }
 
-        function renderCalendarsHTML(calendars) {
+        function renderCalendarsDOM(container, calendars) {
             if (!calendars || calendars.length === 0) {
-                return '<div class="calendar-loading">No calendars found</div>';
+                const empty = document.createElement('div');
+                empty.className = 'calendar-loading';
+                empty.textContent = 'No calendars found';
+                container.appendChild(empty);
+                return;
             }
 
-            return calendars.map(cal => `
-                <div class="calendar-item">
-                    <div class="calendar-color" style="background-color: ${cal.backgroundColor || '#4285f4'}"></div>
-                    <div class="calendar-name ${cal.primary ? 'primary' : ''}">
-                        ${escapeHtml(cal.summaryOverride || cal.summary || 'Unnamed Calendar')}
-                    </div>
-                    <div class="calendar-badges">
-                        ${cal.primary ? '<span class="access-badge primary-badge">Primary</span>' : ''}
-                        <span class="access-badge access-${cal.accessRole}">${formatAccessRole(cal.accessRole)}</span>
-                    </div>
-                </div>
-            `).join('');
+            calendars.forEach(cal => {
+                const row = document.createElement('div');
+                row.className = 'calendar-item';
+
+                const color = document.createElement('div');
+                color.className = 'calendar-color';
+                color.style.backgroundColor = cal.backgroundColor || '#4285f4';
+
+                const name = document.createElement('div');
+                name.className = 'calendar-name' + (cal.primary ? ' primary' : '');
+                name.textContent = cal.summaryOverride || cal.summary || 'Unnamed Calendar';
+
+                const badges = document.createElement('div');
+                badges.className = 'calendar-badges';
+
+                if (cal.primary) {
+                    const primaryBadge = document.createElement('span');
+                    primaryBadge.className = 'access-badge primary-badge';
+                    primaryBadge.textContent = 'Primary';
+                    badges.appendChild(primaryBadge);
+                }
+
+                const roleBadge = document.createElement('span');
+                roleBadge.className = 'access-badge access-' + cal.accessRole;
+                roleBadge.textContent = formatAccessRole(cal.accessRole);
+                badges.appendChild(roleBadge);
+
+                row.appendChild(color);
+                row.appendChild(name);
+                row.appendChild(badges);
+                container.appendChild(row);
+            });
         }
 
         function formatAccessRole(role) {
@@ -480,12 +555,6 @@
                 'freeBusyReader': 'Free/Busy'
             };
             return labels[role] || role;
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
         }
 
         async function addAccount(accountId) {
@@ -523,7 +592,7 @@
                     }
                     if (event.data.type === 'auth-success') {
                         window.removeEventListener('message', handleMessage);
-                        showMessage(`Account "${accountId}" authenticated successfully!`, 'success');
+                        showMessage('Account "' + accountId + '" authenticated successfully!', 'success');
                         loadAccounts();
                     }
                 };
@@ -546,12 +615,12 @@
         }
 
         async function removeAccount(accountId) {
-            if (!confirm(`Are you sure you want to remove account "${accountId}"?`)) {
+            if (!confirm('Are you sure you want to remove account "' + accountId + '"?')) {
                 return;
             }
 
             try {
-                const response = await fetch(`${API_BASE}/${accountId}`, {
+                const response = await fetch(API_BASE + '/' + accountId, {
                     method: 'DELETE'
                 });
 
@@ -561,7 +630,7 @@
                     throw new Error(data.message || 'Failed to remove account');
                 }
 
-                showMessage(`Account "${accountId}" removed successfully!`, 'success');
+                showMessage('Account "' + accountId + '" removed successfully!', 'success');
                 loadAccounts();
             } catch (error) {
                 showMessage(error.message, 'error');
@@ -571,7 +640,7 @@
         async function reauthAccount(accountId) {
             try {
                 // Get OAuth URL from server
-                const response = await fetch(`${API_BASE}/${accountId}/reauth`, {
+                const response = await fetch(API_BASE + '/' + accountId + '/reauth', {
                     method: 'POST'
                 });
 
@@ -601,7 +670,7 @@
                     }
                     if (event.data.type === 'auth-success') {
                         window.removeEventListener('message', handleMessage);
-                        showMessage(`Account "${accountId}" re-authenticated successfully!`, 'success');
+                        showMessage('Account "' + accountId + '" re-authenticated successfully!', 'success');
                         loadAccounts();
                     }
                 };

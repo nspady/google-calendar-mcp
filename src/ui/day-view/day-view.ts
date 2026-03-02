@@ -9,7 +9,6 @@ import { buildSlotSelectPrompt } from './modules/prompt-builders.js';
 // Import renderers
 import {
   renderDayView,
-  renderMultiDayView,
   renderSkeletonView,
   showLoadingState,
   showCancelledState,
@@ -17,13 +16,13 @@ import {
 } from './modules/renderers.js';
 
 // Import state management
-import { toggleExpanded, toggleDayExpanded } from './modules/state-management.js';
+import { toggleExpanded } from './modules/state-management.js';
 
 // Import context extraction
-import { extractDayContext, extractMultiDayContext, isCreateUpdateResponse } from './modules/context-extraction.js';
+import { extractDayContext, isCreateUpdateResponse } from './modules/context-extraction.js';
 
 // Import types for context tracking
-import type { DayContext, MultiDayContext, CalendarFilter, DayViewEvent, AvailableSlot } from './modules/types.js';
+import type { DayContext, CalendarFilter, DayViewEvent, AvailableSlot } from './modules/types.js';
 
 // DOM element references - Day view
 const dayViewContainer = document.getElementById('day-view-container') as HTMLDivElement;
@@ -38,15 +37,6 @@ const expandToggle = document.getElementById('expand-toggle') as HTMLButtonEleme
 const toggleText = document.getElementById('toggle-text') as HTMLSpanElement;
 const dayFullscreenBtn = document.getElementById('day-fullscreen-btn') as HTMLButtonElement;
 const dayRefreshBtn = document.getElementById('day-refresh-btn') as HTMLButtonElement;
-
-// DOM element references - Multi-day view
-const multiDayViewContainer = document.getElementById('multi-day-view-container') as HTMLDivElement;
-const multiDayHeading = document.getElementById('multi-day-heading') as HTMLHeadingElement;
-const multiDaySubheading = document.getElementById('multi-day-subheading') as HTMLDivElement;
-const multiDayLink = document.getElementById('multi-day-link') as HTMLAnchorElement;
-const multiDayEventsList = document.getElementById('multi-day-events-list') as HTMLDivElement;
-const multiDayFullscreenBtn = document.getElementById('multi-day-fullscreen-btn') as HTMLButtonElement;
-const multiDayRefreshBtn = document.getElementById('multi-day-refresh-btn') as HTMLButtonElement;
 
 // DOM element references - Event detail overlay
 const eventDetailOverlay = document.getElementById('event-detail-overlay') as HTMLDivElement;
@@ -67,12 +57,9 @@ let skeletonRendered = false;
 // State references
 const stateRefs = {
   isExpanded: { value: false },
-  expandedDays: new Set<string>(),
   hostLocale: undefined as string | undefined,
   viewKey: undefined as string | undefined,
-  hiddenCalendarIds: undefined as string[] | undefined,
-  highlightedEventIds: undefined as Set<string> | undefined,
-  highlightLabel: undefined as string | undefined
+  hiddenCalendarIds: undefined as string[] | undefined
 };
 
 // --- View state persistence via localStorage ---
@@ -82,15 +69,12 @@ const MAX_STORED_VIEWS = 20;
 
 interface PersistedViewState {
   isExpanded: boolean;
-  expandedDays: string[];
   hiddenCalendarIds?: string[];
   timestamp: number;
 }
 
-function deriveViewKey(context: { date?: string; dates?: string[]; query?: string }): string {
-  if (context.date) return `day:${context.date}`;
-  if (context.dates) return `multi:${context.dates.join(',')}:${context.query || ''}`;
-  return '';
+function deriveViewKey(date: string): string {
+  return `day:${date}`;
 }
 
 function loadViewState(viewKey: string): PersistedViewState | null {
@@ -103,7 +87,7 @@ function loadViewState(viewKey: string): PersistedViewState | null {
   }
 }
 
-function saveViewState(viewKey: string, state: { isExpanded: boolean; expandedDays: Set<string> }): void {
+function saveViewState(viewKey: string, isExpanded: boolean): void {
   if (!viewKey) return;
   // Extract hidden calendar IDs from current filters
   const hiddenIds = (stateRefs as { calendarFilters?: CalendarFilter[] }).calendarFilters
@@ -112,8 +96,7 @@ function saveViewState(viewKey: string, state: { isExpanded: boolean; expandedDa
   try {
     const cache: Record<string, PersistedViewState> = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     cache[viewKey] = {
-      isExpanded: state.isExpanded,
-      expandedDays: Array.from(state.expandedDays),
+      isExpanded,
       hiddenCalendarIds: hiddenIds.length > 0 ? hiddenIds : undefined,
       timestamp: Date.now()
     };
@@ -136,10 +119,7 @@ function saveViewState(viewKey: string, state: { isExpanded: boolean; expandedDa
 // Callback fired after any state toggle — persists to localStorage and updates model context
 function onStateChange(): void {
   if (stateRefs.viewKey) {
-    saveViewState(stateRefs.viewKey, {
-      isExpanded: stateRefs.isExpanded.value,
-      expandedDays: stateRefs.expandedDays
-    });
+    saveViewState(stateRefs.viewKey, stateRefs.isExpanded.value);
   }
   sendModelContextUpdate();
 }
@@ -184,8 +164,7 @@ async function fetchCrossCalendarDayEvents(
         undefined,
         undefined,
         sendModelContextUpdate,
-        showEventDetails,
-        clearHighlightRef
+        showEventDetails
       );
       sendModelContextUpdate();
     }
@@ -215,7 +194,6 @@ async function refreshEvents(): Promise<void> {
       const dayContext = extractDayContext(result);
       if (dayContext) {
         currentDayContext = dayContext;
-        currentMultiDayContext = null;
         renderDayView(
           dayContext,
           appInstance,
@@ -225,8 +203,7 @@ async function refreshEvents(): Promise<void> {
           undefined,
           undefined,
           sendModelContextUpdate,
-          showEventDetails,
-          clearHighlightRef
+          showEventDetails
         );
         sendModelContextUpdate();
       }
@@ -254,30 +231,9 @@ async function refreshEvents(): Promise<void> {
       return;
     }
 
-    // Process the result through the same pipeline as ontoolresult
-    const multiDayContext = extractMultiDayContext(result);
-    if (multiDayContext) {
-      currentDayContext = null;
-      currentMultiDayContext = multiDayContext;
-      renderMultiDayView(
-        multiDayContext,
-        appInstance,
-        domRefs,
-        (dateStr: string) => toggleDayExpanded(dateStr, appInstance, stateRefs.expandedDays, onStateChange),
-        stateRefs,
-        undefined, // schedulingMode
-        handleSlotSelect,
-        showEventDetails, // onEventClick
-        clearHighlightRef
-      );
-      sendModelContextUpdate();
-      return;
-    }
-
     const dayContext = extractDayContext(result);
     if (dayContext) {
       currentDayContext = dayContext;
-      currentMultiDayContext = null;
       renderDayView(
         dayContext,
         appInstance,
@@ -287,8 +243,7 @@ async function refreshEvents(): Promise<void> {
         undefined, // schedulingMode
         handleSlotSelect,
         onStateChange, // onFilterChange — persists hidden calendars and updates model context
-        showEventDetails, // onEventClick
-        clearHighlightRef
+        showEventDetails // onEventClick
       );
       sendModelContextUpdate();
     }
@@ -328,9 +283,9 @@ function updateFullscreenIcons(): void {
   const isFullscreen = currentDisplayMode === 'fullscreen';
   const ns = 'http://www.w3.org/2000/svg';
 
-  for (const btn of [dayFullscreenBtn, multiDayFullscreenBtn]) {
-    const svg = btn.querySelector('svg');
-    if (!svg) continue;
+  {
+    const svg = dayFullscreenBtn.querySelector('svg');
+    if (!svg) return;
 
     // Remove existing children
     while (svg.firstChild) svg.removeChild(svg.firstChild);
@@ -787,14 +742,10 @@ let hostTimeZone: string | undefined;
 
 // Current rendered context (for model context updates and refresh)
 let currentDayContext: DayContext | null = null;
-let currentMultiDayContext: MultiDayContext | null = null;
 
 // Last query params for refresh (stored from tool input)
 let lastToolInputArgs: Record<string, unknown> | null = null;
 let lastToolName: string | null = null;
-
-// Clear highlight callback (set inside init(), used by module-level render calls)
-let clearHighlightRef: (() => void) | undefined;
 
 // --- Model context sync ---
 
@@ -808,24 +759,12 @@ function sendModelContextUpdate(): void {
   modelContextTimer = setTimeout(() => {
     if (!appInstance) return;
 
-    const lines: string[] = [];
+    if (!currentDayContext) return;
 
-    if (currentDayContext) {
-      lines.push(`View: single-day`);
-      lines.push(`Date: ${currentDayContext.date}`);
-      lines.push(`Events: ${currentDayContext.events.length}`);
-      lines.push(`Expanded: ${stateRefs.isExpanded.value}`);
-    } else if (currentMultiDayContext) {
-      lines.push(`View: multi-day`);
-      lines.push(`Dates: ${currentMultiDayContext.dates.length} days`);
-      lines.push(`Events: ${currentMultiDayContext.totalEventCount}`);
-      if (currentMultiDayContext.query) {
-        lines.push(`Query: ${currentMultiDayContext.query}`);
-      }
-      if (stateRefs.expandedDays.size > 0) {
-        lines.push(`Expanded days: ${Array.from(stateRefs.expandedDays).join(', ')}`);
-      }
-    }
+    const lines: string[] = [];
+    lines.push(`Date: ${currentDayContext.date}`);
+    lines.push(`Events: ${currentDayContext.events.length}`);
+    lines.push(`Expanded: ${stateRefs.isExpanded.value}`);
 
     // Report hidden calendars
     const hiddenCalendars = (stateRefs as { calendarFilters?: CalendarFilter[] }).calendarFilters
@@ -835,60 +774,18 @@ function sendModelContextUpdate(): void {
       lines.push(`Hidden calendars: ${hiddenCalendars.join(', ')}`);
     }
 
-    if (lines.length === 0) return;
-
     // Build structured content alongside text
     const structured: Record<string, unknown> = {};
-    if (currentDayContext) {
-      structured.viewType = 'single-day';
-      structured.date = currentDayContext.date;
-      structured.timezone = currentDayContext.timezone;
-      structured.eventCount = currentDayContext.events.length;
-      structured.expanded = stateRefs.isExpanded.value;
-      structured.events = currentDayContext.events.map(e => ({
-        id: e.id, summary: e.summary, start: e.start, end: e.end,
-        isAllDay: e.isAllDay, calendarId: e.calendarId
-      }));
-    } else if (currentMultiDayContext) {
-      structured.viewType = 'multi-day';
-      structured.dates = currentMultiDayContext.dates;
-      structured.timezone = currentMultiDayContext.timezone;
-      structured.totalEventCount = currentMultiDayContext.totalEventCount;
-      if (currentMultiDayContext.query) structured.query = currentMultiDayContext.query;
-      if (stateRefs.expandedDays.size > 0) {
-        structured.expandedDays = Array.from(stateRefs.expandedDays);
-      }
-    }
+    structured.date = currentDayContext.date;
+    structured.timezone = currentDayContext.timezone;
+    structured.eventCount = currentDayContext.events.length;
+    structured.expanded = stateRefs.isExpanded.value;
+    structured.events = currentDayContext.events.map(e => ({
+      id: e.id, summary: e.summary, start: e.start, end: e.end,
+      isAllDay: e.isAllDay, calendarId: e.calendarId
+    }));
     if (hiddenCalendars.length > 0) {
       structured.hiddenCalendars = hiddenCalendars;
-    }
-
-    // Report highlight filter state
-    if (stateRefs.highlightedEventIds?.size) {
-      let highlightTotal = 0;
-      let highlightCount = 0;
-      if (currentDayContext) {
-        highlightTotal = currentDayContext.events.length;
-        highlightCount = currentDayContext.events.filter(e => stateRefs.highlightedEventIds!.has(e.id)).length;
-      } else if (currentMultiDayContext) {
-        highlightTotal = currentMultiDayContext.totalEventCount;
-        for (const date of currentMultiDayContext.dates) {
-          const events = currentMultiDayContext.eventsByDate[date] || [];
-          highlightCount += events.filter(e => stateRefs.highlightedEventIds!.has(e.id)).length;
-        }
-      }
-      const label = stateRefs.highlightLabel;
-      lines.push(label
-        ? `Highlight filter: ${label} (${highlightCount} of ${highlightTotal})`
-        : `Highlight filter: ${highlightCount} of ${highlightTotal} events`
-      );
-      structured.highlightFilter = { count: highlightCount, total: highlightTotal, label };
-    } else {
-      // Hint to use highlight-events when showing many events without a filter
-      const totalEvents = currentDayContext?.events.length ?? currentMultiDayContext?.totalEventCount ?? 0;
-      if (totalEvents > 10) {
-        lines.push(`The UI is showing all ${totalEvents} events. Call highlight-events with the IDs of events relevant to the user's question (from the tool result above) so the UI matches your answer.`);
-      }
     }
 
     appInstance.updateModelContext({
@@ -902,7 +799,6 @@ function sendModelContextUpdate(): void {
 
 // Create DOM references object
 const domRefs: DOMRefs = {
-  // Day view
   dayViewContainer,
   dayViewHeader,
   dateHeading,
@@ -912,14 +808,7 @@ const domRefs: DOMRefs = {
   allDayEvents,
   timeGrid,
   expandToggle,
-  toggleText,
-
-  // Multi-day view
-  multiDayViewContainer,
-  multiDayHeading,
-  multiDaySubheading,
-  multiDayLink,
-  multiDayEventsList
+  toggleText
 };
 
 /**
@@ -994,7 +883,7 @@ async function init(): Promise<void> {
 
     if (!isDataTool) {
       // Args empty or unrecognized — only show skeleton if no view is rendered yet
-      if (currentDayContext || currentMultiDayContext) return;
+      if (currentDayContext) return;
     }
 
     skeletonRendered = true;
@@ -1023,7 +912,6 @@ async function init(): Promise<void> {
   };
 
   // Handle tool input - show loading state while tool executes.
-  // Only show loading for data-fetching tools, not UI-only tools like highlight-events.
   app.ontoolinput = (params) => {
     skeletonRendered = false;
 
@@ -1043,53 +931,12 @@ async function init(): Promise<void> {
 
   // Handle tool results
   app.ontoolresult = (params) => {
-    // Clear highlight filter on new tool result (tied to one model response)
-    stateRefs.highlightedEventIds = undefined;
-    stateRefs.highlightLabel = undefined;
-
-    // Check for multi-day context first (multi-day queries, search results)
-    const multiDayContext = extractMultiDayContext(params);
-    if (multiDayContext) {
-      // Track current context for model updates
-      currentDayContext = null;
-      currentMultiDayContext = multiDayContext;
-
-      // Derive view key and restore persisted state
-      const viewKey = deriveViewKey({ dates: multiDayContext.dates, query: multiDayContext.query });
-      stateRefs.viewKey = viewKey;
-      const saved = loadViewState(viewKey);
-      if (saved) {
-        stateRefs.expandedDays = new Set(saved.expandedDays);
-        stateRefs.hiddenCalendarIds = saved.hiddenCalendarIds;
-      } else {
-        stateRefs.hiddenCalendarIds = undefined;
-      }
-
-      renderMultiDayView(
-        multiDayContext,
-        appInstance,
-        domRefs,
-        (dateStr: string) => toggleDayExpanded(dateStr, appInstance, stateRefs.expandedDays, onStateChange),
-        stateRefs,
-        undefined, // schedulingMode
-        handleSlotSelect,
-        showEventDetails, // onEventClick
-        clearHighlight
-      );
-      multiDayRefreshBtn.style.display = lastToolInputArgs ? '' : 'none';
-      sendModelContextUpdate();
-      return;
-    }
-
-    // Check for single-day context (single-day queries)
     const dayContext = extractDayContext(params);
     if (dayContext) {
-      // Track current context for model updates
       currentDayContext = dayContext;
-      currentMultiDayContext = null;
 
       // Derive view key and restore persisted state
-      const viewKey = deriveViewKey({ date: dayContext.date });
+      const viewKey = deriveViewKey(dayContext.date);
       stateRefs.viewKey = viewKey;
       const saved = loadViewState(viewKey);
       if (saved) {
@@ -1108,8 +955,7 @@ async function init(): Promise<void> {
         undefined, // schedulingMode
         handleSlotSelect,
         onStateChange, // onFilterChange — persists hidden calendars and updates model context
-        showEventDetails, // onEventClick
-        clearHighlight
+        showEventDetails // onEventClick
       );
       dayRefreshBtn.style.display = lastToolInputArgs ? '' : 'none';
       sendModelContextUpdate();
@@ -1157,34 +1003,14 @@ async function init(): Promise<void> {
         undefined,
         handleSlotSelect,
         onStateChange,
-        showEventDetails,
-        clearHighlight
-      );
-    } else if (currentMultiDayContext) {
-      renderMultiDayView(
-        currentMultiDayContext,
-        appInstance,
-        domRefs,
-        (dateStr: string) => toggleDayExpanded(dateStr, appInstance, stateRefs.expandedDays, onStateChange),
-        stateRefs,
-        undefined,
-        handleSlotSelect,
-        showEventDetails,
-        clearHighlight
+        showEventDetails
       );
     }
     sendModelContextUpdate();
   }
 
-  function clearHighlight(): void {
-    stateRefs.highlightedEventIds = undefined;
-    stateRefs.highlightLabel = undefined;
-    reRenderCurrentView();
-  }
-  clearHighlightRef = clearHighlight;
-
   app.onlisttools = async () => ({
-    tools: ['navigate-to-date', 'set-calendar-filter', 'set-display-mode', 'highlight-events']
+    tools: ['navigate-to-date', 'set-calendar-filter', 'set-display-mode']
   });
 
   app.oncalltool = async (params) => {
@@ -1208,9 +1034,8 @@ async function init(): Promise<void> {
           const dayContext = extractDayContext(result);
           if (dayContext) {
             currentDayContext = dayContext;
-            currentMultiDayContext = null;
             lastCrossCalendarArgs = { date, timeZone, focusEventId: '' };
-            const viewKey = deriveViewKey({ date });
+            const viewKey = deriveViewKey(date);
             stateRefs.viewKey = viewKey;
             const saved = loadViewState(viewKey);
             if (saved) {
@@ -1266,33 +1091,6 @@ async function init(): Promise<void> {
         }
       }
 
-      case 'highlight-events': {
-        const eventIds = args.eventIds as string[] | undefined;
-        const label = args.label as string | undefined;
-
-        if (!eventIds || eventIds.length === 0) {
-          clearHighlight();
-          return { content: [{ type: 'text', text: 'Highlight cleared' }] };
-        }
-
-        stateRefs.highlightedEventIds = new Set(eventIds);
-        stateRefs.highlightLabel = label;
-        reRenderCurrentView();
-
-        // Count matches across current context
-        let matchCount = 0;
-        if (currentDayContext) {
-          matchCount = currentDayContext.events.filter(e => stateRefs.highlightedEventIds!.has(e.id)).length;
-        } else if (currentMultiDayContext) {
-          for (const date of currentMultiDayContext.dates) {
-            const events = currentMultiDayContext.eventsByDate[date] || [];
-            matchCount += events.filter(e => stateRefs.highlightedEventIds!.has(e.id)).length;
-          }
-        }
-
-        return { content: [{ type: 'text', text: `Highlighting ${matchCount} events` }] };
-      }
-
       default:
         return { content: [{ type: 'text', text: `Unknown tool: ${params.name}` }], isError: true };
     }
@@ -1307,15 +1105,11 @@ async function init(): Promise<void> {
     const supportsFullscreen = hostContext?.availableDisplayModes?.includes?.('fullscreen');
     if (supportsFullscreen) {
       dayFullscreenBtn.style.display = '';
-      multiDayFullscreenBtn.style.display = '';
       dayFullscreenBtn.addEventListener('click', toggleDisplayMode);
-      multiDayFullscreenBtn.addEventListener('click', toggleDisplayMode);
     }
 
-    // Wire up refresh buttons
-    const refreshHandler = () => { refreshEvents(); };
-    dayRefreshBtn.addEventListener('click', refreshHandler);
-    multiDayRefreshBtn.addEventListener('click', refreshHandler);
+    // Wire up refresh button
+    dayRefreshBtn.addEventListener('click', () => { refreshEvents(); });
 
     // Wire up event detail overlay close handlers
     const backdrop = eventDetailOverlay.querySelector('.event-detail-backdrop');

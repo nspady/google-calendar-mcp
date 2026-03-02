@@ -1,19 +1,18 @@
 /**
- * Rendering functions for day view and multi-day view
+ * Rendering functions for day view
  */
 
 import type { App } from '@modelcontextprotocol/ext-apps';
-import type { DayViewEvent, DayContext, MultiDayContext, AvailableSlot, SchedulingMode, CalendarFilter } from './types.js';
-import { formatHour, formatDateHeading, formatTimeRangeSubheading, formatSlotTime } from './formatting.js';
+import type { DayViewEvent, DayContext, AvailableSlot, SchedulingMode, CalendarFilter } from './types.js';
+import { formatHour, formatDateHeading, formatSlotTime } from './formatting.js';
 import { openLink, calculateAvailableSlots, computeCalendarFilters, filterVisibleEvents, isToday } from './utilities.js';
 import { calculateEventPosition, calculateOverlapColumns } from './positioning.js';
-import { createEventElement, createDateGroup, createCalendarLegend } from './dom-builders.js';
+import { createEventElement, createCalendarLegend } from './dom-builders.js';
 
 /**
  * DOM References interface
  */
 export interface DOMRefs {
-  // Day view
   dayViewContainer: HTMLDivElement;
   dayViewHeader: HTMLDivElement;
   dateHeading: HTMLHeadingElement;
@@ -24,29 +23,12 @@ export interface DOMRefs {
   timeGrid: HTMLDivElement;
   expandToggle: HTMLButtonElement;
   toggleText: HTMLSpanElement;
-
-  // Multi-day view
-  multiDayViewContainer: HTMLDivElement;
-  multiDayHeading: HTMLHeadingElement;
-  multiDaySubheading: HTMLDivElement;
-  multiDayLink: HTMLAnchorElement;
-  multiDayEventsList: HTMLDivElement;
-}
-
-/**
- * Show day view container and hide multi-day view
- */
-export function showDayView(domRefs: DOMRefs): void {
-  domRefs.dayViewContainer.style.display = '';
-  domRefs.multiDayViewContainer.style.display = 'none';
 }
 
 /**
  * Show loading state while tool executes
  */
 export function showLoadingState(domRefs: DOMRefs): void {
-  // Show day view container for loading message, hide multi-day
-  showDayView(domRefs);
   domRefs.dateHeading.textContent = 'Loading...';
   domRefs.dateHeading.classList.add('loading-shimmer');
   domRefs.allDaySection.style.display = 'none';
@@ -64,8 +46,6 @@ export function renderSkeletonView(
   domRefs: DOMRefs,
   hints: { date?: string; timeZone?: string; query?: string }
 ): void {
-  showDayView(domRefs);
-
   // Show date heading if we extracted a date, otherwise generic loading
   if (hints.query) {
     domRefs.dateHeading.textContent = `Searching for "${hints.query}"...`;
@@ -114,8 +94,6 @@ export function renderSkeletonView(
  * Show cancelled state when tool is cancelled
  */
 export function showCancelledState(domRefs: DOMRefs, reason?: string): void {
-  // Show day view container for cancelled message, hide multi-day
-  showDayView(domRefs);
   domRefs.dateHeading.classList.remove('loading-shimmer');
   domRefs.dateHeading.textContent = reason ? `Cancelled: ${reason}` : 'Cancelled';
   domRefs.allDaySection.style.display = 'none';
@@ -477,36 +455,6 @@ function compactToggleLabel(hiddenCount: number): string {
 }
 
 /**
- * Create a highlight filter chip element
- */
-function createHighlightChip(
-  matchCount: number,
-  totalCount: number,
-  label: string | undefined,
-  onClear: () => void
-): HTMLDivElement {
-  const chip = document.createElement('div');
-  chip.className = 'highlight-filter-chip';
-  chip.setAttribute('data-highlight-chip', '');
-
-  const labelEl = document.createElement('span');
-  labelEl.className = 'highlight-chip-label';
-  labelEl.textContent = label
-    ? `${label} \u00b7 ${matchCount} of ${totalCount}`
-    : `Showing ${matchCount} of ${totalCount} events`;
-  chip.appendChild(labelEl);
-
-  const closeBtn = document.createElement('button');
-  closeBtn.className = 'highlight-chip-close';
-  closeBtn.setAttribute('aria-label', 'Clear filter');
-  closeBtn.textContent = '\u00d7';
-  closeBtn.addEventListener('click', onClear);
-  chip.appendChild(closeBtn);
-
-  return chip;
-}
-
-/**
  * Main render function for single-day view
  */
 export function renderDayView(
@@ -514,16 +462,12 @@ export function renderDayView(
   appInstance: App | null,
   domRefs: DOMRefs,
   toggleExpanded: () => void,
-  stateRefs: { isExpanded: { value: boolean }; calendarFilters?: CalendarFilter[]; hiddenCalendarIds?: string[]; highlightedEventIds?: Set<string>; highlightLabel?: string },
+  stateRefs: { isExpanded: { value: boolean }; calendarFilters?: CalendarFilter[]; hiddenCalendarIds?: string[] },
   schedulingMode?: SchedulingMode,
   onSlotSelect?: (slot: AvailableSlot) => void,
   onFilterChange?: () => void,
-  onEventClick?: (event: DayViewEvent) => void,
-  onClearHighlight?: () => void
+  onEventClick?: (event: DayViewEvent) => void
 ): void {
-  // Show day view, hide multi-day view
-  showDayView(domRefs);
-
   // Update header
   domRefs.dateHeading.classList.remove('loading-shimmer');
   domRefs.dateHeading.textContent = formatDateHeading(context.date);
@@ -550,21 +494,10 @@ export function renderDayView(
       const legend = createCalendarLegend(filters, () => {
         // Re-render events when a calendar is toggled
         const visibleEvents = filterVisibleEvents(context.events, filters);
-        const displayEvts = stateRefs.highlightedEventIds?.size
-          ? visibleEvents.filter(e => stateRefs.highlightedEventIds!.has(e.id))
-          : visibleEvents;
-        // Update highlight chip counts
-        const oldChip = domRefs.calendarLegendContainer?.querySelector('[data-highlight-chip]');
-        if (oldChip) oldChip.remove();
-        if (stateRefs.highlightedEventIds?.size && onClearHighlight && domRefs.calendarLegendContainer) {
-          domRefs.calendarLegendContainer.appendChild(
-            createHighlightChip(displayEvts.length, visibleEvents.length, stateRefs.highlightLabel, onClearHighlight)
-          );
-        }
-        renderAllDayEvents(displayEvts, context.focusEventId, appInstance, domRefs, onEventClick);
-        renderTimeGrid(context, appInstance, domRefs, displayEvts, schedulingMode, onSlotSelect, onEventClick);
+        renderAllDayEvents(visibleEvents, context.focusEventId, appInstance, domRefs, onEventClick);
+        renderTimeGrid(context, appInstance, domRefs, visibleEvents, schedulingMode, onSlotSelect, onEventClick);
         // Recompute scroll position and hidden-event count
-        const info = computeCompactScrollInfo(context, displayEvts);
+        const info = computeCompactScrollInfo(context, visibleEvents);
         domRefs.expandToggle.dataset.hiddenCount = String(info.hiddenCount);
         domRefs.expandToggle.dataset.scrollTarget = String(info.scrollTarget);
         if (!stateRefs.isExpanded.value) {
@@ -578,22 +511,7 @@ export function renderDayView(
   }
 
   // Apply persisted filter visibility on initial render
-  const initialEvents = filterVisibleEvents(context.events, filters);
-
-  // Apply highlight filter (stacks with calendar filter)
-  const totalEventCount = initialEvents.length;
-  const displayEvents = stateRefs.highlightedEventIds?.size
-    ? initialEvents.filter(e => stateRefs.highlightedEventIds!.has(e.id))
-    : initialEvents;
-
-  // Insert highlight filter chip
-  const existingChip = domRefs.calendarLegendContainer?.querySelector('[data-highlight-chip]');
-  if (existingChip) existingChip.remove();
-  if (stateRefs.highlightedEventIds?.size && onClearHighlight && domRefs.calendarLegendContainer) {
-    domRefs.calendarLegendContainer.appendChild(
-      createHighlightChip(displayEvents.length, totalEventCount, stateRefs.highlightLabel, onClearHighlight)
-    );
-  }
+  const displayEvents = filterVisibleEvents(context.events, filters);
 
   // Render all-day events
   renderAllDayEvents(displayEvents, context.focusEventId, appInstance, domRefs, onEventClick);
@@ -642,119 +560,3 @@ export function renderDayView(
   }
 }
 
-/**
- * Render multi-day view
- */
-export function renderMultiDayView(
-  context: MultiDayContext,
-  appInstance: App | null,
-  domRefs: DOMRefs,
-  toggleDayExpanded: (dateStr: string) => void,
-  stateRefs: { expandedDays: Set<string>; hostLocale?: string; highlightedEventIds?: Set<string>; highlightLabel?: string },
-  schedulingMode?: SchedulingMode,
-  onSlotSelect?: (slot: AvailableSlot) => void,
-  onEventClick?: (event: DayViewEvent) => void,
-  onClearHighlight?: () => void
-): void {
-  // Only clear expanded days if no persisted state was loaded
-  // (persisted state is pre-loaded into stateRefs before this call)
-  if (stateRefs.expandedDays.size === 0) {
-    stateRefs.expandedDays.clear();
-  }
-
-  // Hide day view, show multi-day view
-  domRefs.dayViewContainer.style.display = 'none';
-  domRefs.multiDayViewContainer.style.display = '';
-
-  // Update header
-  domRefs.multiDayHeading.textContent = context.query ? 'Search Results' : 'Events';
-
-  // Update subheading
-  domRefs.multiDaySubheading.textContent = formatTimeRangeSubheading(context);
-
-  // Set up calendar link
-  domRefs.multiDayLink.href = '#';
-  domRefs.multiDayLink.onclick = (e) => {
-    e.preventDefault();
-    openLink(context.calendarLink, appInstance);
-  };
-
-  // Clear existing content
-  while (domRefs.multiDayEventsList.firstChild) {
-    domRefs.multiDayEventsList.removeChild(domRefs.multiDayEventsList.firstChild);
-  }
-
-  // Remove existing highlight chip
-  domRefs.multiDaySubheading.parentElement?.querySelector('[data-highlight-chip]')?.remove();
-
-  const hasHighlight = (stateRefs.highlightedEventIds?.size ?? 0) > 0;
-
-  // Render date groups
-  if (context.totalEventCount === 0) {
-    const emptyState = document.createElement('div');
-    emptyState.className = 'multi-day-empty';
-    if (context.query) {
-      emptyState.textContent = `No results found for "${context.query}"`;
-    } else if (context.timeRange?.start && context.timeRange?.end) {
-      // Format the date range for the empty message
-      const startDate = new Date(context.timeRange.start);
-      const endDate = new Date(context.timeRange.end);
-      const formatOptions: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-      const startStr = startDate.toLocaleDateString(stateRefs.hostLocale || 'en-US', formatOptions);
-      const endStr = endDate.toLocaleDateString(stateRefs.hostLocale || 'en-US', formatOptions);
-      emptyState.textContent = `No events from ${startStr} to ${endStr}`;
-    } else {
-      emptyState.textContent = 'No events found';
-    }
-    domRefs.multiDayEventsList.appendChild(emptyState);
-  } else {
-    let highlightMatchCount = 0;
-
-    for (const date of context.dates) {
-      let events = context.eventsByDate[date] || [];
-      if (hasHighlight) {
-        events = events.filter(e => stateRefs.highlightedEventIds!.has(e.id));
-        highlightMatchCount += events.length;
-      }
-      if (events.length > 0) {
-        // Calculate available slots for this day if scheduling mode is enabled
-        const availableSlots = schedulingMode?.enabled
-          ? calculateAvailableSlots(events, schedulingMode.durationMinutes, 9, 17, context.timezone)
-          : undefined;
-        const isExpanded = stateRefs.expandedDays.has(date);
-        const dateGroup = createDateGroup(
-          date,
-          events,
-          appInstance,
-          toggleDayExpanded,
-          context.focusEventId,
-          availableSlots,
-          onSlotSelect,
-          isExpanded,
-          onEventClick,
-          context.timezone
-        );
-        domRefs.multiDayEventsList.appendChild(dateGroup);
-      }
-    }
-
-    // Insert highlight chip after subheading
-    if (hasHighlight && onClearHighlight) {
-      const chip = createHighlightChip(
-        highlightMatchCount,
-        context.totalEventCount,
-        stateRefs.highlightLabel,
-        onClearHighlight
-      );
-      domRefs.multiDaySubheading.after(chip);
-    }
-  }
-
-  // Scroll focused event into view
-  setTimeout(() => {
-    const focusedElement = document.querySelector('.event-list-item.focused');
-    if (focusedElement) {
-      focusedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  }, 100);
-}

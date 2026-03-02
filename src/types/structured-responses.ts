@@ -256,8 +256,6 @@ export interface ListEventsResponse {
   }>;
   /** Day context for MCP Apps UI visualization (only included for single-day queries) */
   dayContext?: import('./day-context.js').DayContext;
-  /** Multi-day context for MCP Apps UI visualization (for queries spanning > 24 hours) */
-  multiDayContext?: import('./multi-day-context.js').MultiDayContext;
 }
 
 /**
@@ -275,8 +273,6 @@ export interface SearchEventsResponse {
     end: string;
   };
   warnings?: string[];
-  /** Multi-day context for MCP Apps UI visualization */
-  multiDayContext?: import('./multi-day-context.js').MultiDayContext;
 }
 
 /**
