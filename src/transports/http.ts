@@ -447,9 +447,10 @@ export class HttpTransportHandler {
         resourceMetadataUrl,
       }), async (req: Request, res: Response) => {
         try {
+          process.stderr.write(`MCP request: ${req.method} auth=${!!req.auth}\n`);
           await transport.handleRequest(req, res);
         } catch (error) {
-          process.stderr.write(`Error handling MCP request: ${error instanceof Error ? error.message : error}\n`);
+          process.stderr.write(`Error handling MCP request: ${error instanceof Error ? error.stack || error.message : error}\n`);
           if (!res.headersSent) {
             res.status(500).json({
               jsonrpc: '2.0',
