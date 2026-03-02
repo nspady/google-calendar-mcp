@@ -93,6 +93,8 @@ export class HttpTransportHandler {
   private config: HttpTransportConfig;
   private tokenManager: TokenManager;
   private sessions = new Map<string, StreamableHTTPServerTransport>();
+  private httpServer: import('http').Server | null = null;
+  private mcpOAuthProvider: import('../auth/mcp-oauth/McpOAuthProvider.js').McpOAuthProvider | null = null;
 
   constructor(
     serverFactory: McpServerFactory,
@@ -104,6 +106,34 @@ export class HttpTransportHandler {
     this.tokenManager = tokenManager;
   }
 
+  get port(): number | null {
+    const addr = this.httpServer?.address();
+    if (addr && typeof addr === 'object') return addr.port;
+    return null;
+  }
+
+  async close(): Promise<void> {
+    // Close all active MCP sessions
+    for (const [id, transport] of this.sessions) {
+      await transport.close().catch(() => {});
+      this.sessions.delete(id);
+    }
+
+    // Shut down the OAuth provider (clears timers)
+    if (this.mcpOAuthProvider) {
+      this.mcpOAuthProvider.shutdown();
+      this.mcpOAuthProvider = null;
+    }
+
+    // Close the HTTP server
+    if (this.httpServer) {
+      await new Promise<void>((resolve, reject) => {
+        this.httpServer!.close((err) => (err ? reject(err) : resolve()));
+      });
+      this.httpServer = null;
+    }
+  }
+
   /**
    * Routes an MCP request to the correct per-session transport.
    * Creates a new session (McpServer + transport) for POST requests without a session ID.
@@ -113,6 +143,8 @@ export class HttpTransportHandler {
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
     if (sessionId) {
+      const exists = this.sessions.has(sessionId);
+      process.stderr.write(`/mcp session=${sessionId} found=${exists} sessions=${this.sessions.size}\n`);
       const transport = this.sessions.get(sessionId);
       if (!transport) {
         res.status(404).json({
@@ -124,9 +156,15 @@ export class HttpTransportHandler {
       }
       await transport.handleRequest(req, res);
     } else if (req.method === 'POST') {
+      process.stderr.write(`/mcp new-session request (no mcp-session-id header)\n`);
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => crypto.randomUUID(),
+        enableJsonResponse: true,
       });
+
+      transport.onerror = (error) => {
+        process.stderr.write(`/mcp transport error: ${error.message}\n`);
+      };
 
       transport.onclose = () => {
         const sid = transport.sessionId;
@@ -146,6 +184,7 @@ export class HttpTransportHandler {
       const sid = transport.sessionId;
       if (sid) {
         this.sessions.set(sid, transport);
+        process.stderr.write(`/mcp session created: ${sid}\n`);
       }
     } else {
       res.status(400).json({
@@ -219,8 +258,6 @@ export class HttpTransportHandler {
     });
 
     // --- MCP OAuth setup (when enabled) ---
-    let mcpOAuthProvider: import('../auth/mcp-oauth/McpOAuthProvider.js').McpOAuthProvider | null = null;
-
     if (this.config.mcpOAuth?.enabled) {
       const issuerUrl = this.config.mcpOAuth.issuerUrl;
       if (!issuerUrl) {
@@ -230,15 +267,15 @@ export class HttpTransportHandler {
       const { McpOAuthProvider } = await import('../auth/mcp-oauth/McpOAuthProvider.js');
       const { mcpAuthRouter } = await import('@modelcontextprotocol/sdk/server/auth/router.js');
 
-      mcpOAuthProvider = new McpOAuthProvider({
+      this.mcpOAuthProvider = new McpOAuthProvider({
         tokenManager: this.tokenManager,
         issuerUrl,
       });
-      await mcpOAuthProvider.initialize();
+      await this.mcpOAuthProvider.initialize();
 
       // Install MCP auth router at app root (handles /.well-known/*, /authorize, /token, /register, /revoke)
       app.use(mcpAuthRouter({
-        provider: mcpOAuthProvider,
+        provider: this.mcpOAuthProvider,
         issuerUrl: new URL(issuerUrl),
         resourceServerUrl: new URL(`${issuerUrl}/mcp`),
         serviceDocumentationUrl: new URL('https://github.com/nspady/google-calendar-mcp'),
@@ -251,7 +288,7 @@ export class HttpTransportHandler {
 
     // Origin validation (DNS rebinding protection)
     // When MCP OAuth is enabled, bearer tokens are the security boundary, so skip origin checks.
-    if (!mcpOAuthProvider) {
+    if (!this.mcpOAuthProvider) {
       app.use((req: Request, res: Response, next: NextFunction) => {
         const origin = req.headers.origin;
         if (origin && !isAllowedOrigin(origin)) {
@@ -268,7 +305,7 @@ export class HttpTransportHandler {
     // CORS headers — patch writeHead to ensure headers survive transport layer
     app.use((req: Request, res: Response, next: NextFunction) => {
       const origin = req.headers.origin;
-      const allowedCorsOrigin = mcpOAuthProvider
+      const allowedCorsOrigin = this.mcpOAuthProvider
         ? (origin || '*')
         : (origin && isAllowedOrigin(origin) ? origin : (process.env.ALLOWED_ORIGIN || `http://${host}:${port}`));
 
@@ -436,11 +473,11 @@ export class HttpTransportHandler {
         }
 
         // Check if this is an MCP auth flow callback
-        if (mcpOAuthProvider && stateParam) {
+        if (this.mcpOAuthProvider && stateParam) {
           const { McpOAuthProvider: McpOAuthProviderClass } = await import('../auth/mcp-oauth/McpOAuthProvider.js');
           const mcpState = McpOAuthProviderClass.parseMcpAuthState(stateParam);
           if (mcpState) {
-            await mcpOAuthProvider.completeMcpAuth(
+            await this.mcpOAuthProvider.completeMcpAuth(
               code,
               mcpState.sessionId,
               mcpState.account,
@@ -528,14 +565,14 @@ export class HttpTransportHandler {
     };
 
     // Protect MCP routes based on auth mode
-    if (mcpOAuthProvider) {
+    if (this.mcpOAuthProvider) {
       // MCP OAuth mode: use SDK's bearer auth middleware
       const { requireBearerAuth } = await import('@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js');
       const issuerUrl = this.config.mcpOAuth!.issuerUrl!;
       const resourceMetadataUrl = `${issuerUrl}/.well-known/oauth-protected-resource/mcp`;
 
       app.all('/mcp', requireBearerAuth({
-        verifier: mcpOAuthProvider,
+        verifier: this.mcpOAuthProvider,
         resourceMetadataUrl,
       }), mcpRequestHandler);
     } else {
@@ -574,8 +611,11 @@ export class HttpTransportHandler {
       }, mcpRequestHandler);
     }
 
-    app.listen(port, host, () => {
-      process.stderr.write(`Google Calendar MCP Server listening on http://${host}:${port}\n`);
+    await new Promise<void>((resolve) => {
+      this.httpServer = app.listen(port, host, () => {
+        process.stderr.write(`Google Calendar MCP Server listening on http://${host}:${port}\n`);
+        resolve();
+      });
     });
   }
 }

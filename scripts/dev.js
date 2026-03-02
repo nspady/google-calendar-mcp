@@ -103,6 +103,11 @@ const commands = {
     cmd: 'npm',
     args: ['run', 'test:integration:llm']
   },
+  'test:integration:mcp-oauth': {
+    description: 'Run MCP OAuth end-to-end flow test (no credentials required)',
+    cmd: 'npm',
+    args: ['run', 'test:integration:mcp-oauth']
+  },
   'test:integration:all': {
     description: 'Run complete integration test suite (direct + multi-account + LLM + docker)',
     cmd: 'npm',
@@ -174,7 +179,7 @@ function showHelp() {
     'HTTP Transport': ['http', 'http:public'],
     'Authentication': ['auth', 'auth:test', 'account:status', 'account:clear:normal', 'account:clear:test'],
     'Unit Testing': ['test'],
-    'Integration Testing': ['test:integration', 'test:integration:direct', 'test:integration:multi-account', 'test:integration:claude', 'test:integration:openai', 'test:integration:llm', 'test:integration:all', 'test:watch:all'],
+    'Integration Testing': ['test:integration', 'test:integration:direct', 'test:integration:multi-account', 'test:integration:mcp-oauth', 'test:integration:claude', 'test:integration:openai', 'test:integration:llm', 'test:integration:all', 'test:watch:all'],
     'Docker Operations': ['docker:build', 'docker:up', 'docker:up:http', 'docker:auth', 'docker:logs', 'docker:down', 'docker:exec', 'docker:test:quick'],
     'Coverage & Analysis': ['coverage']
   };
