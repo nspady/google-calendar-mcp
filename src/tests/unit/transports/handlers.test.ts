@@ -59,6 +59,7 @@ vi.mock('express', () => {
 
   const expressFn: any = () => app;
   expressFn.json = vi.fn(() => (_req: any, _res: any, next: Function) => next());
+  expressFn.urlencoded = vi.fn(() => (_req: any, _res: any, next: Function) => next());
 
   state.expressApp = app;
   return { default: expressFn };

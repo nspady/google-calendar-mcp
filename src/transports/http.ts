@@ -154,12 +154,14 @@ export class HttpTransportHandler {
 
     const app = express();
     app.set('trust proxy', 1);
-    // Parse JSON for all routes except /mcp — the MCP transport reads the raw body stream itself
+    // Parse request bodies for all routes except /mcp — the MCP transport reads the raw body stream itself
+    const jsonParser = express.json({ limit: '10mb' });
+    const urlencodedParser = express.urlencoded({ extended: false });
     app.use((req: Request, res: Response, next: NextFunction) => {
       if (req.path === '/mcp') {
         next();
       } else {
-        express.json({ limit: '10mb' })(req, res, next);
+        jsonParser(req, res, () => urlencodedParser(req, res, next));
       }
     });
 
