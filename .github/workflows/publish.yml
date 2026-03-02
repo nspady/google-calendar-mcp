@@ -29,7 +29,6 @@ jobs:
         if: ${{ steps.release.outputs.release_created }}
         with:
           node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
         if: ${{ steps.release.outputs.release_created }}
@@ -62,7 +61,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
         run: npm ci
