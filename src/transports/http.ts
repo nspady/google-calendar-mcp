@@ -212,15 +212,36 @@ export class HttpTransportHandler {
       });
     }
 
-    // CORS headers
+    // CORS headers — patch writeHead to ensure headers survive transport layer
     app.use((req: Request, res: Response, next: NextFunction) => {
       const origin = req.headers.origin;
       const allowedCorsOrigin = mcpOAuthProvider
         ? (origin || '*')
         : (origin && isAllowedOrigin(origin) ? origin : (process.env.ALLOWED_ORIGIN || `http://${host}:${port}`));
-      res.setHeader('Access-Control-Allow-Origin', allowedCorsOrigin);
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, mcp-session-id, Authorization');
+
+      const corsHeaders: Record<string, string> = {
+        'Access-Control-Allow-Origin': allowedCorsOrigin,
+        'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, mcp-session-id, Authorization, MCP-Protocol-Version',
+        'Access-Control-Expose-Headers': 'Mcp-Session-Id',
+      };
+
+      // Set headers immediately for normal Express responses
+      for (const [key, value] of Object.entries(corsHeaders)) {
+        res.setHeader(key, value);
+      }
+
+      // Also patch writeHead to inject CORS headers into responses created by the MCP transport,
+      // which bypasses Express's response handling via Web Standard API conversion.
+      const originalWriteHead = res.writeHead.bind(res);
+      (res as any).writeHead = function(statusCode: number, ...args: any[]) {
+        for (const [key, value] of Object.entries(corsHeaders)) {
+          if (!res.getHeader(key)) {
+            res.setHeader(key, value);
+          }
+        }
+        return originalWriteHead(statusCode, ...args);
+      };
 
       if (req.method === 'OPTIONS') {
         res.status(200).end();
