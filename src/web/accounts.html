@@ -72,10 +72,10 @@
         }
 
         /* Account list */
-        .account-list {
+        #accountList {
             display: flex;
             flex-direction: column;
-            gap: 1.25rem;
+            gap: 0.5rem;
         }
 
         .account-item {
@@ -204,13 +204,13 @@
             max-height: 0;
             overflow: hidden;
             opacity: 0;
-            transition: max-height 0.3s ease, opacity 0.25s ease;
+            padding: 0 0.75rem;
+            transition: max-height 0.3s ease, opacity 0.25s ease, padding 0.3s ease;
             background: var(--bg-surface);
         }
         .calendar-list.expanded {
-            max-height: 320px;
+            max-height: 800px;
             opacity: 1;
-            overflow-y: auto;
             padding: 0.25rem 0.75rem 0.5rem;
         }
 
