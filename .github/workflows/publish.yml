@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -13,6 +14,7 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push'
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -50,3 +52,23 @@ jobs:
             echo "Publishing stable version $VERSION with latest tag"
             npm publish --provenance --access public
           fi
+
+  publish:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+
+      - name: Publish to NPM
+        run: npm publish --provenance --access public
