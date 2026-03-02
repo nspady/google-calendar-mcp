@@ -154,7 +154,14 @@ export class HttpTransportHandler {
 
     const app = express();
     app.set('trust proxy', 1);
-    app.use(express.json({ limit: '10mb' }));
+    // Parse JSON for all routes except /mcp — the MCP transport reads the raw body stream itself
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      if (req.path === '/mcp') {
+        next();
+      } else {
+        express.json({ limit: '10mb' })(req, res, next);
+      }
+    });
 
     // --- MCP OAuth setup (when enabled) ---
     let mcpOAuthProvider: import('../auth/mcp-oauth/McpOAuthProvider.js').McpOAuthProvider | null = null;
