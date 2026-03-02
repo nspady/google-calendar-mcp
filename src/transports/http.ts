@@ -187,24 +187,27 @@ export class HttpTransportHandler {
     // --- Global middleware ---
 
     // Origin validation (DNS rebinding protection)
-    app.use((req: Request, res: Response, next: NextFunction) => {
-      const origin = req.headers.origin;
-      if (origin && !isAllowedOrigin(origin)) {
-        res.status(403).json({
-          error: 'Forbidden: Invalid origin',
-          message: 'Origin header validation failed'
-        });
-        return;
-      }
-      next();
-    });
+    // When MCP OAuth is enabled, bearer tokens are the security boundary, so skip origin checks.
+    if (!mcpOAuthProvider) {
+      app.use((req: Request, res: Response, next: NextFunction) => {
+        const origin = req.headers.origin;
+        if (origin && !isAllowedOrigin(origin)) {
+          res.status(403).json({
+            error: 'Forbidden: Invalid origin',
+            message: 'Origin header validation failed'
+          });
+          return;
+        }
+        next();
+      });
+    }
 
     // CORS headers
     app.use((req: Request, res: Response, next: NextFunction) => {
       const origin = req.headers.origin;
-      const allowedCorsOrigin = origin && isAllowedOrigin(origin)
-        ? origin
-        : (process.env.ALLOWED_ORIGIN || `http://${host}:${port}`);
+      const allowedCorsOrigin = mcpOAuthProvider
+        ? (origin || '*')
+        : (origin && isAllowedOrigin(origin) ? origin : (process.env.ALLOWED_ORIGIN || `http://${host}:${port}`));
       res.setHeader('Access-Control-Allow-Origin', allowedCorsOrigin);
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type, mcp-session-id, Authorization');
