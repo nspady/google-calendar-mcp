@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.6.1](https://github.com/nspady/google-calendar-mcp/compare/v2.6.0...v2.6.1) (2026-03-02)
+
+
+### Bug Fixes
+
+* **ci:** remove registry-url so npm OIDC handles auth ([385fd02](https://github.com/nspady/google-calendar-mcp/commit/385fd02875555aeceb9cb94a259b6d2a96493174))
+* **ci:** upgrade npm to 11.5.1+ for OIDC trusted publishing ([934b5b5](https://github.com/nspady/google-calendar-mcp/commit/934b5b58b47a615abe968517adc9df0f25daf633))
+
 ## [2.6.0](https://github.com/nspady/google-calendar-mcp/compare/v2.5.0...v2.6.0) (2026-02-28)
 
 
