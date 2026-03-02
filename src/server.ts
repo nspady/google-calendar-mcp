@@ -19,7 +19,7 @@ import { z } from 'zod';
 
 // Import transport handlers
 import { StdioTransportHandler } from './transports/stdio.js';
-import { HttpTransportHandler, HttpTransportConfig } from './transports/http.js';
+import { HttpTransportHandler, HttpTransportConfig, McpServerFactory } from './transports/http.js';
 
 // Import config
 import { ServerConfig } from './config/TransportConfig.js';
@@ -119,6 +119,10 @@ export class GoogleCalendarMcpServer {
    * - Needs access to authServer, tokenManager, etc.
    */
   private registerAccountManagementTools(): void {
+    this.registerAccountManagementToolsOn(this.server);
+  }
+
+  private registerAccountManagementToolsOn(server: McpServer): void {
     // Use arrow functions to keep `this` reference current after reloadAccounts()
     const self = this;
     const serverContext: ServerContext = {
@@ -133,7 +137,7 @@ export class GoogleCalendarMcpServer {
     };
 
     const manageAccountsHandler = new ManageAccountsHandler();
-    this.server.tool(
+    server.tool(
       'manage-accounts',
       "Manage Google account authentication. Actions: 'list' (show accounts), 'add' (authenticate new account), 'remove' (remove account).",
       {
@@ -215,8 +219,17 @@ export class GoogleCalendarMcpServer {
           host: this.config.transport.host,
           mcpOAuth: this.config.mcpOAuth,
         };
+        const serverFactory: McpServerFactory = async () => {
+          const server = new McpServer({
+            name: "google-calendar",
+            version: SERVER_VERSION
+          });
+          await ToolRegistry.registerAll(server, this.executeWithHandler.bind(this), this.config);
+          this.registerAccountManagementToolsOn(server);
+          return server;
+        };
         const httpHandler = new HttpTransportHandler(
-          this.server,
+          serverFactory,
           httpConfig,
           this.tokenManager
         );

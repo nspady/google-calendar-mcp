@@ -32,11 +32,16 @@ RUN mkdir -p /home/nodejs/.config/google-calendar-mcp && \
     chown -R nodejs:nodejs /home/nodejs/.config && \
     chown -R nodejs:nodejs /app
 
-# Switch to non-root user
-USER nodejs
+# Install su-exec for dropping privileges after fixing volume permissions
+RUN apk add --no-cache su-exec
+
+# Copy entrypoint script (runs as root to fix volume permissions, then drops to nodejs)
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
 # Expose port for HTTP mode (optional)
 EXPOSE 3000
 
-# Default command - start in HTTP mode on all interfaces for Railway/cloud deployment
+# Entrypoint fixes volume mount permissions then drops to nodejs user
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["node", "build/index.js", "--transport", "http", "--host", "0.0.0.0"]

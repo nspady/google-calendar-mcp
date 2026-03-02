@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
-  transport: undefined as { handleRequest: ReturnType<typeof vi.fn> } | undefined,
+  transport: undefined as any,
   expressApp: undefined as any,
   listen: vi.fn(),
   clearCache: vi.fn(),
@@ -10,11 +10,15 @@ const state = vi.hoisted(() => ({
   loadWebFile: vi.fn(async (name: string) => `file:${name}`),
   validateAccountId: vi.fn(),
   loadCredentials: vi.fn(async () => ({ client_id: 'client-id', client_secret: 'client-secret' })),
+  mcpHandleRequest: vi.fn(async () => undefined) as ReturnType<typeof vi.fn>,
 }));
 
 vi.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
   StreamableHTTPServerTransport: class MockStreamableHTTPServerTransport {
-    handleRequest = vi.fn(async () => undefined);
+    handleRequest = state.mcpHandleRequest;
+    sessionId = 'mock-session-id';
+    onclose: (() => void) | null = null;
+    close = vi.fn(async () => undefined);
     constructor() {
       state.transport = this;
     }
@@ -204,10 +208,20 @@ async function invokeRoute(
   }
 }
 
+function createMockServerFactory() {
+  return vi.fn(async () => ({ connect: vi.fn(async () => undefined) })) as any;
+}
+
+const mockTokenManager = () => ({
+  listAccounts: vi.fn(), getAccountMode: vi.fn(), setAccountMode: vi.fn(),
+  clearTokens: vi.fn(), saveTokens: vi.fn()
+}) as any;
+
 describe('Transport Handlers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     state.transport = undefined;
+    state.mcpHandleRequest.mockReset().mockResolvedValue(undefined);
     if (state.expressApp) {
       state.expressApp._routes.length = 0;
       state.expressApp._middlewares.length = 0;
@@ -224,9 +238,7 @@ describe('Transport Handlers', () => {
   });
 
   it('rejects requests from non-localhost origins', async () => {
-    const server = { connect: vi.fn(async () => undefined) } as any;
-    const tokenManager = { listAccounts: vi.fn(), getAccountMode: vi.fn(), setAccountMode: vi.fn(), clearTokens: vi.fn(), saveTokens: vi.fn() } as any;
-    const handler = new HttpTransportHandler(server, { port: 3999, host: '127.0.0.1' }, tokenManager);
+    const handler = new HttpTransportHandler(createMockServerFactory(), { port: 3999, host: '127.0.0.1' }, mockTokenManager());
     await handler.connect();
 
     const req = createMockRequest({
@@ -243,9 +255,7 @@ describe('Transport Handlers', () => {
   });
 
   it('returns health payload and sets localhost CORS defaults', async () => {
-    const server = { connect: vi.fn(async () => undefined) } as any;
-    const tokenManager = { listAccounts: vi.fn(), getAccountMode: vi.fn(), setAccountMode: vi.fn(), clearTokens: vi.fn(), saveTokens: vi.fn() } as any;
-    const handler = new HttpTransportHandler(server, { port: 4001, host: '127.0.0.1' }, tokenManager);
+    const handler = new HttpTransportHandler(createMockServerFactory(), { port: 4001, host: '127.0.0.1' }, mockTokenManager());
     await handler.connect();
 
     const req = createMockRequest({
@@ -263,7 +273,6 @@ describe('Transport Handlers', () => {
   });
 
   it('returns account list via API endpoint', async () => {
-    const server = { connect: vi.fn(async () => undefined) } as any;
     const tokenManager = {
       listAccounts: vi.fn(async () => [{ id: 'work', status: 'active' }]),
       getAccountMode: vi.fn(),
@@ -271,7 +280,7 @@ describe('Transport Handlers', () => {
       clearTokens: vi.fn(),
       saveTokens: vi.fn()
     } as any;
-    const handler = new HttpTransportHandler(server, {}, tokenManager);
+    const handler = new HttpTransportHandler(createMockServerFactory(), {}, tokenManager);
     await handler.connect();
 
     const req = createMockRequest({
@@ -289,9 +298,7 @@ describe('Transport Handlers', () => {
   });
 
   it('creates OAuth URL for POST /api/accounts', async () => {
-    const server = { connect: vi.fn(async () => undefined) } as any;
-    const tokenManager = { listAccounts: vi.fn(), getAccountMode: vi.fn(), setAccountMode: vi.fn(), clearTokens: vi.fn(), saveTokens: vi.fn() } as any;
-    const handler = new HttpTransportHandler(server, { port: 4000, host: 'localhost' }, tokenManager);
+    const handler = new HttpTransportHandler(createMockServerFactory(), { port: 4000, host: 'localhost' }, mockTokenManager());
     await handler.connect();
 
     const req = createMockRequest({
@@ -311,15 +318,10 @@ describe('Transport Handlers', () => {
   });
 
   it('returns 500 when MCP transport request handling throws', async () => {
-    const server = { connect: vi.fn(async () => undefined) } as any;
-    const tokenManager = { listAccounts: vi.fn(), getAccountMode: vi.fn(), setAccountMode: vi.fn(), clearTokens: vi.fn(), saveTokens: vi.fn() } as any;
-    const handler = new HttpTransportHandler(server, {}, tokenManager);
-    await handler.connect();
+    state.mcpHandleRequest.mockRejectedValueOnce(new Error('boom'));
 
-    if (!state.transport) {
-      throw new Error('Transport mock not initialized');
-    }
-    state.transport.handleRequest.mockRejectedValueOnce(new Error('boom'));
+    const handler = new HttpTransportHandler(createMockServerFactory(), {}, mockTokenManager());
+    await handler.connect();
 
     const req = createMockRequest({
       method: 'POST',

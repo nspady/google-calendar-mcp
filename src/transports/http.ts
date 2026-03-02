@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import express, { Request, Response, NextFunction } from "express";
@@ -5,6 +6,8 @@ import { TokenManager } from "../auth/tokenManager.js";
 import { CalendarRegistry } from "../services/CalendarRegistry.js";
 import { renderAuthSuccess, renderAuthError, loadWebFile } from "../web/templates.js";
 import type { McpOAuthConfig } from "../config/TransportConfig.js";
+
+export type McpServerFactory = () => Promise<McpServer>;
 
 /**
  * Security headers for HTML responses
@@ -86,18 +89,71 @@ export interface HttpTransportConfig {
 }
 
 export class HttpTransportHandler {
-  private server: McpServer;
+  private serverFactory: McpServerFactory;
   private config: HttpTransportConfig;
   private tokenManager: TokenManager;
+  private sessions = new Map<string, StreamableHTTPServerTransport>();
 
   constructor(
-    server: McpServer,
+    serverFactory: McpServerFactory,
     config: HttpTransportConfig = {},
     tokenManager: TokenManager
   ) {
-    this.server = server;
+    this.serverFactory = serverFactory;
     this.config = config;
     this.tokenManager = tokenManager;
+  }
+
+  /**
+   * Routes an MCP request to the correct per-session transport.
+   * Creates a new session (McpServer + transport) for POST requests without a session ID.
+   * Routes to existing sessions for requests with a valid mcp-session-id header.
+   */
+  private async handleMcpRequest(req: Request, res: Response): Promise<void> {
+    const sessionId = req.headers['mcp-session-id'] as string | undefined;
+
+    if (sessionId) {
+      const transport = this.sessions.get(sessionId);
+      if (!transport) {
+        res.status(404).json({
+          jsonrpc: '2.0',
+          error: { code: -32000, message: 'Session not found. The client may need to reconnect.' },
+          id: null,
+        });
+        return;
+      }
+      await transport.handleRequest(req, res);
+    } else if (req.method === 'POST') {
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => crypto.randomUUID(),
+      });
+
+      transport.onclose = () => {
+        const sid = transport.sessionId;
+        if (sid) this.sessions.delete(sid);
+      };
+
+      const server = await this.serverFactory();
+      await server.connect(transport);
+
+      try {
+        await transport.handleRequest(req, res);
+      } catch (error) {
+        await transport.close().catch(() => {});
+        throw error;
+      }
+
+      const sid = transport.sessionId;
+      if (sid) {
+        this.sessions.set(sid, transport);
+      }
+    } else {
+      res.status(400).json({
+        jsonrpc: '2.0',
+        error: { code: -32000, message: 'Missing mcp-session-id header' },
+        id: null,
+      });
+    }
   }
 
   /**
@@ -145,20 +201,17 @@ export class HttpTransportHandler {
     const port = this.config.port || 3000;
     const host = this.config.host || '127.0.0.1';
 
-    // Configure transport for stateless mode to allow multiple initialization cycles
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined // Stateless mode - allows multiple initializations
-    });
-
-    await this.server.connect(transport);
-
     const app = express();
     app.set('trust proxy', 1);
-    // Parse request bodies for all routes except /mcp — the MCP transport reads the raw body stream itself
+    // Parse request bodies only for our own routes.
+    // Skip /mcp (transport reads raw body stream) and SDK OAuth routes
+    // (/token, /register, /revoke, /authorize — they include their own body parsers
+    // and would hang if the raw stream was already consumed by our parser).
+    const SDK_OAUTH_ROUTES = new Set(['/mcp', '/token', '/register', '/revoke', '/authorize']);
     const jsonParser = express.json({ limit: '10mb' });
     const urlencodedParser = express.urlencoded({ extended: false });
     app.use((req: Request, res: Response, next: NextFunction) => {
-      if (req.path === '/mcp') {
+      if (SDK_OAUTH_ROUTES.has(req.path)) {
         next();
       } else {
         jsonParser(req, res, () => urlencodedParser(req, res, next));
@@ -458,6 +511,22 @@ export class HttpTransportHandler {
 
     // --- MCP Endpoint ---
 
+    // --- MCP request handler (shared between auth modes) ---
+    const mcpRequestHandler = async (req: Request, res: Response) => {
+      try {
+        await this.handleMcpRequest(req, res);
+      } catch (error) {
+        process.stderr.write(`Error handling MCP request: ${error instanceof Error ? error.message : error}\n`);
+        if (!res.headersSent) {
+          res.status(500).json({
+            jsonrpc: '2.0',
+            error: { code: -32603, message: 'Internal server error' },
+            id: null,
+          });
+        }
+      }
+    };
+
     // Protect MCP routes based on auth mode
     if (mcpOAuthProvider) {
       // MCP OAuth mode: use SDK's bearer auth middleware
@@ -468,21 +537,7 @@ export class HttpTransportHandler {
       app.all('/mcp', requireBearerAuth({
         verifier: mcpOAuthProvider,
         resourceMetadataUrl,
-      }), async (req: Request, res: Response) => {
-        try {
-          process.stderr.write(`MCP request: ${req.method} auth=${!!req.auth}\n`);
-          await transport.handleRequest(req, res);
-        } catch (error) {
-          process.stderr.write(`Error handling MCP request: ${error instanceof Error ? error.stack || error.message : error}\n`);
-          if (!res.headersSent) {
-            res.status(500).json({
-              jsonrpc: '2.0',
-              error: { code: -32603, message: 'Internal server error' },
-              id: null,
-            });
-          }
-        }
-      });
+      }), mcpRequestHandler);
     } else {
       // Static bearer token mode (existing behavior)
       app.all('/mcp', (req: Request, res: Response, next: NextFunction) => {
@@ -495,23 +550,10 @@ export class HttpTransportHandler {
           return;
         }
         next();
-      }, async (req: Request, res: Response) => {
-        try {
-          await transport.handleRequest(req, res);
-        } catch (error) {
-          process.stderr.write(`Error handling MCP request: ${error instanceof Error ? error.message : error}\n`);
-          if (!res.headersSent) {
-            res.status(500).json({
-              jsonrpc: '2.0',
-              error: { code: -32603, message: 'Internal server error' },
-              id: null,
-            });
-          }
-        }
-      });
+      }, mcpRequestHandler);
 
       // Also handle requests at root for backwards compatibility (non-OAuth mode only)
-      app.post('/', async (req: Request, res: Response, next: NextFunction) => {
+      app.post('/', (req: Request, res: Response, next: NextFunction) => {
         // Only handle JSON-RPC requests at root, not other POST requests
         const contentType = req.headers['content-type'];
         if (!contentType?.includes('application/json')) {
@@ -528,19 +570,8 @@ export class HttpTransportHandler {
           return;
         }
 
-        try {
-          await transport.handleRequest(req, res);
-        } catch (error) {
-          process.stderr.write(`Error handling request: ${error instanceof Error ? error.message : error}\n`);
-          if (!res.headersSent) {
-            res.status(500).json({
-              jsonrpc: '2.0',
-              error: { code: -32603, message: 'Internal server error' },
-              id: null,
-            });
-          }
-        }
-      });
+        next();
+      }, mcpRequestHandler);
     }
 
     app.listen(port, host, () => {

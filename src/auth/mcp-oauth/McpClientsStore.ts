@@ -40,7 +40,12 @@ export class McpClientsStore implements OAuthRegisteredClientsStore {
     };
 
     this.clients.set(clientId, registered);
-    await saveJsonFile(this.persistPath, Object.fromEntries(this.clients));
+    try {
+      await saveJsonFile(this.persistPath, Object.fromEntries(this.clients));
+    } catch (error) {
+      process.stderr.write(`McpClientsStore save error: ${error instanceof Error ? error.message : error}\n`);
+      // Continue without persistence — clients will work in-memory for this session
+    }
     return registered;
   }
 }
