@@ -1,4 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { BaseToolHandler } from "../handlers/core/BaseToolHandler.js";
 import { ALLOWED_EVENT_FIELDS } from "../utils/field-mask-builder.js";
@@ -767,11 +768,32 @@ export type RespondToEventInput = ToolInputs['respond-to-event'];
 
 interface ToolDefinition {
   name: keyof typeof ToolSchemas;
+  title: string;
   description: string;
+  annotations: ToolAnnotations;
   schema: z.ZodType<any>;
   handler: new () => BaseToolHandler;
   handlerFunction?: (args: any) => Promise<any>;
 }
+
+const READ_ONLY_ANNOTATIONS: ToolAnnotations = {
+  readOnlyHint: true,
+  openWorldHint: false
+};
+
+const WRITE_NON_DESTRUCTIVE_ANNOTATIONS: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: false
+};
+
+const WRITE_DESTRUCTIVE_ANNOTATIONS: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: false,
+  openWorldHint: false
+};
 
 
 export class ToolRegistry {
@@ -790,13 +812,17 @@ export class ToolRegistry {
   private static tools: ToolDefinition[] = [
     {
       name: "list-calendars",
+      title: "List Calendars",
       description: "List all available calendars",
+      annotations: READ_ONLY_ANNOTATIONS,
       schema: ToolSchemas['list-calendars'],
       handler: ListCalendarsHandler
     },
     {
       name: "list-events",
+      title: "List Calendar Events",
       description: "List events from one or more calendars. Supports both calendar IDs and calendar names.",
+      annotations: READ_ONLY_ANNOTATIONS,
       schema: ToolSchemas['list-events'],
       handler: ListEventsHandler,
       handlerFunction: async (args: ListEventsInput & { calendarId: string | string[] }) => {
@@ -863,61 +889,81 @@ export class ToolRegistry {
     },
     {
       name: "search-events",
+      title: "Search Calendar Events",
       description: "Search for events in a calendar by text query.",
+      annotations: READ_ONLY_ANNOTATIONS,
       schema: ToolSchemas['search-events'],
       handler: SearchEventsHandler
     },
     {
       name: "get-event",
+      title: "Get Event Details",
       description: "Get details of a specific event by ID.",
+      annotations: READ_ONLY_ANNOTATIONS,
       schema: ToolSchemas['get-event'],
       handler: GetEventHandler
     },
     {
       name: "list-colors",
+      title: "List Calendar Colors",
       description: "List available color IDs and their meanings for calendar events",
+      annotations: READ_ONLY_ANNOTATIONS,
       schema: ToolSchemas['list-colors'],
       handler: ListColorsHandler
     },
     {
       name: "create-event",
+      title: "Create Calendar Event",
       description: "Create a new calendar event.",
+      annotations: WRITE_NON_DESTRUCTIVE_ANNOTATIONS,
       schema: ToolSchemas['create-event'],
       handler: CreateEventHandler
     },
     {
       name: "create-events",
+      title: "Create Calendar Events (Bulk)",
       description: "Create multiple calendar events in bulk. Accepts shared defaults (account, calendarId, timeZone) that apply to all events, with per-event overrides. Skips conflict and duplicate detection for speed.",
+      annotations: WRITE_NON_DESTRUCTIVE_ANNOTATIONS,
       schema: ToolSchemas['create-events'],
       handler: CreateEventsHandler
     },
     {
       name: "update-event",
+      title: "Update Calendar Event",
       description: "Update an existing calendar event with recurring event modification scope support.",
+      annotations: WRITE_DESTRUCTIVE_ANNOTATIONS,
       schema: ToolSchemas['update-event'],
       handler: UpdateEventHandler
     },
     {
       name: "delete-event",
+      title: "Delete Calendar Event",
       description: "Delete a calendar event.",
+      annotations: WRITE_DESTRUCTIVE_ANNOTATIONS,
       schema: ToolSchemas['delete-event'],
       handler: DeleteEventHandler
     },
     {
       name: "get-freebusy",
+      title: "Get Free/Busy",
       description: "Query free/busy information for calendars. Note: Time range is limited to a maximum of 3 months between timeMin and timeMax.",
+      annotations: READ_ONLY_ANNOTATIONS,
       schema: ToolSchemas['get-freebusy'],
       handler: FreeBusyEventHandler
     },
     {
       name: "get-current-time",
+      title: "Get Current Time",
       description: "Get the current date and time. Call this FIRST before creating, updating, or searching for events to ensure you have accurate date context for scheduling.",
+      annotations: READ_ONLY_ANNOTATIONS,
       schema: ToolSchemas['get-current-time'],
       handler: GetCurrentTimeHandler
     },
     {
       name: "respond-to-event",
+      title: "Respond to Event Invitation",
       description: "Respond to a calendar event invitation with Accept, Decline, Maybe (Tentative), or No Response.",
+      annotations: WRITE_NON_DESTRUCTIVE_ANNOTATIONS,
       schema: ToolSchemas['respond-to-event'],
       handler: RespondToEventHandler
     }
@@ -1052,8 +1098,10 @@ export class ToolRegistry {
     server.registerTool(
         tool.name,
         {
+          title: tool.title,
           description: tool.description,
-          inputSchema: this.extractSchemaShape(tool.schema)
+          inputSchema: this.extractSchemaShape(tool.schema),
+          annotations: tool.annotations
         },
         async (args: any) => {
           // Preprocess: Normalize datetime fields (convert object format to string format)

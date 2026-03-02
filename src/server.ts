@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
+import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
@@ -133,6 +134,13 @@ export class GoogleCalendarMcpServer {
     };
 
     const manageAccountsHandler = new ManageAccountsHandler();
+    const manageAccountsAnnotations: ToolAnnotations = {
+      title: "Manage Connected Google Accounts",
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: false
+    };
     this.server.tool(
       'manage-accounts',
       "Manage Google account authentication. Actions: 'list' (show accounts), 'add' (authenticate new account), 'remove' (remove account).",
@@ -144,6 +152,7 @@ export class GoogleCalendarMcpServer {
           .optional()
           .describe("Account nickname (e.g., 'work', 'personal') - a friendly name to identify this Google account. Required for 'add' and 'remove'. Optional for 'list' (shows all if omitted)")
       },
+      manageAccountsAnnotations,
       async (args) => {
         return manageAccountsHandler.runTool(args, serverContext);
       }

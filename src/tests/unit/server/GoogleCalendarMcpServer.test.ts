@@ -117,6 +117,19 @@ describe('GoogleCalendarMcpServer', () => {
     expect(state.tokenManagerLoadAllAccounts).toHaveBeenCalledTimes(1);
     expect(state.toolRegistryRegisterAll).toHaveBeenCalledTimes(1);
     expect(state.mcpServerInstance.tool).toHaveBeenCalledTimes(1);
+    expect(state.mcpServerInstance.tool).toHaveBeenCalledWith(
+      'manage-accounts',
+      expect.any(String),
+      expect.any(Object),
+      {
+        title: 'Manage Google Accounts',
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: false
+      },
+      expect.any(Function)
+    );
     expect(process.on).toHaveBeenCalledWith('SIGINT', expect.any(Function));
     expect(process.on).toHaveBeenCalledWith('SIGTERM', expect.any(Function));
     expect(server.getServer()).toBe(state.mcpServerInstance);
