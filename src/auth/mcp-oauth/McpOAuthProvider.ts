@@ -140,12 +140,15 @@ export class McpOAuthProvider implements OAuthServerProvider {
     _redirectUri?: string,
     _resource?: URL
   ): Promise<OAuthTokens> {
+    process.stderr.write(`MCP OAuth token exchange: client=${client.client_id}\n`);
     const stored = this._tokenStore.consumeAuthCode(authorizationCode);
     if (!stored) {
+      process.stderr.write(`MCP OAuth token exchange failed: invalid or expired auth code\n`);
       throw new InvalidGrantError('Invalid or expired authorization code');
     }
 
     if (stored.clientId !== client.client_id) {
+      process.stderr.write(`MCP OAuth token exchange failed: client mismatch (expected=${stored.clientId} got=${client.client_id})\n`);
       throw new InvalidGrantError('Authorization code was not issued to this client');
     }
 
@@ -156,6 +159,7 @@ export class McpOAuthProvider implements OAuthServerProvider {
       refreshToken.token
     );
 
+    process.stderr.write(`MCP OAuth token exchange success: client=${client.client_id}\n`);
     return {
       access_token: accessToken.token,
       token_type: 'Bearer',
@@ -201,6 +205,7 @@ export class McpOAuthProvider implements OAuthServerProvider {
   async verifyAccessToken(token: string): Promise<AuthInfo> {
     const stored = this._tokenStore.getAccessToken(token);
     if (!stored) {
+      process.stderr.write(`MCP OAuth verify failed: invalid or expired access token\n`);
       throw new InvalidTokenError('Invalid or expired access token');
     }
 
