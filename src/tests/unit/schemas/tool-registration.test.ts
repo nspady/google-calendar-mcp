@@ -104,7 +104,7 @@ describe('Tool Registration', () => {
       'update-event': {
         readOnlyHint: false,
         destructiveHint: true,
-        idempotentHint: false,
+        idempotentHint: true,
         openWorldHint: false
       },
       'delete-event': {
@@ -116,7 +116,7 @@ describe('Tool Registration', () => {
       'respond-to-event': {
         readOnlyHint: false,
         destructiveHint: false,
-        idempotentHint: false,
+        idempotentHint: true,
         openWorldHint: false
       }
     };

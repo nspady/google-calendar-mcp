@@ -795,6 +795,19 @@ const WRITE_DESTRUCTIVE_ANNOTATIONS: ToolAnnotations = {
   openWorldHint: false
 };
 
+const WRITE_DESTRUCTIVE_IDEMPOTENT_ANNOTATIONS: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: true,
+  openWorldHint: false
+};
+
+const WRITE_NON_DESTRUCTIVE_IDEMPOTENT_ANNOTATIONS: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false
+};
 
 export class ToolRegistry {
   private static extractSchemaShape(schema: z.ZodType<any>): any {
@@ -931,7 +944,7 @@ export class ToolRegistry {
       name: "update-event",
       title: "Update Calendar Event",
       description: "Update an existing calendar event with recurring event modification scope support.",
-      annotations: WRITE_DESTRUCTIVE_ANNOTATIONS,
+      annotations: WRITE_DESTRUCTIVE_IDEMPOTENT_ANNOTATIONS,
       schema: ToolSchemas['update-event'],
       handler: UpdateEventHandler
     },
@@ -963,7 +976,7 @@ export class ToolRegistry {
       name: "respond-to-event",
       title: "Respond to Event Invitation",
       description: "Respond to a calendar event invitation with Accept, Decline, Maybe (Tentative), or No Response.",
-      annotations: WRITE_NON_DESTRUCTIVE_ANNOTATIONS,
+      annotations: WRITE_NON_DESTRUCTIVE_IDEMPOTENT_ANNOTATIONS,
       schema: ToolSchemas['respond-to-event'],
       handler: RespondToEventHandler
     }
