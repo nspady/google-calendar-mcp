@@ -539,6 +539,18 @@ export class HttpTransportHandler {
       }
     });
 
+    // --- Icon ---
+
+    app.get('/icon.svg', async (_req: Request, res: Response) => {
+      try {
+        const svg = await loadWebFile('icon.svg');
+        setSecurityHeaders(res);
+        res.type('image/svg+xml').send(svg);
+      } catch {
+        res.status(404).send('Not found');
+      }
+    });
+
     // --- Health Check ---
 
     app.get('/health', (_req: Request, res: Response) => {

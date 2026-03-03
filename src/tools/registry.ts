@@ -1185,6 +1185,7 @@ export class ToolRegistry {
       server.registerTool(
         tool.name,
         {
+          title: tool.title,
           description: tool.description,
           inputSchema,
           annotations: tool.annotations

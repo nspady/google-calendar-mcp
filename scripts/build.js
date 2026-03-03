@@ -61,7 +61,8 @@ if (isWatch) {
     'auth-landing.html',
     'auth-success.html',
     'auth-error.html',
-    'styles.css'
+    'styles.css',
+    'icon.svg'
   ];
 
   await Promise.all(staticFiles.map(file =>

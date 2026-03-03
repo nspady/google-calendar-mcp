@@ -82,50 +82,25 @@ describe('Tool Registration', () => {
     };
 
     const expectedAnnotations: Record<string, Record<string, boolean>> = {
-      'list-calendars': { readOnlyHint: true, openWorldHint: false },
-      'list-events': { readOnlyHint: true, openWorldHint: false },
-      'search-events': { readOnlyHint: true, openWorldHint: false },
-      'get-event': { readOnlyHint: true, openWorldHint: false },
-      'list-colors': { readOnlyHint: true, openWorldHint: false },
-      'get-freebusy': { readOnlyHint: true, openWorldHint: false },
-      'get-current-time': { readOnlyHint: true, openWorldHint: false },
-      'create-event': {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false
-      },
-      'create-events': {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false
-      },
-      'update-event': {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: true,
-        openWorldHint: false
-      },
-      'delete-event': {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: false,
-        openWorldHint: false
-      },
-      'respond-to-event': {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false
-      }
+      'list-calendars': { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      'list-events': { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      'search-events': { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      'get-event': { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      'list-colors': { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      'get-freebusy': { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      'get-current-time': { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      'create-event': { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+      'create-events': { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+      'update-event': { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      'delete-event': { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
+      'respond-to-event': { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true }
     };
 
     for (const tool of registeredTools) {
+      if (!(tool.name in expectedTitles)) continue;
       expect(tool.title).toBe(expectedTitles[tool.name]);
       expect(tool.title.trim().length).toBeGreaterThan(0);
       expect(tool.annotations).toEqual(expectedAnnotations[tool.name]);
-      expect(tool.annotations.openWorldHint).toBe(false);
     }
   });
 

@@ -34,6 +34,21 @@ import { registerUIResources } from './ui/register-ui-resources.js';
 const __server_dirname = dirname(fileURLToPath(import.meta.url));
 const SERVER_VERSION = JSON.parse(readFileSync(join(__server_dirname, '..', 'package.json'), 'utf-8')).version;
 
+function buildServerInfo(): { name: string; version: string; title?: string; icons?: { src: string; mimeType: string; sizes: string[] }[] } {
+  const info: ReturnType<typeof buildServerInfo> = {
+    name: "google-calendar",
+    version: SERVER_VERSION,
+    title: "Google Calendar",
+  };
+
+  const baseUrl = process.env.OAUTH_REDIRECT_BASE_URL || process.env.MCP_ISSUER_URL;
+  if (baseUrl) {
+    info.icons = [{ src: `${baseUrl.replace(/\/+$/, '')}/icon.svg`, mimeType: "image/svg+xml", sizes: ["any"] }];
+  }
+
+  return info;
+}
+
 export class GoogleCalendarMcpServer {
   private server: McpServer;
   private oauth2Client!: OAuth2Client;
@@ -44,10 +59,7 @@ export class GoogleCalendarMcpServer {
 
   constructor(config: ServerConfig) {
     this.config = config;
-    this.server = new McpServer({
-      name: "google-calendar",
-      version: SERVER_VERSION
-    });
+    this.server = new McpServer(buildServerInfo());
   }
 
   async initialize(): Promise<void> {
@@ -412,10 +424,7 @@ export class GoogleCalendarMcpServer {
           mcpOAuth: this.config.mcpOAuth,
         };
         const serverFactory: McpServerFactory = async () => {
-          const server = new McpServer({
-            name: "google-calendar",
-            version: SERVER_VERSION
-          });
+          const server = new McpServer(buildServerInfo());
           await ToolRegistry.registerAll(server, this.executeWithHandler.bind(this), this.config);
           this.registerAccountManagementToolsOn(server);
           return server;
