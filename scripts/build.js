@@ -62,7 +62,7 @@ if (isWatch) {
     'auth-success.html',
     'auth-error.html',
     'styles.css',
-    'icon.svg'
+    'cocal_neon.png'
   ];
 
   await Promise.all(staticFiles.map(file =>

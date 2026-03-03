@@ -541,11 +541,25 @@ export class HttpTransportHandler {
 
     // --- Icon ---
 
-    app.get('/icon.svg', async (_req: Request, res: Response) => {
+    app.get('/icon.png', async (_req: Request, res: Response) => {
       try {
-        const svg = await loadWebFile('icon.svg');
-        setSecurityHeaders(res);
-        res.type('image/svg+xml').send(svg);
+        const { readFile } = await import('fs/promises');
+        const { dirname, join } = await import('path');
+        const { fileURLToPath } = await import('url');
+        const __iconDir = dirname(fileURLToPath(import.meta.url));
+        const locations = [
+          join(__iconDir, 'cocal_neon.png'),
+          join(__iconDir, 'web', 'cocal_neon.png'),
+        ];
+        for (const loc of locations) {
+          try {
+            const buf = await readFile(loc);
+            setSecurityHeaders(res);
+            res.type('image/png').send(buf);
+            return;
+          } catch { /* try next */ }
+        }
+        res.status(404).send('Not found');
       } catch {
         res.status(404).send('Not found');
       }

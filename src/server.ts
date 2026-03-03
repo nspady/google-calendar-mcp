@@ -43,7 +43,7 @@ function buildServerInfo(): { name: string; version: string; title?: string; ico
 
   const baseUrl = process.env.OAUTH_REDIRECT_BASE_URL || process.env.MCP_ISSUER_URL;
   if (baseUrl) {
-    info.icons = [{ src: `${baseUrl.replace(/\/+$/, '')}/icon.svg`, mimeType: "image/svg+xml", sizes: ["any"] }];
+    info.icons = [{ src: `${baseUrl.replace(/\/+$/, '')}/icon.png`, mimeType: "image/png", sizes: ["any"] }];
   }
 
   return info;
