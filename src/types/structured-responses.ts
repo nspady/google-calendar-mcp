@@ -310,6 +310,21 @@ export interface CreateEventsResponse {
 }
 
 /**
+ * Response format for bulk-creating multiple events
+ */
+export interface CreateEventsResponse {
+  totalRequested: number;
+  totalCreated: number;
+  totalFailed: number;
+  created: StructuredEvent[];
+  failed?: Array<{
+    index: number;
+    summary: string;
+    error: string;
+  }>;
+}
+
+/**
  * Response format for updating an existing event
  */
 export interface UpdateEventResponse {
