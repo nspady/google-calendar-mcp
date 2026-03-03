@@ -12,7 +12,13 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 describe('Tool Registration', () => {
   let mockServer: McpServer;
-  let registeredTools: Array<{ name: string; description: string; inputSchema: any }>;
+  let registeredTools: Array<{
+    name: string;
+    title: string;
+    description: string;
+    annotations: Record<string, unknown>;
+    inputSchema: any;
+  }>;
 
   beforeEach(() => {
     mockServer = new McpServer({ name: 'test', version: '1.0.0' });
@@ -22,7 +28,9 @@ describe('Tool Registration', () => {
     mockServer.registerTool = vi.fn((name: string, definition: any, _handler: any) => {
       registeredTools.push({
         name,
+        title: definition.title,
         description: definition.description,
+        annotations: definition.annotations,
         inputSchema: definition.inputSchema
       });
       // Return a mock RegisteredTool
@@ -52,6 +60,72 @@ describe('Tool Registration', () => {
     
     for (const expectedTool of expectedTools) {
       expect(registeredToolNames).toContain(expectedTool);
+    }
+  });
+
+  it('should register titles and annotations for all tools', async () => {
+    await ToolRegistry.registerAll(mockServer, async () => ({ content: [] }));
+
+    const expectedTitles: Record<string, string> = {
+      'list-calendars': 'List Calendars',
+      'list-events': 'List Calendar Events',
+      'search-events': 'Search Calendar Events',
+      'get-event': 'Get Event Details',
+      'list-colors': 'List Calendar Colors',
+      'create-event': 'Create Calendar Event',
+      'create-events': 'Create Calendar Events (Bulk)',
+      'update-event': 'Update Calendar Event',
+      'delete-event': 'Delete Calendar Event',
+      'get-freebusy': 'Get Free/Busy',
+      'get-current-time': 'Get Current Time',
+      'respond-to-event': 'Respond to Event Invitation'
+    };
+
+    const expectedAnnotations: Record<string, Record<string, boolean>> = {
+      'list-calendars': { readOnlyHint: true, openWorldHint: false },
+      'list-events': { readOnlyHint: true, openWorldHint: false },
+      'search-events': { readOnlyHint: true, openWorldHint: false },
+      'get-event': { readOnlyHint: true, openWorldHint: false },
+      'list-colors': { readOnlyHint: true, openWorldHint: false },
+      'get-freebusy': { readOnlyHint: true, openWorldHint: false },
+      'get-current-time': { readOnlyHint: true, openWorldHint: false },
+      'create-event': {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false
+      },
+      'create-events': {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false
+      },
+      'update-event': {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false
+      },
+      'delete-event': {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: false
+      },
+      'respond-to-event': {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false
+      }
+    };
+
+    for (const tool of registeredTools) {
+      expect(tool.title).toBe(expectedTitles[tool.name]);
+      expect(tool.title.trim().length).toBeGreaterThan(0);
+      expect(tool.annotations).toEqual(expectedAnnotations[tool.name]);
+      expect(tool.annotations.openWorldHint).toBe(false);
     }
   });
 
