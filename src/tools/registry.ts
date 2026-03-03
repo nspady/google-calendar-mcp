@@ -1,9 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { registerAppTool } from "@modelcontextprotocol/ext-apps/server";
 import { BaseToolHandler } from "../handlers/core/BaseToolHandler.js";
 import { ALLOWED_EVENT_FIELDS } from "../utils/field-mask-builder.js";
 import { ServerConfig } from "../config/TransportConfig.js";
+import { DAY_VIEW_RESOURCE_URI } from "../ui/register-ui-resources.js";
 
 // Import all handlers
 import { ListCalendarsHandler } from "../handlers/core/ListCalendarsHandler.js";
@@ -18,6 +19,8 @@ import { DeleteEventHandler } from "../handlers/core/DeleteEventHandler.js";
 import { FreeBusyEventHandler } from "../handlers/core/FreeBusyEventHandler.js";
 import { GetCurrentTimeHandler } from "../handlers/core/GetCurrentTimeHandler.js";
 import { RespondToEventHandler } from "../handlers/core/RespondToEventHandler.js";
+import { GetDayEventsHandler } from "../handlers/core/GetDayEventsHandler.js";
+
 
 // ============================================================================
 // SHARED VALIDATION PATTERNS
@@ -290,7 +293,10 @@ export const ToolSchemas = {
       return val;
     }).describe("Calendar identifier(s) to search. Accepts calendar IDs or names. Single or multiple calendars supported."),
     query: z.string().describe(
-      "Free text search query (searches summary, description, location, attendees, etc.)"
+      "Search query — all words are ANDed, so use 1-2 specific keywords for best results. " +
+      "Searches title, description, location, and attendee names/emails. " +
+      "Use quotes for exact phrases: \"team standup\". Use - to exclude: meeting -standup. " +
+      "Example: search 'school' then filter results, or make separate searches for 'last day' and 'summer'."
     ),
     timeMin: z.string()
       .refine(isValidIsoDateTime, "Must be ISO 8601 format: '2026-01-01T00:00:00'")
@@ -323,6 +329,18 @@ export const ToolSchemas = {
     fields: z.array(z.enum(ALLOWED_EVENT_FIELDS)).optional().describe(
       "Optional array of additional event fields to retrieve. Available fields are strictly validated. Default fields (id, summary, start, end, status, htmlLink, location, attendees) are always included."
     )
+  }),
+
+  'ui-get-event-details': z.object({
+    account: singleAccountSchema,
+    calendarId: z.string().describe("ID of the calendar"),
+    eventId: z.string().describe("ID of the event to retrieve"),
+  }),
+
+  'ui-get-day-events': z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe("Date to fetch events for (YYYY-MM-DD)"),
+    timeZone: z.string().optional().describe("IANA timezone (e.g., 'America/Los_Angeles')"),
+    focusEventId: z.string().optional().describe("Event ID to highlight in the day view"),
   }),
 
   'list-colors': z.object({
@@ -766,6 +784,21 @@ export type GetFreeBusyInput = ToolInputs['get-freebusy'];
 export type GetCurrentTimeInput = ToolInputs['get-current-time'];
 export type RespondToEventInput = ToolInputs['respond-to-event'];
 
+/**
+ * Tool annotations that help clients understand tool behavior.
+ * These are hints, not security guarantees.
+ */
+interface ToolAnnotations {
+  /** Tool does not modify its environment */
+  readOnlyHint?: boolean;
+  /** Tool may perform destructive updates (delete, overwrite) */
+  destructiveHint?: boolean;
+  /** Repeated calls with same args have no additional effect */
+  idempotentHint?: boolean;
+  /** Tool interacts with external entities (APIs, services) */
+  openWorldHint?: boolean;
+}
+
 interface ToolDefinition {
   name: keyof typeof ToolSchemas;
   title: string;
@@ -774,40 +807,14 @@ interface ToolDefinition {
   schema: z.ZodType<any>;
   handler: new () => BaseToolHandler;
   handlerFunction?: (args: any) => Promise<any>;
+  customInputSchema?: any; // Custom schema shape for MCP registration (overrides extractSchemaShape)
+  /** Tool annotations per MCP spec */
+  annotations?: ToolAnnotations;
+  /** Whether this tool has an associated UI (MCP Apps) */
+  hasUI?: boolean;
+  /** UI visibility scope — controls who can invoke the tool. Default: both model and app. */
+  uiVisibility?: ('model' | 'app')[];
 }
-
-const READ_ONLY_ANNOTATIONS: ToolAnnotations = {
-  readOnlyHint: true,
-  openWorldHint: false
-};
-
-const WRITE_NON_DESTRUCTIVE_ANNOTATIONS: ToolAnnotations = {
-  readOnlyHint: false,
-  destructiveHint: false,
-  idempotentHint: false,
-  openWorldHint: false
-};
-
-const WRITE_DESTRUCTIVE_ANNOTATIONS: ToolAnnotations = {
-  readOnlyHint: false,
-  destructiveHint: true,
-  idempotentHint: false,
-  openWorldHint: false
-};
-
-const WRITE_DESTRUCTIVE_IDEMPOTENT_ANNOTATIONS: ToolAnnotations = {
-  readOnlyHint: false,
-  destructiveHint: true,
-  idempotentHint: true,
-  openWorldHint: false
-};
-
-const WRITE_NON_DESTRUCTIVE_IDEMPOTENT_ANNOTATIONS: ToolAnnotations = {
-  readOnlyHint: false,
-  destructiveHint: false,
-  idempotentHint: true,
-  openWorldHint: false
-};
 
 export class ToolRegistry {
   private static extractSchemaShape(schema: z.ZodType<any>): any {
@@ -819,6 +826,12 @@ export class ToolRegistry {
       return schemaAny.shape;
     }
 
+    // Fallback for pipe/preprocess schemas: unwrap inner schema
+    if (schemaAny._def?.out) {
+      return this.extractSchemaShape(schemaAny._def.out);
+    }
+
+
     return schemaAny.shape;
   }
 
@@ -827,15 +840,14 @@ export class ToolRegistry {
       name: "list-calendars",
       title: "List Calendars",
       description: "List all available calendars",
-      annotations: READ_ONLY_ANNOTATIONS,
       schema: ToolSchemas['list-calendars'],
-      handler: ListCalendarsHandler
+      handler: ListCalendarsHandler,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
     },
     {
       name: "list-events",
       title: "List Calendar Events",
       description: "List events from one or more calendars. Supports both calendar IDs and calendar names.",
-      annotations: READ_ONLY_ANNOTATIONS,
       schema: ToolSchemas['list-events'],
       handler: ListEventsHandler,
       handlerFunction: async (args: ListEventsInput & { calendarId: string | string[] }) => {
@@ -898,87 +910,110 @@ export class ToolRegistry {
           privateExtendedProperty: args.privateExtendedProperty,
           sharedExtendedProperty: args.sharedExtendedProperty
         };
-      }
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      hasUI: true
     },
     {
       name: "search-events",
       title: "Search Calendar Events",
-      description: "Search for events in a calendar by text query.",
-      annotations: READ_ONLY_ANNOTATIONS,
+      description: "Search for events by keyword. Google Calendar ANDs all query terms — keep queries short (1-2 keywords). For broad lookups like 'what do I have this summer', prefer list-events with a time range instead. Use search only when looking for specific event names or topics.",
       schema: ToolSchemas['search-events'],
-      handler: SearchEventsHandler
+      handler: SearchEventsHandler,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      hasUI: true
     },
     {
       name: "get-event",
       title: "Get Event Details",
       description: "Get details of a specific event by ID.",
-      annotations: READ_ONLY_ANNOTATIONS,
       schema: ToolSchemas['get-event'],
-      handler: GetEventHandler
+      handler: GetEventHandler,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
+    },
+    {
+      name: "ui-get-event-details",
+      description: "Get event details for UI display (app-only).",
+      schema: ToolSchemas['ui-get-event-details'],
+      handler: GetEventHandler,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      hasUI: true,
+      uiVisibility: ['app']
+    },
+    {
+      name: "ui-get-day-events",
+      description: "Get all events across all calendars for a single day (app-only).",
+      schema: ToolSchemas['ui-get-day-events'],
+      handler: GetDayEventsHandler,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      hasUI: true,
+      uiVisibility: ['app']
     },
     {
       name: "list-colors",
       title: "List Calendar Colors",
       description: "List available color IDs and their meanings for calendar events",
-      annotations: READ_ONLY_ANNOTATIONS,
       schema: ToolSchemas['list-colors'],
-      handler: ListColorsHandler
+      handler: ListColorsHandler,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
     },
     {
       name: "create-event",
       title: "Create Calendar Event",
       description: "Create a new calendar event.",
-      annotations: WRITE_NON_DESTRUCTIVE_ANNOTATIONS,
       schema: ToolSchemas['create-event'],
-      handler: CreateEventHandler
+      handler: CreateEventHandler,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+      hasUI: true
     },
     {
       name: "create-events",
       title: "Create Calendar Events (Bulk)",
       description: "Create multiple calendar events in bulk. Accepts shared defaults (account, calendarId, timeZone) that apply to all events, with per-event overrides. Skips conflict and duplicate detection for speed.",
-      annotations: WRITE_NON_DESTRUCTIVE_ANNOTATIONS,
       schema: ToolSchemas['create-events'],
-      handler: CreateEventsHandler
+      handler: CreateEventsHandler,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
     },
     {
       name: "update-event",
       title: "Update Calendar Event",
       description: "Update an existing calendar event with recurring event modification scope support.",
-      annotations: WRITE_DESTRUCTIVE_IDEMPOTENT_ANNOTATIONS,
       schema: ToolSchemas['update-event'],
-      handler: UpdateEventHandler
+      handler: UpdateEventHandler,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+      hasUI: true
     },
     {
       name: "delete-event",
       title: "Delete Calendar Event",
       description: "Delete a calendar event.",
-      annotations: WRITE_DESTRUCTIVE_ANNOTATIONS,
       schema: ToolSchemas['delete-event'],
-      handler: DeleteEventHandler
+      handler: DeleteEventHandler,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true }
     },
     {
       name: "get-freebusy",
       title: "Get Free/Busy",
       description: "Query free/busy information for calendars. Note: Time range is limited to a maximum of 3 months between timeMin and timeMax.",
-      annotations: READ_ONLY_ANNOTATIONS,
       schema: ToolSchemas['get-freebusy'],
-      handler: FreeBusyEventHandler
+      handler: FreeBusyEventHandler,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
     },
     {
       name: "get-current-time",
       title: "Get Current Time",
       description: "Get the current date and time. Call this FIRST before creating, updating, or searching for events to ensure you have accurate date context for scheduling.",
-      annotations: READ_ONLY_ANNOTATIONS,
       schema: ToolSchemas['get-current-time'],
-      handler: GetCurrentTimeHandler
+      handler: GetCurrentTimeHandler,
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
     },
     {
       name: "respond-to-event",
       title: "Respond to Event Invitation",
       description: "Respond to a calendar event invitation with Accept, Decline, Maybe (Tentative), or No Response.",
-      annotations: WRITE_NON_DESTRUCTIVE_IDEMPOTENT_ANNOTATIONS,
       schema: ToolSchemas['respond-to-event'],
-      handler: RespondToEventHandler
+      handler: RespondToEventHandler,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true }
     }
   ];
 
@@ -1107,30 +1142,55 @@ export class ToolRegistry {
       args: any
     ) => Promise<{ content: Array<{ type: "text"; text: string }> }>
   ) {
-    // Use the existing registerTool method which handles schema conversion properly
-    server.registerTool(
+    const inputSchema = tool.customInputSchema || this.extractSchemaShape(tool.schema);
+
+    // Build the handler function (same for both UI and non-UI tools)
+    const handlerFn = async (args: any) => {
+      // Preprocess: Normalize datetime fields (convert object format to string format)
+      // This allows accepting both formats while keeping schemas simple
+      const normalizedArgs = this.normalizeDateTimeFields(tool.name, args);
+
+      // Validate input using our Zod schema
+      const validatedArgs = tool.schema.parse(normalizedArgs);
+
+      // Apply any custom handler function preprocessing
+      const processedArgs = tool.handlerFunction ? await tool.handlerFunction(validatedArgs) : validatedArgs;
+
+      // Create handler instance and execute
+      const handler = new tool.handler();
+      return executeWithHandler(handler, processedArgs);
+    };
+
+    // For tools with UI, use registerAppTool from ext-apps
+    // This adds _meta.ui.resourceUri to the tool definition, which the host uses to render UI
+    if (tool.hasUI) {
+      const uiMeta: Record<string, unknown> = { resourceUri: DAY_VIEW_RESOURCE_URI };
+      if (tool.uiVisibility) {
+        uiMeta.visibility = tool.uiVisibility;
+      }
+      registerAppTool(
+        server,
         tool.name,
         {
           title: tool.title,
           description: tool.description,
-          inputSchema: this.extractSchemaShape(tool.schema),
+          inputSchema,
+          annotations: tool.annotations,
+          _meta: { ui: uiMeta }
+        },
+        handlerFn
+      );
+    } else {
+      // For regular tools, use the standard registerTool
+      server.registerTool(
+        tool.name,
+        {
+          description: tool.description,
+          inputSchema,
           annotations: tool.annotations
         },
-        async (args: any) => {
-          // Preprocess: Normalize datetime fields (convert object format to string format)
-          // This allows accepting both formats while keeping schemas simple
-          const normalizedArgs = this.normalizeDateTimeFields(tool.name, args);
-
-          // Validate input using our Zod schema
-          const validatedArgs = tool.schema.parse(normalizedArgs);
-
-          // Apply any custom handler function preprocessing
-          const processedArgs = tool.handlerFunction ? await tool.handlerFunction(validatedArgs) : validatedArgs;
-
-          // Create handler instance and execute
-          const handler = new tool.handler();
-          return executeWithHandler(handler, processedArgs);
-        }
+        handlerFn
       );
+    }
   }
 }

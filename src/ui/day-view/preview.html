@@ -1,0 +1,2317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Day View - Preview</title>
+  <link rel="stylesheet" href="./styles.css">
+  <style>
+    /* Preview controls */
+    .preview-controls {
+      position: fixed;
+      top: 8px;
+      right: 8px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 12px;
+      z-index: 100;
+      max-width: 200px;
+    }
+    .preview-controls h4 {
+      margin: 0 0 8px 0;
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+    .preview-controls label {
+      display: block;
+      margin: 4px 0;
+      cursor: pointer;
+    }
+    .preview-controls select,
+    .preview-controls input {
+      width: 100%;
+      margin-top: 4px;
+      padding: 4px;
+      font-size: 12px;
+    }
+
+    /* Available slot styles for scheduling mode */
+    .available-slot-item {
+      display: flex;
+      align-items: stretch;
+      gap: 12px;
+      padding: 10px 8px;
+      background: rgba(52, 168, 83, 0.06);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+      border: 2px solid transparent;
+      margin-bottom: 6px;
+    }
+    .available-slot-item:hover {
+      background: rgba(52, 168, 83, 0.12);
+    }
+    .available-slot-item.selected {
+      border-color: var(--success-color, #34a853);
+      background: rgba(52, 168, 83, 0.15);
+    }
+    .slot-color-bar {
+      width: 4px;
+      border-radius: 2px;
+      background: var(--success-color, #34a853);
+      flex-shrink: 0;
+    }
+    .slot-time-col {
+      min-width: 65px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .slot-start-time {
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .slot-end-time {
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+    .slot-details {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .slot-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--success-color, #34a853);
+    }
+    .slot-sublabel {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      margin-top: 1px;
+    }
+    /* Slots summary in day header */
+    .slots-summary {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--success-color, #34a853);
+      margin-left: 8px;
+    }
+    .slots-summary::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      background: var(--success-color, #34a853);
+      border-radius: 50%;
+    }
+  </style>
+</head>
+<body>
+  <!-- Preview Controls -->
+  <div class="preview-controls">
+    <h4>Preview Options</h4>
+    <label>
+      View:
+      <select id="view-select">
+        <option value="day">Single Day</option>
+      </select>
+    </label>
+    <label>
+      Theme:
+      <select id="theme-select">
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </label>
+    <label>
+      <input type="checkbox" id="show-all-day" checked>
+      Show all-day event
+    </label>
+    <label>
+      <input type="checkbox" id="show-colors" checked>
+      Use event colors
+    </label>
+    <label>
+      <input type="checkbox" id="show-loading">
+      Loading state
+    </label>
+    <hr style="margin: 8px 0; border: none; border-top: 1px solid var(--border-color);">
+    <label>
+      <input type="checkbox" id="scheduling-mode">
+      Scheduling mode
+    </label>
+    <div id="scheduling-options" style="display: none; margin-top: 8px; padding: 8px; background: var(--bg-tertiary); border-radius: 4px;">
+      <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">Finding times with:</div>
+      <div style="font-size: 11px; font-weight: 500;">Alice, Bob</div>
+      <label style="margin-top: 6px;">
+        Duration:
+        <select id="slot-duration" style="font-size: 11px;">
+          <option value="30">30 min</option>
+          <option value="60" selected>1 hour</option>
+          <option value="90">1.5 hours</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <!-- App container (same as day-view.html) -->
+  <div id="app">
+    <!-- Single-day view (time grid) -->
+    <div id="day-view-container">
+      <div id="day-view-header" class="day-view-header">
+        <div class="day-view-title-row">
+          <h2 id="date-heading">Loading...</h2>
+          <a id="day-link" href="#" target="_blank" class="open-calendar-btn" style="display: none;" title="Open in Google Calendar"><svg class="gcal-icon" width="16" height="16" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="10" width="180" height="180" rx="24" fill="#4285F4"/><rect x="24" y="0" width="152" height="40" rx="0" fill="#4285F4"/><rect x="40" y="56" width="120" height="120" rx="4" fill="#fff"/><path d="M160 176h16c13.3 0 24-10.7 24-24v-16L160 176z" fill="#EA4335"/><rect x="0" y="136" width="200" height="64" rx="0" fill="#0B8043" style="clip-path:inset(0 0 0 0 round 0 0 24px 24px)"/><rect x="136" y="0" width="64" height="200" rx="0" fill="#F4B400" style="clip-path:inset(0 24px 0 0 round 0 24px 0 0)"/><rect x="136" y="136" width="64" height="64" fill="#0B8043"/><path d="M160 176h16c13.3 0 24-10.7 24-24v-16L160 176z" fill="#EA4335"/><rect x="40" y="56" width="120" height="120" rx="4" fill="#fff"/><text x="100" y="138" text-anchor="middle" font-family="Google Sans,Roboto,Arial,sans-serif" font-size="80" font-weight="500" fill="#4285F4">31</text></svg></a>
+        </div>
+        <div id="calendar-legend-container"></div>
+      </div>
+      <div id="all-day-section" class="all-day-section" style="display: none;">
+        <div class="all-day-label">All day</div>
+        <div id="all-day-events" class="all-day-events"></div>
+      </div>
+      <div id="time-grid" class="time-grid compact">
+        <!-- Time slots and events rendered here -->
+      </div>
+      <button id="expand-toggle" class="expand-toggle" style="display: none;">
+        <span id="toggle-text">Show more</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <script type="module">
+    // Mock the MCP Apps SDK for preview mode
+    window.__PREVIEW_MODE__ = true;
+
+    // Sample event data for preview
+    function getSampleDayContext(options = {}) {
+      const today = new Date();
+      const dateStr = today.toISOString().split('T')[0];
+
+      const events = [];
+
+      // All-day event (work calendar)
+      if (options.showAllDay !== false) {
+        events.push({
+          id: 'all-day-1',
+          summary: 'Home',
+          start: dateStr,
+          end: dateStr,
+          isAllDay: true,
+          htmlLink: 'https://calendar.google.com',
+          backgroundColor: options.useColors ? '#f6bf26' : undefined, // Banana
+          calendarId: 'primary',
+          accountId: 'work'
+        });
+      }
+
+      // === OVERLAPPING EVENTS - Same Calendar (Family) ===
+      // Bandits ride: 6:00 AM - 10:00 AM
+      events.push({
+        id: 'overlap-bandits',
+        summary: 'Bandits ride',
+        start: `${dateStr}T06:00:00`,
+        end: `${dateStr}T10:00:00`,
+        isAllDay: false,
+        htmlLink: 'https://calendar.google.com',
+        backgroundColor: options.useColors ? '#33b679' : undefined, // Sage
+        calendarId: 'family@group.calendar.google.com',
+        accountId: 'personal'
+      });
+
+      // School Drop Off: 8:00 AM - 8:30 AM (overlaps with Bandits ride)
+      events.push({
+        id: 'overlap-school',
+        summary: 'School Drop Off',
+        start: `${dateStr}T08:00:00`,
+        end: `${dateStr}T08:30:00`,
+        isAllDay: false,
+        htmlLink: 'https://calendar.google.com',
+        backgroundColor: options.useColors ? '#7986cb' : undefined, // Lavender
+        calendarId: 'family@group.calendar.google.com',
+        accountId: 'personal'
+      });
+
+      // Meeting with Emily: 10:00 AM - 10:25 AM
+      events.push({
+        id: 'event-meeting-emily',
+        summary: 'Design Review with Product Team',
+        start: `${dateStr}T10:00:00`,
+        end: `${dateStr}T10:25:00`,
+        isAllDay: false,
+        htmlLink: 'https://calendar.google.com',
+        backgroundColor: options.useColors ? '#7986cb' : undefined, // Lavender
+        calendarId: 'primary',
+        accountId: 'work'
+      });
+
+      // === OVERLAPPING EVENTS - Different Calendars ===
+      // Block: 12:00 PM - 2:30 PM (work calendar)
+      events.push({
+        id: 'overlap-block',
+        summary: 'block',
+        start: `${dateStr}T12:00:00`,
+        end: `${dateStr}T14:30:00`,
+        isAllDay: false,
+        htmlLink: 'https://calendar.google.com',
+        backgroundColor: options.useColors ? '#e1bee7' : undefined, // Light purple
+        calendarId: 'primary',
+        accountId: 'work'
+      });
+
+      // PTA Check-in: 12:30 PM - 1:00 PM (family calendar, overlaps with block)
+      events.push({
+        id: 'overlap-pta',
+        summary: 'PTA Check-in',
+        start: `${dateStr}T12:30:00`,
+        end: `${dateStr}T13:00:00`,
+        isAllDay: false,
+        htmlLink: 'https://calendar.google.com',
+        backgroundColor: options.useColors ? '#e1bee7' : undefined, // Light purple
+        calendarId: 'family@group.calendar.google.com',
+        accountId: 'personal'
+      });
+
+      // Meet with Jen: 1:30 PM - 2:30 PM (work, overlaps with block)
+      events.push({
+        id: 'overlap-jen',
+        summary: 'Coffee chat at cafe',
+        start: `${dateStr}T13:30:00`,
+        end: `${dateStr}T14:30:00`,
+        isAllDay: false,
+        htmlLink: 'https://calendar.google.com',
+        backgroundColor: options.useColors ? '#e1bee7' : undefined, // Light purple
+        calendarId: 'primary',
+        accountId: 'work'
+      });
+
+      // Monthly AI Cost Reconciliation: 2:00 PM - 2:30 PM (overlaps with block and Jen)
+      events.push({
+        id: 'overlap-ai-cost',
+        summary: 'Monthly AI Cost Reconciliation',
+        start: `${dateStr}T14:00:00`,
+        end: `${dateStr}T14:30:00`,
+        isAllDay: false,
+        htmlLink: 'https://calendar.google.com',
+        backgroundColor: options.useColors ? '#f6bf26' : undefined, // Banana
+        calendarId: 'primary',
+        accountId: 'work'
+      });
+
+      // School Pick Up: 2:25 PM - 2:55 PM (family, overlaps with AI Cost)
+      events.push({
+        id: 'overlap-pickup',
+        summary: 'School Pick Up - 2:35',
+        start: `${dateStr}T14:25:00`,
+        end: `${dateStr}T14:55:00`,
+        isAllDay: false,
+        htmlLink: 'https://calendar.google.com',
+        backgroundColor: options.useColors ? '#33b679' : undefined, // Sage
+        calendarId: 'family@group.calendar.google.com',
+        accountId: 'personal'
+      });
+
+      // Parkour: 3:30 PM - 4:30 PM
+      events.push({
+        id: 'event-parkour',
+        summary: 'Parkour',
+        start: `${dateStr}T15:30:00`,
+        end: `${dateStr}T16:30:00`,
+        isAllDay: false,
+        location: 'The Cave, 405 Tamal Plaza, Corte Madera, CA 94925, USA',
+        htmlLink: 'https://calendar.google.com',
+        backgroundColor: options.useColors ? '#f6bf26' : undefined, // Banana
+        calendarId: 'family@group.calendar.google.com',
+        accountId: 'personal'
+      });
+
+      // === MORE OVERLAPPING - Same Calendar ===
+      // Family time: 5:30 PM - 8:45 PM
+      events.push({
+        id: 'overlap-family',
+        summary: 'Family time',
+        start: `${dateStr}T17:30:00`,
+        end: `${dateStr}T20:45:00`,
+        isAllDay: false,
+        htmlLink: 'https://calendar.google.com',
+        backgroundColor: options.useColors ? '#7986cb' : undefined, // Lavender
+        calendarId: 'family@group.calendar.google.com',
+        accountId: 'personal'
+      });
+
+      // Dinner at Roaming Goat: 6:30 PM - 8:30 PM (overlaps with Family time)
+      events.push({
+        id: 'overlap-dinner',
+        summary: 'Dinner at Roaming Goat',
+        start: `${dateStr}T18:30:00`,
+        end: `${dateStr}T20:30:00`,
+        isAllDay: false,
+        location: '1830 Union St, San Francisco, CA 94123, USA',
+        htmlLink: 'https://calendar.google.com',
+        backgroundColor: options.useColors ? '#33b679' : undefined, // Sage
+        calendarId: 'family@group.calendar.google.com',
+        accountId: 'personal'
+      });
+
+      return {
+        date: dateStr,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        events,
+        focusEventId: 'event-meeting-emily', // Focus on meeting
+        timeRange: {
+          startHour: 5,
+          endHour: 21
+        },
+        dayLink: 'https://calendar.google.com'
+      };
+    }
+
+    // Helper to get next day (for all-day event exclusive end dates)
+    function nextDay(dateStr) {
+      const date = new Date(dateStr + 'T00:00:00');
+      date.setDate(date.getDate() + 1);
+      return date.toISOString().split('T')[0];
+    }
+
+    // Sample multi-day context for preview
+    function getSampleMultiDayContext(options = {}) {
+      const today = new Date();
+      const dates = [];
+      const eventsByDate = {};
+
+      // Generate 5 days of events
+      for (let i = 0; i < 5; i++) {
+        const date = new Date(today);
+        date.setDate(date.getDate() + i);
+        const dateStr = date.toISOString().split('T')[0];
+        dates.push(dateStr);
+        eventsByDate[dateStr] = [];
+
+        // Add single-day all-day event on first day
+        if (i === 0 && options.showAllDay !== false) {
+          eventsByDate[dateStr].push({
+            id: `allday-single-${i}`,
+            summary: 'Company Holiday',
+            start: dateStr,
+            end: nextDay(dateStr), // All-day events have exclusive end date
+            isAllDay: true,
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#e67c73' : undefined,
+            calendarId: 'primary',
+            accountId: 'personal'
+          });
+        }
+
+        // Add multi-day all-day event spanning days 1-3
+        if (i >= 1 && i <= 3 && options.showAllDay !== false) {
+          // Only add once on day 1, but it will appear on days 1, 2, 3
+          if (i === 1) {
+            const multiDayStart = dateStr;
+            const multiDayEndDate = new Date(date);
+            multiDayEndDate.setDate(multiDayEndDate.getDate() + 3); // 3 days later (exclusive end)
+            const multiDayEnd = multiDayEndDate.toISOString().split('T')[0];
+
+            // Add to all days it spans
+            eventsByDate[dateStr].push({
+              id: 'allday-multi',
+              summary: 'Team Retreat',
+              start: multiDayStart,
+              end: multiDayEnd,
+              isAllDay: true,
+              htmlLink: 'https://calendar.google.com',
+              backgroundColor: options.useColors ? '#7986cb' : undefined,
+              calendarId: 'primary',
+              accountId: 'work'
+            });
+          } else {
+            // Add reference to same event on subsequent days
+            const multiDayStart = dates[1]; // Day 1
+            const multiDayEndDate = new Date(dates[1] + 'T00:00:00');
+            multiDayEndDate.setDate(multiDayEndDate.getDate() + 3);
+            const multiDayEnd = multiDayEndDate.toISOString().split('T')[0];
+
+            eventsByDate[dateStr].push({
+              id: 'allday-multi',
+              summary: 'Team Retreat',
+              start: multiDayStart,
+              end: multiDayEnd,
+              isAllDay: true,
+              htmlLink: 'https://calendar.google.com',
+              backgroundColor: options.useColors ? '#7986cb' : undefined,
+              calendarId: 'primary',
+              accountId: 'work'
+            });
+          }
+        }
+
+        // Morning event (work account)
+        eventsByDate[dateStr].push({
+          id: `morning-${i}`,
+          summary: i === 0 ? 'Daily standup' : `Team sync - Day ${i + 1}`,
+          start: `${dateStr}T09:00:00`,
+          end: `${dateStr}T09:30:00`,
+          isAllDay: false,
+          location: 'Zoom',
+          htmlLink: 'https://calendar.google.com',
+          backgroundColor: options.useColors ? '#039be5' : undefined,
+          calendarId: 'primary',
+          accountId: 'work'
+        });
+
+        // OVERLAPPING EVENTS on day 0 (today) - School Drop Off + Studio30
+        if (i === 0) {
+          // First event: 8:00 AM - 8:30 AM
+          eventsByDate[dateStr].push({
+            id: `overlap-school-${i}`,
+            summary: 'School Drop Off',
+            start: `${dateStr}T08:00:00`,
+            end: `${dateStr}T08:30:00`,
+            isAllDay: false,
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#7986cb' : undefined, // Lavender
+            calendarId: 'family@group.calendar.google.com',
+            calendarName: 'Family',
+            accountId: 'personal'
+          });
+          // Second event: 8:15 AM - 9:00 AM (overlaps by 15 min)
+          eventsByDate[dateStr].push({
+            id: `overlap-studio-${i}`,
+            summary: 'Studio30',
+            start: `${dateStr}T08:15:00`,
+            end: `${dateStr}T09:00:00`,
+            isAllDay: false,
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#7986cb' : undefined, // Same color (same calendar)
+            calendarId: 'family@group.calendar.google.com',
+            calendarName: 'Family',
+            accountId: 'personal'
+          });
+        }
+
+        // OVERLAPPING EVENTS on day 1 (like Brand AI Weekly Focus + Alston's MTB)
+        if (i === 1) {
+          // First event: 3:00 PM - 4:00 PM
+          eventsByDate[dateStr].push({
+            id: `overlap-a-${i}`,
+            summary: 'Brand AI Weekly Focus',
+            start: `${dateStr}T15:00:00`,
+            end: `${dateStr}T16:00:00`,
+            isAllDay: false,
+            location: 'Virtual',
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#f6bf26' : undefined, // Banana/yellow
+            calendarId: 'primary',
+            accountId: 'work'
+          });
+          // Second event: 3:30 PM - 5:45 PM (overlaps by 30 min)
+          eventsByDate[dateStr].push({
+            id: `overlap-b-${i}`,
+            summary: 'Alston Mnt Biking',
+            start: `${dateStr}T15:30:00`,
+            end: `${dateStr}T17:45:00`,
+            isAllDay: false,
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#7986cb' : undefined, // Lavender
+            calendarId: 'personal@gmail.com',
+            calendarName: 'Personal',
+            accountId: 'personal'
+          });
+        }
+
+        // Another overlap scenario on day 3 - triple overlap
+        if (i === 3) {
+          // Meeting 1: 10:00 AM - 11:30 AM
+          eventsByDate[dateStr].push({
+            id: `triple-a-${i}`,
+            summary: 'Architecture Review',
+            start: `${dateStr}T10:00:00`,
+            end: `${dateStr}T11:30:00`,
+            isAllDay: false,
+            location: 'Room 301',
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#e67c73' : undefined, // Flamingo
+            calendarId: 'primary',
+            accountId: 'work'
+          });
+          // Meeting 2: 11:00 AM - 12:00 PM (overlaps with #1 by 30 min)
+          eventsByDate[dateStr].push({
+            id: `triple-b-${i}`,
+            summary: 'Quick 1:1 with Sarah',
+            start: `${dateStr}T11:00:00`,
+            end: `${dateStr}T12:00:00`,
+            isAllDay: false,
+            location: 'Zoom',
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#33b679' : undefined, // Sage
+            calendarId: 'primary',
+            accountId: 'work'
+          });
+        }
+
+        // Afternoon event (personal account, different calendar)
+        if (i % 2 === 0) {
+          eventsByDate[dateStr].push({
+            id: `afternoon-${i}`,
+            summary: 'Project review',
+            start: `${dateStr}T14:00:00`,
+            end: `${dateStr}T15:00:00`,
+            isAllDay: false,
+            location: 'Conference Room B',
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#33b679' : undefined,
+            calendarId: 'family@group.calendar.google.com',
+            calendarName: 'Family',
+            accountId: 'personal'
+          });
+        }
+
+        // Additional work events
+        if (i < 3) {
+          eventsByDate[dateStr].push({
+            id: `work-lunch-${i}`,
+            summary: 'Team lunch',
+            start: `${dateStr}T12:00:00`,
+            end: `${dateStr}T13:00:00`,
+            isAllDay: false,
+            location: 'Cafe',
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#039be5' : undefined,
+            calendarId: 'primary',
+            calendarName: 'Work',
+            accountId: 'work'
+          });
+        }
+
+        // PROPORTIONAL HEIGHT DEMO - events of varying duration on day 2
+        if (i === 2) {
+          // Short event: 15 min (will show at minimum height)
+          eventsByDate[dateStr].push({
+            id: `short-${i}`,
+            summary: 'Quick check-in',
+            start: `${dateStr}T10:00:00`,
+            end: `${dateStr}T10:15:00`,
+            isAllDay: false,
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#33b679' : undefined, // Sage
+            calendarId: 'primary',
+            accountId: 'work'
+          });
+          // Medium event: 1.5 hours
+          eventsByDate[dateStr].push({
+            id: `medium-${i}`,
+            summary: 'Design Workshop',
+            start: `${dateStr}T10:30:00`,
+            end: `${dateStr}T12:00:00`,
+            isAllDay: false,
+            location: 'Design Lab',
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#8e24aa' : undefined, // Grape
+            calendarId: 'primary',
+            accountId: 'work'
+          });
+          // Long event: 4 hours (will show "continues" indicator)
+          eventsByDate[dateStr].push({
+            id: `long-${i}`,
+            summary: 'All-hands Meeting + Q&A',
+            start: `${dateStr}T13:00:00`,
+            end: `${dateStr}T17:00:00`,
+            isAllDay: false,
+            location: 'Main Auditorium',
+            htmlLink: 'https://calendar.google.com',
+            backgroundColor: options.useColors ? '#d50000' : undefined, // Tomato
+            calendarId: 'primary',
+            accountId: 'work'
+          });
+        }
+
+        // Personal events
+        eventsByDate[dateStr].push({
+          id: `personal-${i}`,
+          summary: i === 0 ? 'Gym' : `Exercise day ${i + 1}`,
+          start: `${dateStr}T07:00:00`,
+          end: `${dateStr}T08:00:00`,
+          isAllDay: false,
+          htmlLink: 'https://calendar.google.com',
+          backgroundColor: options.useColors ? '#8e24aa' : undefined,
+          calendarId: 'personal@gmail.com',
+          calendarName: 'Personal',
+          accountId: 'personal'
+        });
+      }
+
+      const startDate = dates[0];
+      const endDate = dates[dates.length - 1];
+
+      return {
+        dates,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        eventsByDate,
+        totalEventCount: Object.values(eventsByDate).flat().length,
+        timeRange: {
+          start: `${startDate}T00:00:00`,
+          end: `${endDate}T23:59:59`
+        },
+        query: options.isSearch ? 'meeting' : undefined,
+        calendarLink: 'https://calendar.google.com'
+      };
+    }
+
+    // Mock App class
+    class MockApp {
+      constructor() {
+        this.ontoolinput = null;
+        this.ontoolresult = null;
+        this.ontoolcancelled = null;
+        this.onhostcontextchanged = null;
+        this.onteardown = null;
+      }
+
+      async connect() {
+        // Simulate tool result after connection
+        setTimeout(() => {
+          if (this.ontoolresult) {
+            const options = getPreviewOptions();
+            const viewType = document.getElementById('view-select')?.value || 'day';
+
+            const context = getSampleDayContext(options);
+              this.ontoolresult({
+                content: [{
+                  type: 'text',
+                  text: JSON.stringify({ dayContext: context })
+                }]
+              });
+          }
+        }, 100);
+      }
+
+      getHostContext() {
+        const theme = document.getElementById('theme-select')?.value || 'light';
+        return {
+          locale: navigator.language,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          theme
+        };
+      }
+
+      async openLink({ url }) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+
+      async sendSizeChanged() {
+        // No-op in preview
+      }
+    }
+
+    // Get current preview options
+    function getPreviewOptions() {
+      return {
+        showAllDay: document.getElementById('show-all-day')?.checked ?? true,
+        useColors: document.getElementById('show-colors')?.checked ?? true
+      };
+    }
+
+    // Re-render with new options
+    function rerender() {
+      const app = window.__mockApp__;
+      if (app && app.ontoolresult) {
+        const options = getPreviewOptions();
+        const viewType = document.getElementById('view-select')?.value || 'day';
+
+        const context = getSampleDayContext(options);
+          app.ontoolresult({
+            content: [{
+              type: 'text',
+              text: JSON.stringify({ dayContext: context })
+            }]
+          });
+      }
+    }
+
+    // Apply theme
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      if (theme === 'dark') {
+        document.documentElement.style.colorScheme = 'dark';
+      } else {
+        document.documentElement.style.colorScheme = 'light';
+      }
+    }
+
+    // Set up preview controls
+    document.getElementById('theme-select')?.addEventListener('change', (e) => {
+      applyTheme(e.target.value);
+    });
+    document.getElementById('view-select')?.addEventListener('change', rerender);
+    document.getElementById('show-all-day')?.addEventListener('change', rerender);
+    document.getElementById('show-colors')?.addEventListener('change', rerender);
+
+    // Loading state toggle
+    document.getElementById('show-loading')?.addEventListener('change', (e) => {
+      const dateHeading = document.getElementById('date-heading');
+      if (dateHeading) {
+        if (e.target.checked) {
+          dateHeading.textContent = 'Loading...';
+          dateHeading.classList.add('loading-shimmer');
+        } else {
+          dateHeading.classList.remove('loading-shimmer');
+          rerender();
+        }
+      }
+    });
+
+    // Scheduling mode toggle
+    document.getElementById('scheduling-mode')?.addEventListener('change', (e) => {
+      const optionsPanel = document.getElementById('scheduling-options');
+      if (optionsPanel) {
+        optionsPanel.style.display = e.target.checked ? 'block' : 'none';
+      }
+      rerender();
+    });
+    document.getElementById('slot-duration')?.addEventListener('change', rerender);
+
+    // Calculate available slots from events
+    function calculateAvailableSlots(events, durationMinutes) {
+      const workStart = 9 * 60; // 9 AM in minutes
+      const workEnd = 17 * 60;  // 5 PM in minutes
+      const slots = [];
+
+      // Filter to timed events only and sort by start time
+      const timedEvents = events
+        .filter(e => !e.isAllDay)
+        .map(e => ({
+          start: new Date(e.start).getHours() * 60 + new Date(e.start).getMinutes(),
+          end: new Date(e.end).getHours() * 60 + new Date(e.end).getMinutes()
+        }))
+        .sort((a, b) => a.start - b.start);
+
+      // Find gaps and split into meeting-duration slots
+      let currentTime = workStart;
+      for (const event of timedEvents) {
+        if (event.start > currentTime) {
+          const gapEnd = event.start;
+          if (gapEnd - currentTime >= durationMinutes) {
+            // Create multiple slots at meeting-duration intervals
+            let slotStart = currentTime;
+            while (slotStart + durationMinutes <= gapEnd) {
+              slots.push({
+                startMinutes: slotStart,
+                endMinutes: slotStart + durationMinutes,
+                duration: durationMinutes
+              });
+              slotStart += durationMinutes;
+            }
+          }
+        }
+        currentTime = Math.max(currentTime, event.end);
+      }
+
+      // Check gap after last event until end of work day
+      if (workEnd > currentTime && workEnd - currentTime >= durationMinutes) {
+        let slotStart = currentTime;
+        while (slotStart + durationMinutes <= workEnd) {
+          slots.push({
+            startMinutes: slotStart,
+            endMinutes: slotStart + durationMinutes,
+            duration: durationMinutes
+          });
+          slotStart += durationMinutes;
+        }
+      }
+
+      return slots;
+    }
+
+    function formatSlotTime(minutes) {
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      const h = hours % 12 || 12;
+      const ampm = hours < 12 ? 'AM' : 'PM';
+      return mins === 0 ? h + ' ' + ampm : h + ':' + String(mins).padStart(2, '0') + ' ' + ampm;
+    }
+
+    function createAvailableSlotElement(slot, dateStr) {
+      const item = document.createElement('div');
+      item.className = 'available-slot-item';
+      item.setAttribute('role', 'button');
+      item.setAttribute('tabindex', '0');
+      item.title = 'Click to select this time slot';
+
+      const bar = document.createElement('div');
+      bar.className = 'slot-color-bar';
+
+      const timeCol = document.createElement('div');
+      timeCol.className = 'slot-time-col';
+
+      const startTime = document.createElement('div');
+      startTime.className = 'slot-start-time';
+      startTime.textContent = formatSlotTime(slot.startMinutes);
+      timeCol.appendChild(startTime);
+
+      const endTime = document.createElement('div');
+      endTime.className = 'slot-end-time';
+      endTime.textContent = formatSlotTime(slot.endMinutes);
+      timeCol.appendChild(endTime);
+
+      const details = document.createElement('div');
+      details.className = 'slot-details';
+
+      const label = document.createElement('div');
+      label.className = 'slot-label';
+      label.textContent = 'Available';
+      details.appendChild(label);
+
+      const sublabel = document.createElement('div');
+      sublabel.className = 'slot-sublabel';
+      sublabel.textContent = 'Everyone is free';
+      details.appendChild(sublabel);
+
+      item.appendChild(bar);
+      item.appendChild(timeCol);
+      item.appendChild(details);
+
+      item.addEventListener('click', () => {
+        document.querySelectorAll('.available-slot-item.selected').forEach(el => el.classList.remove('selected'));
+        item.classList.add('selected');
+      });
+
+      return item;
+    }
+
+    // Check if scheduling mode is active - expose globally for module script
+    window.isSchedulingMode = function() {
+      return document.getElementById('scheduling-mode')?.checked ?? false;
+    };
+
+    window.getSlotDuration = function() {
+      return parseInt(document.getElementById('slot-duration')?.value || '60');
+    };
+
+    window.calculateAvailableSlots = calculateAvailableSlots;
+    window.createAvailableSlotElement = createAvailableSlotElement;
+
+    // Override the MCP Apps module
+    window.MockApp = MockApp;
+  </script>
+
+  <!-- Load the day-view code with mocked App -->
+  <script type="module">
+    // Import and mock before day-view loads
+    import { applyHostStyleVariables, applyHostFonts, applyDocumentTheme } from '@modelcontextprotocol/ext-apps';
+
+    // Re-export mock App
+    const App = window.MockApp;
+
+    // Store mock app instance for rerender
+    const mockApp = new App();
+    window.__mockApp__ = mockApp;
+
+    // Copy the day-view initialization logic with mock
+    // Day view elements
+    const dayViewContainer = document.getElementById('day-view-container');
+    const dayViewHeader = document.getElementById('day-view-header');
+    const dateHeading = document.getElementById('date-heading');
+    const dayLink = document.getElementById('day-link');
+    const calendarLegendContainer = document.getElementById('calendar-legend-container');
+    const allDaySection = document.getElementById('all-day-section');
+    const allDayEvents = document.getElementById('all-day-events');
+    const timeGrid = document.getElementById('time-grid');
+    const expandToggle = document.getElementById('expand-toggle');
+    const toggleText = document.getElementById('toggle-text');
+
+    let appInstance = mockApp;
+    let isExpanded = false;
+    let hostLocale = navigator.language;
+    let hostTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    function formatHour(hour) {
+      if (hour === 0) return '12 AM';
+      if (hour === 12) return '12 PM';
+      if (hour < 12) return `${hour} AM`;
+      return `${hour - 12} PM`;
+    }
+
+    function formatTime(isoString) {
+      const date = new Date(isoString);
+      return date.toLocaleTimeString(hostLocale, {
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: hostTimeZone
+      });
+    }
+
+    function formatDateHeading(dateStr) {
+      const date = new Date(dateStr + 'T00:00:00');
+      return date.toLocaleDateString(hostLocale, {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    }
+
+    function formatAllDayRange(startStr, endStr) {
+      const start = new Date(startStr);
+      const end = new Date(endStr);
+      // All-day events: end is exclusive, subtract 1 day for display
+      const actualEnd = new Date(end);
+      actualEnd.setDate(actualEnd.getDate() - 1);
+
+      const formatOptions = { month: 'short', day: 'numeric' };
+      const startFormatted = start.toLocaleDateString(hostLocale, formatOptions);
+
+      if (start.toDateString() === actualEnd.toDateString()) {
+        return { text: 'All day', dateRange: startFormatted, isMultiDay: false };
+      }
+
+      const endFormatted = actualEnd.toLocaleDateString(hostLocale, formatOptions);
+      return { text: 'All day', dateRange: `${startFormatted}–${endFormatted}`, isMultiDay: true };
+    }
+
+    function getEventColorClass(colorId) {
+      if (!colorId) return '';
+      const num = parseInt(colorId, 10);
+      if (num >= 1 && num <= 11) {
+        return `event-color-${num}`;
+      }
+      return '';
+    }
+
+    function calculateEventPosition(event, startHour, endHour) {
+      const ROW_HEIGHT = 48;
+      const eventStart = new Date(event.start);
+      const eventEnd = new Date(event.end);
+      const startHourFloat = eventStart.getHours() + eventStart.getMinutes() / 60;
+      const endHourFloat = eventEnd.getHours() + eventEnd.getMinutes() / 60;
+      const clampedStart = Math.max(startHourFloat, startHour);
+      const clampedEnd = Math.min(endHourFloat, endHour);
+      const topOffset = (clampedStart - startHour) * ROW_HEIGHT;
+      const height = Math.max((clampedEnd - clampedStart) * ROW_HEIGHT, 24);
+      return { top: `${topOffset}px`, height: `${height}px` };
+    }
+
+    function openLink(url) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+
+    // Check if two events overlap in time
+    function eventsOverlapInTime(eventA, eventB) {
+      if (eventA.isAllDay || eventB.isAllDay) return false;
+      const startA = new Date(eventA.start).getTime();
+      const endA = new Date(eventA.end).getTime();
+      const startB = new Date(eventB.start).getTime();
+      const endB = new Date(eventB.end).getTime();
+      return startA < endB && startB < endA;
+    }
+
+    // Calculate overlap columns for side-by-side stacking
+    function calculateOverlapColumns(events) {
+      const positions = new Map();
+      const timedEvents = events.filter(e => !e.isAllDay);
+      if (timedEvents.length === 0) return positions;
+
+      // Sort by start time
+      const sortedEvents = [...timedEvents].sort((a, b) => {
+        const startDiff = new Date(a.start).getTime() - new Date(b.start).getTime();
+        if (startDiff !== 0) return startDiff;
+        return new Date(a.end).getTime() - new Date(b.end).getTime();
+      });
+
+      // Find overlap groups
+      const overlapGroups = [];
+      const visited = new Set();
+
+      for (const event of sortedEvents) {
+        if (visited.has(event.id)) continue;
+        const group = [];
+        const queue = [event];
+        while (queue.length > 0) {
+          const current = queue.shift();
+          if (visited.has(current.id)) continue;
+          visited.add(current.id);
+          group.push(current);
+          for (const other of sortedEvents) {
+            if (!visited.has(other.id) && eventsOverlapInTime(current, other)) {
+              queue.push(other);
+            }
+          }
+        }
+        if (group.length > 0) overlapGroups.push(group);
+      }
+
+      // Assign columns within each group
+      for (const group of overlapGroups) {
+        if (group.length === 1) {
+          positions.set(group[0].id, { columnIndex: 0, totalColumns: 1 });
+          continue;
+        }
+        group.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+        const columns = [];
+        for (const event of group) {
+          const eventStart = new Date(event.start).getTime();
+          let columnIndex = 0;
+          while (columnIndex < columns.length && columns[columnIndex] > eventStart) {
+            columnIndex++;
+          }
+          columns[columnIndex] = new Date(event.end).getTime();
+          positions.set(event.id, { columnIndex, totalColumns: 0 });
+        }
+        const maxColumns = columns.length;
+        for (const event of group) {
+          const pos = positions.get(event.id);
+          positions.set(event.id, { ...pos, totalColumns: maxColumns });
+        }
+      }
+      return positions;
+    }
+
+    // Compute calendar filters for legend
+    function computeCalendarFilters(events) {
+      const filterMap = new Map();
+      for (const event of events) {
+        const key = event.accountId ? `${event.accountId}:${event.calendarId}` : event.calendarId;
+        const existing = filterMap.get(key);
+        if (existing) {
+          existing.eventCount++;
+        } else {
+          filterMap.set(key, {
+            calendarId: event.calendarId,
+            accountId: event.accountId,
+            displayName: event.accountId || formatCalendarName(event.calendarId),
+            backgroundColor: event.backgroundColor || 'var(--accent-color)',
+            eventCount: 1,
+            visible: true
+          });
+        }
+      }
+      return Array.from(filterMap.values());
+    }
+
+    // Filter events based on visibility
+    function filterVisibleEvents(events, filters) {
+      const hidden = new Set();
+      for (const f of filters) {
+        if (!f.visible) {
+          hidden.add(f.accountId ? `${f.accountId}:${f.calendarId}` : f.calendarId);
+        }
+      }
+      if (hidden.size === 0) return events;
+      return events.filter(e => {
+        const key = e.accountId ? `${e.accountId}:${e.calendarId}` : e.calendarId;
+        return !hidden.has(key);
+      });
+    }
+
+    // Create calendar legend
+    function createCalendarLegend(filters, onToggle) {
+      const container = document.createElement('div');
+      container.className = 'calendar-legend';
+      for (const filter of filters) {
+        const item = document.createElement('button');
+        item.className = `calendar-legend-item${filter.visible ? '' : ' hidden'}`;
+        item.setAttribute('role', 'checkbox');
+        item.setAttribute('aria-checked', filter.visible ? 'true' : 'false');
+        item.title = filter.visible ? `Click to hide ${filter.displayName} events` : `Click to show ${filter.displayName} events`;
+
+        const dot = document.createElement('span');
+        dot.className = 'legend-dot';
+        dot.style.backgroundColor = filter.backgroundColor;
+        item.appendChild(dot);
+
+        const name = document.createElement('span');
+        name.className = 'legend-name';
+        name.textContent = filter.displayName;
+        item.appendChild(name);
+
+        const count = document.createElement('span');
+        count.className = 'legend-count';
+        count.textContent = `(${filter.eventCount})`;
+        item.appendChild(count);
+
+        item.addEventListener('click', () => {
+          filter.visible = !filter.visible;
+          item.classList.toggle('hidden', !filter.visible);
+          item.setAttribute('aria-checked', filter.visible ? 'true' : 'false');
+          item.title = filter.visible ? `Click to hide ${filter.displayName} events` : `Click to show ${filter.displayName} events`;
+          onToggle(filter);
+        });
+        container.appendChild(item);
+      }
+      return container;
+    }
+
+    // Current calendar filters state
+    let currentCalendarFilters = [];
+    let currentContext = null;
+
+    function toggleExpanded() {
+      isExpanded = !isExpanded;
+      if (isExpanded) {
+        timeGrid.classList.remove('compact');
+        expandToggle.classList.add('expanded');
+        toggleText.textContent = 'Show less';
+      } else {
+        timeGrid.classList.add('compact');
+        expandToggle.classList.remove('expanded');
+        toggleText.textContent = 'Show more';
+      }
+    }
+
+    function createEventElement(event, isFocused, isAllDay = false) {
+      const element = document.createElement('div');
+      element.style.cursor = 'pointer';
+      element.setAttribute('role', 'button');
+      element.setAttribute('tabindex', '0');
+      // Detailed tooltip
+      const tooltipParts = [event.summary];
+      if (!isAllDay) {
+        tooltipParts.push(`${formatTime(event.start)} - ${formatTime(event.end)}`);
+      }
+      if (event.location) tooltipParts.push(event.location);
+      tooltipParts.push('Click to open in Google Calendar');
+      element.title = tooltipParts.join('\n');
+      element.addEventListener('click', () => openLink(event.htmlLink));
+
+      // Use backgroundColor directly if available, otherwise fall back to colorId class
+      const colorClass = event.backgroundColor ? '' : getEventColorClass(event.colorId);
+
+      if (isAllDay) {
+        element.className = `all-day-event ${colorClass} ${isFocused ? 'focused' : ''}`.trim();
+        if (event.backgroundColor) {
+          element.style.backgroundColor = event.backgroundColor;
+        }
+        element.textContent = event.summary;
+      } else {
+        element.className = `event-block ${colorClass} ${isFocused ? 'focused' : ''}`.trim();
+        if (event.backgroundColor) {
+          element.style.backgroundColor = event.backgroundColor;
+        }
+
+        // Content wrapper for horizontal layout
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'event-content';
+
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'event-title';
+        titleDiv.textContent = event.summary;
+        contentDiv.appendChild(titleDiv);
+
+        const timeDiv = document.createElement('div');
+        timeDiv.className = 'event-time';
+        timeDiv.textContent = `${formatTime(event.start)} - ${formatTime(event.end)}`;
+        contentDiv.appendChild(timeDiv);
+
+        element.appendChild(contentDiv);
+
+        if (event.location) {
+          const locationDiv = document.createElement('div');
+          locationDiv.className = 'event-location';
+          locationDiv.textContent = event.location;
+          element.appendChild(locationDiv);
+        }
+      }
+
+      return element;
+    }
+
+    function renderAllDayEvents(events, focusEventId) {
+      const allDayEvts = events.filter(e => e.isAllDay);
+      while (allDayEvents.firstChild) {
+        allDayEvents.removeChild(allDayEvents.firstChild);
+      }
+      if (allDayEvts.length === 0) {
+        allDaySection.style.display = 'none';
+        return;
+      }
+      allDaySection.style.display = 'flex';
+      for (const event of allDayEvts) {
+        const isFocused = event.id === focusEventId;
+        const element = createEventElement(event, isFocused, true);
+        allDayEvents.appendChild(element);
+      }
+    }
+
+    function calculateSlotPosition(slot, startHour, endHour) {
+      const ROW_HEIGHT = 48;
+      const gridStartMinutes = startHour * 60;
+      const gridEndMinutes = endHour * 60;
+
+      const clampedStart = Math.max(slot.startMinutes, gridStartMinutes);
+      const clampedEnd = Math.min(slot.endMinutes, gridEndMinutes);
+
+      const topOffset = ((clampedStart - gridStartMinutes) / 60) * ROW_HEIGHT;
+      const height = Math.max(((clampedEnd - clampedStart) / 60) * ROW_HEIGHT, 24);
+
+      return { top: `${topOffset}px`, height: `${height}px` };
+    }
+
+    function createTimeGridSlotElement(slot) {
+      const element = document.createElement('div');
+      element.className = 'time-grid-slot';
+      element.setAttribute('role', 'button');
+      element.setAttribute('tabindex', '0');
+      element.title = `Available: ${formatSlotTime(slot.startMinutes)} - ${formatSlotTime(slot.endMinutes)}\nClick to select`;
+
+      const label = document.createElement('div');
+      label.className = 'slot-grid-label';
+      label.textContent = 'Available';
+      element.appendChild(label);
+
+      const time = document.createElement('div');
+      time.className = 'slot-grid-time';
+      time.textContent = `${formatSlotTime(slot.startMinutes)} - ${formatSlotTime(slot.endMinutes)}`;
+      element.appendChild(time);
+
+      element.addEventListener('click', () => {
+        document.querySelectorAll('.time-grid-slot.selected').forEach(el => el.classList.remove('selected'));
+        element.classList.add('selected');
+      });
+
+      return element;
+    }
+
+    function renderTimeGrid(context, visibleEvents) {
+      const { focusEventId, timeRange } = context;
+      const events = visibleEvents || context.events;
+      const { startHour, endHour } = timeRange;
+
+      while (timeGrid.firstChild) {
+        timeGrid.removeChild(timeGrid.firstChild);
+      }
+
+      const timedEvents = events.filter(e => !e.isAllDay);
+
+      // Calculate overlap columns for side-by-side stacking
+      const overlapColumns = calculateOverlapColumns(timedEvents);
+
+      for (let hour = startHour; hour < endHour; hour++) {
+        const row = document.createElement('div');
+        row.className = 'time-row';
+
+        const hourLabel = document.createElement('div');
+        hourLabel.className = 'hour-label';
+        hourLabel.textContent = formatHour(hour);
+        row.appendChild(hourLabel);
+
+        const timeSlot = document.createElement('div');
+        timeSlot.className = 'time-slot';
+        row.appendChild(timeSlot);
+
+        timeGrid.appendChild(row);
+      }
+
+      const eventsContainer = document.createElement('div');
+      eventsContainer.style.position = 'absolute';
+      eventsContainer.style.top = '0';
+      eventsContainer.style.left = 'var(--hour-width)';
+      eventsContainer.style.right = '0';
+      eventsContainer.style.bottom = '0';
+      eventsContainer.style.pointerEvents = 'none';
+
+      // Add available slots FIRST (behind events) if scheduling mode is enabled
+      if (window.isSchedulingMode()) {
+        const availableSlots = window.calculateAvailableSlots(events, window.getSlotDuration());
+
+        for (const slot of availableSlots) {
+          const slotElement = createTimeGridSlotElement(slot);
+          const position = calculateSlotPosition(slot, startHour, endHour);
+
+          slotElement.style.position = 'absolute';
+          slotElement.style.top = position.top;
+          slotElement.style.height = position.height;
+          slotElement.style.left = '0';
+          slotElement.style.right = '0';
+          slotElement.style.pointerEvents = 'auto';
+          slotElement.style.zIndex = '0';
+
+          eventsContainer.appendChild(slotElement);
+        }
+      }
+
+      // Add events AFTER slots (on top)
+      // Apply overlap positioning for side-by-side stacking
+      const PADDING = 4;
+      const GAP = 2;
+
+      for (const event of timedEvents) {
+        const isFocused = event.id === focusEventId;
+        const element = createEventElement(event, isFocused);
+        const position = calculateEventPosition(event, startHour, endHour);
+        const overlapPos = overlapColumns.get(event.id);
+
+        element.style.top = position.top;
+        element.style.height = position.height;
+        element.style.pointerEvents = 'auto';
+
+        // Apply horizontal positioning for overlapping events
+        if (overlapPos && overlapPos.totalColumns > 1) {
+          const totalColumns = overlapPos.totalColumns;
+          const columnIndex = overlapPos.columnIndex;
+          const columnWidth = (100 - (GAP * (totalColumns - 1))) / totalColumns;
+          const leftPercent = columnIndex * (columnWidth + GAP);
+
+          element.style.left = `calc(${leftPercent}% + ${PADDING}px)`;
+          element.style.width = `calc(${columnWidth}% - ${PADDING * 2}px)`;
+          element.style.right = 'auto';
+        } else {
+          element.style.left = `${PADDING}px`;
+          element.style.right = `${PADDING}px`;
+        }
+
+        element.style.zIndex = String(1 + (overlapPos?.columnIndex || 0));
+        eventsContainer.appendChild(element);
+      }
+
+      timeGrid.style.position = 'relative';
+      timeGrid.appendChild(eventsContainer);
+    }
+
+    function renderDayView(context) {
+      currentContext = context;
+      dateHeading.textContent = formatDateHeading(context.date);
+      dayLink.style.display = '';
+      dayLink.href = '#';
+      dayLink.onclick = (e) => {
+        e.preventDefault();
+        openLink(context.dayLink);
+      };
+
+      // Compute and render calendar legend
+      currentCalendarFilters = computeCalendarFilters(context.events);
+      while (calendarLegendContainer.firstChild) {
+        calendarLegendContainer.removeChild(calendarLegendContainer.firstChild);
+      }
+      if (currentCalendarFilters.length > 1) {
+        const legend = createCalendarLegend(currentCalendarFilters, () => {
+          // Re-render events when a calendar is toggled
+          const visibleEvents = filterVisibleEvents(context.events, currentCalendarFilters);
+          renderAllDayEvents(visibleEvents, context.focusEventId);
+          renderTimeGrid(context, visibleEvents);
+        });
+        calendarLegendContainer.appendChild(legend);
+      }
+
+      renderAllDayEvents(context.events, context.focusEventId);
+      renderTimeGrid(context, context.events);
+      expandToggle.style.display = '';
+      expandToggle.onclick = toggleExpanded;
+      isExpanded = false;
+      timeGrid.classList.add('compact');
+      expandToggle.classList.remove('expanded');
+      toggleText.textContent = 'Show more';
+    }
+
+    // Multi-day view helper functions (kept for scheduling mode preview)
+    function formatMultiDayDate(dateStr) {
+      const date = new Date(dateStr + 'T00:00:00');
+      const day = date.getDate().toString();
+      const month = date.toLocaleDateString(hostLocale, { month: 'short' }).toUpperCase();
+      const year = date.getFullYear();
+      const weekday = date.toLocaleDateString(hostLocale, { weekday: 'short' }).toUpperCase();
+      return { day, monthYearDay: `${month} ${year}, ${weekday}` };
+    }
+
+    function isToday(dateStr) {
+      const today = new Date();
+      const date = new Date(dateStr + 'T00:00:00');
+      return date.getFullYear() === today.getFullYear() &&
+        date.getMonth() === today.getMonth() &&
+        date.getDate() === today.getDate();
+    }
+
+    function formatMultiDayEventTime(event) {
+      if (event.isAllDay) return 'All day';
+      const startDate = new Date(event.start);
+      const endDate = new Date(event.end);
+      const startOptions = { hour: 'numeric', minute: startDate.getMinutes() > 0 ? '2-digit' : undefined };
+      const endOptions = { hour: 'numeric', minute: endDate.getMinutes() > 0 ? '2-digit' : undefined };
+      const startStr = startDate.toLocaleTimeString(hostLocale, startOptions);
+      const endStr = endDate.toLocaleTimeString(hostLocale, endOptions);
+      return `${startStr} - ${endStr}`;
+    }
+
+    function formatCalendarName(calendarId, calendarName) {
+      if (calendarName) return calendarName;
+      if (calendarId === 'primary') return 'Primary';
+      if (calendarId.includes('@')) return calendarId;
+      return calendarId;
+    }
+
+    // Overlap detection helpers
+    function eventsOverlap(eventA, eventB) {
+      if (eventA.isAllDay || eventB.isAllDay) return { overlaps: false, overlapMinutes: 0 };
+
+      const startA = new Date(eventA.start).getTime();
+      const endA = new Date(eventA.end).getTime();
+      const startB = new Date(eventB.start).getTime();
+      const endB = new Date(eventB.end).getTime();
+
+      const overlaps = startA < endB && startB < endA;
+      if (!overlaps) return { overlaps: false, overlapMinutes: 0 };
+
+      const overlapStart = Math.max(startA, startB);
+      const overlapEnd = Math.min(endA, endB);
+      const overlapMinutes = Math.round((overlapEnd - overlapStart) / (1000 * 60));
+
+      return { overlaps: true, overlapMinutes };
+    }
+
+    function formatOverlapDuration(minutes) {
+      if (minutes < 60) {
+        return `${minutes} min`;
+      }
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      if (mins === 0) {
+        return `${hours} hr`;
+      }
+      return `${hours} hr ${mins} min`;
+    }
+
+    // Duration and proportional height helpers
+    function getEventDurationMinutes(event) {
+      const start = new Date(event.start).getTime();
+      const end = new Date(event.end).getTime();
+      return Math.round((end - start) / (1000 * 60));
+    }
+
+    function calculateEventHeight(durationMinutes) {
+      const MIN_DURATION = 30;  // 30 minutes
+      const MAX_DURATION = 180; // 3 hours
+      const MIN_HEIGHT = 44;    // pixels
+      const MAX_HEIGHT = 120;   // pixels
+
+      const continues = durationMinutes > MAX_DURATION;
+      const clampedDuration = Math.min(Math.max(durationMinutes, MIN_DURATION), MAX_DURATION);
+
+      const ratio = (clampedDuration - MIN_DURATION) / (MAX_DURATION - MIN_DURATION);
+      const height = MIN_HEIGHT + ratio * (MAX_HEIGHT - MIN_HEIGHT);
+
+      return { height: Math.round(height), continues };
+    }
+
+    function formatDuration(minutes) {
+      if (minutes < 60) {
+        return `${minutes}m`;
+      }
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      if (mins === 0) {
+        return `${hours}h`;
+      }
+      return `${hours}h ${mins}m`;
+    }
+
+    function createOverlapGroup(eventA, eventB, overlapMinutes, focusEventId) {
+      const group = document.createElement('div');
+      group.className = 'overlap-group';
+
+      // Calculate which event ends later for proper bar styling
+      const endA = new Date(eventA.end).getTime();
+      const endB = new Date(eventB.end).getTime();
+      const aEndsAfterB = endA > endB;
+
+      // Add modifier class for CSS bar styling
+      if (aEndsAfterB) {
+        group.classList.add('first-continues');
+      } else {
+        group.classList.add('second-continues');
+      }
+
+      const colorA = eventA.backgroundColor || 'var(--accent-color)';
+      const colorB = eventB.backgroundColor || 'var(--accent-color)';
+
+      const durationA = getEventDurationMinutes(eventA);
+      const durationB = getEventDurationMinutes(eventB);
+
+      const startA = new Date(eventA.start).getTime();
+      const startB = new Date(eventB.start).getTime();
+
+      // Calculate segment durations
+      const beforeOverlapMinutes = Math.round((startB - startA) / (1000 * 60));
+      // After overlap: time from when the shorter event ends to when the longer event ends
+      const afterOverlapMinutes = aEndsAfterB
+        ? Math.round((endA - endB) / (1000 * 60))  // A continues after B ends
+        : Math.round((endB - endA) / (1000 * 60)); // B continues after A ends
+
+      const { height: heightBeforeOverlap } = calculateEventHeight(Math.max(beforeOverlapMinutes, 15));
+      const { height: heightOverlap } = calculateEventHeight(Math.max(overlapMinutes, 15));
+      const { height: heightAfterOverlap, continues: continuesAfter } = calculateEventHeight(Math.max(afterOverlapMinutes, 15));
+
+      // First Event (before overlap)
+      const firstRow = document.createElement('div');
+      firstRow.className = 'overlap-event-first';
+      firstRow.style.minHeight = `${heightBeforeOverlap}px`;
+      firstRow.setAttribute('role', 'button');
+      firstRow.setAttribute('tabindex', '0');
+      firstRow.title = `${eventA.summary}\n${formatTime(eventA.start)} - ${formatTime(eventA.end)} (${formatDuration(durationA)})\nClick to open in Google Calendar`;
+      firstRow.addEventListener('click', () => openLink(eventA.htmlLink));
+
+      const barFirst = document.createElement('div');
+      barFirst.className = 'overlap-bar-first';
+      barFirst.style.backgroundColor = colorA;
+      firstRow.appendChild(barFirst);
+
+      const timeColFirst = document.createElement('div');
+      timeColFirst.className = 'event-time-col';
+      const startTimeA = document.createElement('div');
+      startTimeA.textContent = formatTime(eventA.start);
+      timeColFirst.appendChild(startTimeA);
+      const endTimeA = document.createElement('div');
+      endTimeA.className = 'event-end-time';
+      endTimeA.textContent = formatTime(eventA.end);
+      timeColFirst.appendChild(endTimeA);
+      firstRow.appendChild(timeColFirst);
+
+      const detailsFirst = document.createElement('div');
+      detailsFirst.className = 'event-details';
+
+      const titleRowFirst = document.createElement('div');
+      titleRowFirst.className = 'event-item-title-row';
+      const titleFirst = document.createElement('div');
+      titleFirst.className = 'event-item-title';
+      titleFirst.textContent = eventA.summary;
+      titleRowFirst.appendChild(titleFirst);
+      const calFirst = document.createElement('div');
+      calFirst.className = 'event-item-calendar';
+      calFirst.textContent = formatCalendarName(eventA.calendarId, eventA.calendarName);
+      titleRowFirst.appendChild(calFirst);
+      detailsFirst.appendChild(titleRowFirst);
+
+      if (eventA.location) {
+        const locFirst = document.createElement('div');
+        locFirst.className = 'event-item-location';
+        locFirst.textContent = eventA.location;
+        detailsFirst.appendChild(locFirst);
+      }
+      firstRow.appendChild(detailsFirst);
+
+      if (eventA.id === focusEventId) firstRow.classList.add('focused');
+      group.appendChild(firstRow);
+
+      // Overlap Region with Event B info
+      const overlapRow = document.createElement('div');
+      overlapRow.className = 'overlap-region overlap-region-with-event';
+      overlapRow.style.minHeight = `${heightOverlap}px`;
+      overlapRow.setAttribute('role', 'button');
+      overlapRow.setAttribute('tabindex', '0');
+      overlapRow.title = `${eventB.summary}\n${formatTime(eventB.start)} - ${formatTime(eventB.end)} (${formatDuration(durationB)})\nClick to open in Google Calendar`;
+      overlapRow.addEventListener('click', () => openLink(eventB.htmlLink));
+
+      const overlapBars = document.createElement('div');
+      overlapBars.className = 'overlap-bars';
+
+      const barOverlapA = document.createElement('div');
+      barOverlapA.className = 'overlap-bar bar-first';
+      barOverlapA.style.backgroundColor = colorA;
+      overlapBars.appendChild(barOverlapA);
+
+      const barOverlapB = document.createElement('div');
+      barOverlapB.className = 'overlap-bar bar-second';
+      barOverlapB.style.backgroundColor = colorB;
+      overlapBars.appendChild(barOverlapB);
+
+      overlapRow.appendChild(overlapBars);
+
+      // Overlap duration label (positioned after bars for prominence)
+      const overlapLabel = document.createElement('div');
+      overlapLabel.className = 'overlap-label';
+      overlapLabel.textContent = formatOverlapDuration(overlapMinutes);
+      overlapRow.appendChild(overlapLabel);
+
+      // Event B time column
+      const timeColB = document.createElement('div');
+      timeColB.className = 'event-time-col';
+      const startTimeBEl = document.createElement('div');
+      startTimeBEl.textContent = formatTime(eventB.start);
+      timeColB.appendChild(startTimeBEl);
+      const endTimeBEl = document.createElement('div');
+      endTimeBEl.className = 'event-end-time';
+      endTimeBEl.textContent = formatTime(eventB.end);
+      timeColB.appendChild(endTimeBEl);
+      overlapRow.appendChild(timeColB);
+
+      // Event B details
+      const detailsB = document.createElement('div');
+      detailsB.className = 'event-details';
+
+      const titleRowB = document.createElement('div');
+      titleRowB.className = 'event-item-title-row';
+      const titleB = document.createElement('div');
+      titleB.className = 'event-item-title';
+      titleB.textContent = eventB.summary;
+      titleRowB.appendChild(titleB);
+      const calB = document.createElement('div');
+      calB.className = 'event-item-calendar';
+      calB.textContent = formatCalendarName(eventB.calendarId, eventB.calendarName);
+      titleRowB.appendChild(calB);
+      detailsB.appendChild(titleRowB);
+
+      if (eventB.location) {
+        const locB = document.createElement('div');
+        locB.className = 'event-item-location';
+        locB.textContent = eventB.location;
+        detailsB.appendChild(locB);
+      }
+      overlapRow.appendChild(detailsB);
+
+      if (eventB.id === focusEventId) overlapRow.classList.add('focused');
+      group.appendChild(overlapRow);
+
+      // Continuation section (whichever event ends later)
+      if (afterOverlapMinutes > 0) {
+        if (aEndsAfterB) {
+          // Event A continues after Event B ends - show A's bar continuing
+          const continuationRow = document.createElement('div');
+          continuationRow.className = 'overlap-event-continuation';
+          continuationRow.style.minHeight = `${heightAfterOverlap}px`;
+          continuationRow.setAttribute('role', 'button');
+          continuationRow.setAttribute('tabindex', '0');
+          continuationRow.title = `${eventA.summary} continues\n${formatTime(eventA.start)} - ${formatTime(eventA.end)} (${formatDuration(durationA)})\nClick to open in Google Calendar`;
+          continuationRow.addEventListener('click', () => openLink(eventA.htmlLink));
+
+          const barContinuation = document.createElement('div');
+          barContinuation.className = 'overlap-bar-continuation';
+          barContinuation.style.backgroundColor = colorA;
+
+          // Add continues indicator if the continuation is capped
+          if (continuesAfter) {
+            barContinuation.classList.add('event-continues');
+            const dashes = document.createElement('div');
+            dashes.className = 'event-continues-dashes';
+            for (let d = 0; d < 2; d++) {
+              const dash = document.createElement('div');
+              dash.className = 'dash';
+              dash.style.backgroundColor = colorA;
+              dashes.appendChild(dash);
+            }
+            barContinuation.appendChild(dashes);
+          }
+
+          continuationRow.appendChild(barContinuation);
+
+          // Show "continues until X" label
+          const continueLabel = document.createElement('div');
+          continueLabel.className = 'continuation-label';
+          continueLabel.textContent = `continues until ${formatTime(eventA.end)}`;
+          continuationRow.appendChild(continueLabel);
+
+          if (eventA.id === focusEventId) continuationRow.classList.add('focused');
+          group.appendChild(continuationRow);
+        } else {
+          // Event B continues after Event A ends - show B's continuation
+          const secondRow = document.createElement('div');
+          secondRow.className = 'overlap-event-second';
+          secondRow.style.minHeight = `${heightAfterOverlap}px`;
+          secondRow.setAttribute('role', 'button');
+          secondRow.setAttribute('tabindex', '0');
+          secondRow.title = `${eventB.summary}\n${formatTime(eventB.start)} - ${formatTime(eventB.end)} (${formatDuration(durationB)})\nClick to open in Google Calendar`;
+          secondRow.addEventListener('click', () => openLink(eventB.htmlLink));
+
+          const barSecond = document.createElement('div');
+          barSecond.className = 'overlap-bar-second';
+          barSecond.style.backgroundColor = colorB;
+
+          // Add continues indicator if needed
+          if (continuesAfter) {
+            barSecond.classList.add('event-continues');
+            const dashes = document.createElement('div');
+            dashes.className = 'event-continues-dashes';
+            for (let d = 0; d < 2; d++) {
+              const dash = document.createElement('div');
+              dash.className = 'dash';
+              dash.style.backgroundColor = colorB;
+              dashes.appendChild(dash);
+            }
+            barSecond.appendChild(dashes);
+          }
+
+          secondRow.appendChild(barSecond);
+
+          if (eventB.id === focusEventId) secondRow.classList.add('focused');
+          group.appendChild(secondRow);
+        }
+      }
+
+      return group;
+    }
+
+    function createEventListItem(event, isFocused) {
+      const element = document.createElement('div');
+      element.className = `event-list-item ${isFocused ? 'focused' : ''}`.trim();
+      element.style.cursor = 'pointer';
+      element.setAttribute('role', 'button');
+      element.setAttribute('tabindex', '0');
+      // Detailed tooltip
+      const tooltipParts = [event.summary];
+      if (event.isAllDay) {
+        tooltipParts.push('All day');
+      } else {
+        tooltipParts.push(`${formatTime(event.start)} - ${formatTime(event.end)}`);
+      }
+      if (event.location) tooltipParts.push(event.location);
+      tooltipParts.push('Click to open in Google Calendar');
+      element.title = tooltipParts.join('\n');
+      element.addEventListener('click', () => openLink(event.htmlLink));
+
+      // Color dot
+      const colorDot = document.createElement('div');
+      colorDot.className = 'color-dot';
+      if (event.backgroundColor) {
+        colorDot.style.backgroundColor = event.backgroundColor;
+      }
+      element.appendChild(colorDot);
+
+      // Content container
+      const content = document.createElement('div');
+      content.className = 'event-list-content';
+
+      const titleDiv = document.createElement('div');
+      titleDiv.className = 'event-list-title';
+      titleDiv.textContent = event.summary;
+      content.appendChild(titleDiv);
+
+      const timeDiv = document.createElement('div');
+      timeDiv.className = 'event-list-time';
+      timeDiv.textContent = formatMultiDayEventTime(event);
+      content.appendChild(timeDiv);
+
+      if (event.location) {
+        const locationDiv = document.createElement('div');
+        locationDiv.className = 'event-list-location';
+        locationDiv.textContent = event.location;
+        content.appendChild(locationDiv);
+      }
+
+      // Account and calendar info
+      const sourceDiv = document.createElement('div');
+      sourceDiv.className = 'event-list-source';
+      const calendarName = formatCalendarName(event.calendarId, event.calendarName);
+      if (event.accountId) {
+        sourceDiv.textContent = `${event.accountId} · ${calendarName}`;
+      } else {
+        sourceDiv.textContent = calendarName;
+      }
+      content.appendChild(sourceDiv);
+
+      element.appendChild(content);
+      return element;
+    }
+
+    function calculateDayTimeRange(events) {
+      const timedEvents = events.filter(e => !e.isAllDay);
+      if (timedEvents.length === 0) {
+        return { startHour: 8, endHour: 18 };
+      }
+      let minHour = 24;
+      let maxHour = 0;
+      for (const event of timedEvents) {
+        const start = new Date(event.start);
+        const end = new Date(event.end);
+        minHour = Math.min(minHour, start.getHours());
+        maxHour = Math.max(maxHour, end.getHours() + (end.getMinutes() > 0 ? 1 : 0));
+      }
+      return {
+        startHour: Math.max(0, minHour - 1),
+        endHour: Math.min(24, maxHour + 1)
+      };
+    }
+
+    function calculateMultiDayEventPosition(event, startHour, endHour) {
+      const ROW_HEIGHT = 32; // Compact row height
+      const eventStart = new Date(event.start);
+      const eventEnd = new Date(event.end);
+      const startHourFloat = eventStart.getHours() + eventStart.getMinutes() / 60;
+      const endHourFloat = eventEnd.getHours() + eventEnd.getMinutes() / 60;
+      const clampedStart = Math.max(startHourFloat, startHour);
+      const clampedEnd = Math.min(endHourFloat, endHour);
+      const topOffset = (clampedStart - startHour) * ROW_HEIGHT;
+      const height = Math.max((clampedEnd - clampedStart) * ROW_HEIGHT, 24);
+      return { top: `${topOffset}px`, height: `${height}px` };
+    }
+
+    function createDayEventList(events, focusEventId, availableSlots, dateStr) {
+      const container = document.createElement('div');
+      container.className = 'expanded-day-list';
+
+      const allDayEvents = events.filter(e => e.isAllDay);
+      const timedEvents = events.filter(e => !e.isAllDay).sort(
+        (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
+      );
+
+      // All-day events section
+      if (allDayEvents.length > 0) {
+        const allDaySection = document.createElement('div');
+        allDaySection.className = 'all-day-list-section';
+
+        const allDayLabel = document.createElement('div');
+        allDayLabel.className = 'all-day-list-label';
+        allDayLabel.textContent = 'All day';
+        allDaySection.appendChild(allDayLabel);
+
+        for (const event of allDayEvents) {
+          const isFocused = event.id === focusEventId;
+          const allDayRange = formatAllDayRange(event.start, event.end);
+
+          const item = document.createElement('div');
+          item.className = `expanded-event-item ${isFocused ? 'focused' : ''}`.trim();
+          item.style.cursor = 'pointer';
+          item.setAttribute('role', 'button');
+          item.setAttribute('tabindex', '0');
+
+          // Tooltip
+          const tooltipParts = [event.summary];
+          tooltipParts.push(allDayRange.dateRange ? `All day (${allDayRange.dateRange})` : 'All day');
+          if (event.location) tooltipParts.push(event.location);
+          tooltipParts.push('Click to open in Google Calendar');
+          item.title = tooltipParts.join('\n');
+
+          item.addEventListener('click', () => openLink(event.htmlLink));
+          item.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              openLink(event.htmlLink);
+            }
+          });
+
+          // Color bar
+          const colorBar = document.createElement('div');
+          colorBar.className = 'event-color-bar';
+          colorBar.style.backgroundColor = event.backgroundColor || 'var(--accent-color)';
+          item.appendChild(colorBar);
+
+          // Time column - show date or date range
+          const timeCol = document.createElement('div');
+          timeCol.className = 'event-time-col';
+          timeCol.textContent = allDayRange.dateRange;
+          item.appendChild(timeCol);
+
+          // Event details
+          const details = document.createElement('div');
+          details.className = 'event-details';
+
+          const title = document.createElement('div');
+          title.className = 'event-item-title';
+          title.textContent = event.summary;
+          details.appendChild(title);
+
+          if (event.location) {
+            const location = document.createElement('div');
+            location.className = 'event-item-location';
+            location.textContent = event.location;
+            details.appendChild(location);
+          }
+
+          item.appendChild(details);
+          allDaySection.appendChild(item);
+        }
+
+        container.appendChild(allDaySection);
+      }
+
+      // Build unified timeline of events and available slots
+      // Convert slots to timeline items with comparable start times
+      const slotItems = (availableSlots || []).map(slot => ({
+        type: 'slot',
+        startMinutes: slot.startMinutes,
+        slot: slot
+      }));
+
+      // Track rendered events for overlap handling
+      const renderedEventIds = new Set();
+
+      // Process events and slots in chronological order
+      let eventIndex = 0;
+      let slotIndex = 0;
+
+      while (eventIndex < timedEvents.length || slotIndex < slotItems.length) {
+        // Get current event start time in minutes (if any remaining)
+        let eventStartMinutes = Infinity;
+        if (eventIndex < timedEvents.length) {
+          const event = timedEvents[eventIndex];
+          if (!renderedEventIds.has(event.id)) {
+            const eventDate = new Date(event.start);
+            eventStartMinutes = eventDate.getHours() * 60 + eventDate.getMinutes();
+          }
+        }
+
+        // Get current slot start time (if any remaining)
+        const slotStartMinutes = slotIndex < slotItems.length ? slotItems[slotIndex].startMinutes : Infinity;
+
+        // Render whichever comes first
+        if (slotStartMinutes < eventStartMinutes && slotIndex < slotItems.length) {
+          // Render available slot
+          const slotEl = window.createAvailableSlotElement(slotItems[slotIndex].slot, dateStr);
+          container.appendChild(slotEl);
+          slotIndex++;
+        } else if (eventIndex < timedEvents.length) {
+          const event = timedEvents[eventIndex];
+
+          // Skip if already rendered as part of an overlap group
+          if (renderedEventIds.has(event.id)) {
+            eventIndex++;
+            continue;
+          }
+
+          const nextEvent = eventIndex < timedEvents.length - 1 ? timedEvents[eventIndex + 1] : null;
+          const overlapWithNext = nextEvent ? eventsOverlap(event, nextEvent) : { overlaps: false, overlapMinutes: 0 };
+
+          // If overlapping with next, render as an overlap group
+          if (overlapWithNext.overlaps && nextEvent) {
+            const overlapGroup = createOverlapGroup(event, nextEvent, overlapWithNext.overlapMinutes, focusEventId);
+            container.appendChild(overlapGroup);
+            renderedEventIds.add(event.id);
+            renderedEventIds.add(nextEvent.id);
+            eventIndex++;
+            continue;
+          }
+
+          // Otherwise render as a regular event row
+          const durationMinutes = getEventDurationMinutes(event);
+          const { height, continues } = calculateEventHeight(durationMinutes);
+
+          const isFocused = event.id === focusEventId;
+          const item = document.createElement('div');
+
+          const classes = ['expanded-event-item'];
+          if (isFocused) classes.push('focused');
+          if (continues) classes.push('event-continues-row');
+          item.className = classes.join(' ');
+
+          item.style.minHeight = `${height}px`;
+          item.style.cursor = 'pointer';
+          item.setAttribute('role', 'button');
+          item.setAttribute('tabindex', '0');
+
+          const tooltipParts = [event.summary];
+          tooltipParts.push(`${formatTime(event.start)} - ${formatTime(event.end)} (${formatDuration(durationMinutes)})`);
+          if (event.location) tooltipParts.push(event.location);
+          tooltipParts.push('Click to open in Google Calendar');
+          item.title = tooltipParts.join('\n');
+
+          item.addEventListener('click', () => openLink(event.htmlLink));
+          item.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              openLink(event.htmlLink);
+            }
+          });
+
+          const colorBar = document.createElement('div');
+          const eventColor = event.backgroundColor || 'var(--accent-color)';
+          colorBar.className = 'event-color-bar';
+          colorBar.style.backgroundColor = eventColor;
+
+          if (continues) {
+            colorBar.classList.add('event-continues');
+            const dashes = document.createElement('div');
+            dashes.className = 'event-continues-dashes';
+            for (let d = 0; d < 2; d++) {
+              const dash = document.createElement('div');
+              dash.className = 'dash';
+              dash.style.backgroundColor = eventColor;
+              dashes.appendChild(dash);
+            }
+            colorBar.appendChild(dashes);
+          }
+
+          item.appendChild(colorBar);
+
+          const timeCol = document.createElement('div');
+          timeCol.className = 'event-time-col';
+          const startTime = document.createElement('div');
+          startTime.textContent = formatTime(event.start);
+          timeCol.appendChild(startTime);
+          const endTime = document.createElement('div');
+          endTime.className = 'event-end-time';
+          endTime.textContent = formatTime(event.end);
+          timeCol.appendChild(endTime);
+          if (continues) {
+            const durationLabel = document.createElement('div');
+            durationLabel.className = 'event-duration-label';
+            durationLabel.textContent = formatDuration(durationMinutes);
+            timeCol.appendChild(durationLabel);
+          }
+          item.appendChild(timeCol);
+
+          const details = document.createElement('div');
+          details.className = 'event-details';
+
+          const titleRow = document.createElement('div');
+          titleRow.className = 'event-item-title-row';
+          const title = document.createElement('div');
+          title.className = 'event-item-title';
+          title.textContent = event.summary;
+          titleRow.appendChild(title);
+          const calendarLabel = document.createElement('div');
+          calendarLabel.className = 'event-item-calendar';
+          calendarLabel.textContent = formatCalendarName(event.calendarId, event.calendarName);
+          titleRow.appendChild(calendarLabel);
+          details.appendChild(titleRow);
+
+          if (event.location) {
+            const location = document.createElement('div');
+            location.className = 'event-item-location';
+            location.textContent = event.location;
+            details.appendChild(location);
+          }
+          item.appendChild(details);
+          container.appendChild(item);
+          eventIndex++;
+        } else {
+          break;
+        }
+      }
+
+      return container;
+    }
+
+    function computeCalendarSummary(events) {
+      const byAccount = new Map();
+      for (const event of events) {
+        // Use accountId as the grouping key, fall back to calendarId if no account
+        const key = event.accountId || event.calendarId;
+        const existing = byAccount.get(key);
+        if (existing) {
+          existing.count++;
+        } else {
+          byAccount.set(key, {
+            calendarId: event.calendarId,
+            calendarName: event.accountId || formatCalendarName(event.calendarId),
+            backgroundColor: event.backgroundColor || 'var(--accent-color)',
+            count: 1
+          });
+        }
+      }
+      return Array.from(byAccount.values());
+    }
+
+    function createCalendarSummary(events) {
+      const summary = computeCalendarSummary(events);
+      const container = document.createElement('div');
+      container.className = 'calendar-summary';
+
+      for (const cal of summary) {
+        const item = document.createElement('div');
+        item.className = 'calendar-summary-item';
+
+        const dot = document.createElement('span');
+        dot.className = 'color-dot';
+        dot.style.backgroundColor = cal.backgroundColor;
+        item.appendChild(dot);
+
+        const name = document.createElement('span');
+        name.className = 'calendar-name';
+        name.textContent = cal.calendarName;
+        item.appendChild(name);
+
+        const count = document.createElement('span');
+        count.className = 'calendar-count';
+        count.textContent = `· ${cal.count}`;
+        item.appendChild(count);
+
+        container.appendChild(item);
+      }
+
+      return container;
+    }
+
+    function toggleDayExpanded(dateStr) {
+      const group = document.querySelector(`[data-date="${dateStr}"]`);
+      if (!group) return;
+
+      const header = group.querySelector('.date-header');
+      const eventsContainer = group.querySelector('.date-events');
+      if (!header || !eventsContainer) return;
+
+      const isCurrentlyExpanded = expandedDays.has(dateStr);
+
+      if (isCurrentlyExpanded) {
+        expandedDays.delete(dateStr);
+        header.classList.remove('expanded');
+        header.setAttribute('aria-expanded', 'false');
+        eventsContainer.classList.add('collapsed');
+      } else {
+        expandedDays.add(dateStr);
+        header.classList.add('expanded');
+        header.setAttribute('aria-expanded', 'true');
+        eventsContainer.classList.remove('collapsed');
+      }
+    }
+
+    function createDateGroup(dateStr, events, focusEventId) {
+      const group = document.createElement('div');
+      group.className = 'date-group';
+      group.setAttribute('data-date', dateStr);
+
+      // Calculate available slots if in scheduling mode
+      const schedulingActive = window.isSchedulingMode();
+      const availableSlots = schedulingActive
+        ? window.calculateAvailableSlots(events, window.getSlotDuration())
+        : [];
+
+      const header = document.createElement('div');
+      header.className = 'date-header';
+      header.setAttribute('role', 'button');
+      header.setAttribute('tabindex', '0');
+      header.setAttribute('aria-expanded', 'false');
+
+      const { day, monthYearDay } = formatMultiDayDate(dateStr);
+
+      const dayNumber = document.createElement('div');
+      dayNumber.className = `date-number ${isToday(dateStr) ? 'today' : ''}`.trim();
+      dayNumber.textContent = day;
+      header.appendChild(dayNumber);
+
+      const dateText = document.createElement('div');
+      dateText.className = 'date-text';
+      dateText.textContent = monthYearDay;
+      header.appendChild(dateText);
+
+      // Calendar summary (inline in header)
+      const calendarSummary = createCalendarSummary(events);
+      header.appendChild(calendarSummary);
+
+      // Available slots summary (when in scheduling mode)
+      if (schedulingActive && availableSlots.length > 0) {
+        const slotsSummary = document.createElement('div');
+        slotsSummary.className = 'slots-summary';
+        slotsSummary.textContent = availableSlots.length + ' slot' + (availableSlots.length > 1 ? 's' : '') + ' available';
+        header.appendChild(slotsSummary);
+      }
+
+      // Expand icon (SVG chevron)
+      const expandIcon = document.createElement('div');
+      expandIcon.className = 'date-expand-icon';
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('width', '16');
+      svg.setAttribute('height', '16');
+      svg.setAttribute('viewBox', '0 0 24 24');
+      svg.setAttribute('fill', 'none');
+      svg.setAttribute('stroke', 'currentColor');
+      svg.setAttribute('stroke-width', '2');
+      const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+      polyline.setAttribute('points', '6 9 12 15 18 9');
+      svg.appendChild(polyline);
+      expandIcon.appendChild(svg);
+      header.appendChild(expandIcon);
+
+      header.addEventListener('click', () => toggleDayExpanded(dateStr));
+      header.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          toggleDayExpanded(dateStr);
+        }
+      });
+
+      group.appendChild(header);
+
+      // Day event list (starts collapsed)
+      const dayEventList = createDayEventList(events, focusEventId, availableSlots, dateStr);
+      dayEventList.className = 'date-events collapsed';
+
+      group.appendChild(dayEventList);
+      return group;
+    }
+
+    function formatTimeRangeSubheading(context) {
+      const parts = [];
+      if (context.query) parts.push(`Search: "${context.query}"`);
+      if (context.timeRange?.start && context.timeRange?.end) {
+        const startDate = new Date(context.timeRange.start);
+        const endDate = new Date(context.timeRange.end);
+        const formatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+        const startStr = startDate.toLocaleDateString(hostLocale, formatOptions);
+        const endStr = endDate.toLocaleDateString(hostLocale, formatOptions);
+        parts.push(`${startStr} - ${endStr}`);
+      }
+      parts.push(`${context.totalEventCount} event${context.totalEventCount !== 1 ? 's' : ''}`);
+      return parts.join(' · ');
+    }
+
+    function renderMultiDayView(context) {
+      // Reset expanded days state
+      expandedDays.clear();
+
+      // Hide day view, show multi-day view
+      dayViewContainer.style.display = 'none';
+      multiDayViewContainer.style.display = '';
+
+      multiDayHeading.textContent = context.query ? 'Search Results' : 'Events';
+      multiDaySubheading.textContent = formatTimeRangeSubheading(context);
+
+      multiDayLink.href = '#';
+      multiDayLink.onclick = (e) => {
+        e.preventDefault();
+        openLink(context.calendarLink);
+      };
+
+      // Clear existing content
+      while (multiDayEventsList.firstChild) {
+        multiDayEventsList.removeChild(multiDayEventsList.firstChild);
+      }
+
+      // Render date groups
+      if (context.totalEventCount === 0) {
+        const emptyState = document.createElement('div');
+        emptyState.className = 'multi-day-empty';
+        if (context.query) {
+          emptyState.textContent = `No results found for "${context.query}"`;
+        } else if (context.timeRange?.start && context.timeRange?.end) {
+          // Format the date range for the empty message
+          const startDate = new Date(context.timeRange.start);
+          const endDate = new Date(context.timeRange.end);
+          const formatOptions = { month: 'short', day: 'numeric' };
+          const startStr = startDate.toLocaleDateString(hostLocale, formatOptions);
+          const endStr = endDate.toLocaleDateString(hostLocale, formatOptions);
+          emptyState.textContent = `No events from ${startStr} to ${endStr}`;
+        } else {
+          emptyState.textContent = 'No events found';
+        }
+        multiDayEventsList.appendChild(emptyState);
+      } else {
+        for (const date of context.dates) {
+          const events = context.eventsByDate[date] || [];
+          if (events.length > 0) {
+            const dateGroup = createDateGroup(date, events, context.focusEventId);
+            multiDayEventsList.appendChild(dateGroup);
+          }
+        }
+      }
+    }
+
+    function extractDayContext(params) {
+      if (!params.content) return null;
+      for (const block of params.content) {
+        if (block.type === 'text' && block.text) {
+          try {
+            const parsed = JSON.parse(block.text);
+            if (parsed.dayContext) {
+              return parsed.dayContext;
+            }
+          } catch {}
+        }
+      }
+      return null;
+    }
+
+    // Set up handlers
+    mockApp.ontoolresult = (params) => {
+      const dayContext = extractDayContext(params);
+      if (dayContext) {
+        renderDayView(dayContext);
+      }
+    };
+
+    // Initialize
+    mockApp.connect();
+  </script>
+</body>
+</html>

@@ -9,6 +9,15 @@ export default defineConfig({
     env: loadEnv('', process.cwd(), ''),
     // Increase timeout for AI API calls
     testTimeout: 30000,
+    // Use forks pool for cleaner process termination (prevents orphaned workers)
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        singleFork: true, // Use single fork to minimize process spawning
+      },
+    },
+    // Ensure proper cleanup on exit
+    teardownTimeout: 5000,
     include: [
       'src/tests/**/*.test.ts'
     ],

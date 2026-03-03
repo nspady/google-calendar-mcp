@@ -97,9 +97,15 @@ export class SearchEventsHandler extends BaseToolHandler {
         // Sort events chronologically
         this.sortEventsByStartTime(allEvents);
 
-        // Convert to structured format
+        // Build color context for resolving event display colors
+        const colorContext = await this.buildMultiAccountColorContext(
+            Array.from(accountCalendarMap.entries()).map(([accountId, calendarIds]) => ({ accountId, calendarIds })),
+            selectedAccounts
+        );
+
+        // Convert to structured format with resolved colors
         const structuredEvents: StructuredEvent[] = allEvents.map(event =>
-            convertGoogleEventToStructured(event, event.calendarId, event.accountId)
+            convertGoogleEventToStructured(event, event.calendarId, event.accountId, colorContext)
         );
 
         const response: SearchEventsResponse = {
@@ -141,9 +147,9 @@ export class SearchEventsHandler extends BaseToolHandler {
             const { timeMin, timeMax } = await this.normalizeTimeRange(
                 client, args.calendarId, args.timeMin, args.timeMax, args.timeZone
             );
-            
+
             const fieldMask = buildListFieldMask(args.fields);
-            
+
             const response = await calendar.events.list({
                 calendarId: args.calendarId,
                 q: args.query,

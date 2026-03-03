@@ -4,7 +4,7 @@ import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
 import { buildSingleEventFieldMask } from "../../utils/field-mask-builder.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
-import { GetEventResponse, convertGoogleEventToStructured } from "../../types/structured-responses.js";
+import { GetEventResponse, convertGoogleEventToStructured, EventColorContext } from "../../types/structured-responses.js";
 
 interface GetEventArgs {
     calendarId: string;
@@ -35,8 +35,11 @@ export class GetEventHandler extends BaseToolHandler {
                 throw new Error(`Event with ID '${validArgs.eventId}' not found in calendar '${resolvedCalendarId}'.`);
             }
 
+            // Build color context for resolving display colors
+            const colorContext = await this.buildColorContext(oauth2Client, [resolvedCalendarId]);
+
             const response: GetEventResponse = {
-                event: convertGoogleEventToStructured(event, resolvedCalendarId, selectedAccountId)
+                event: convertGoogleEventToStructured(event, resolvedCalendarId, selectedAccountId, colorContext)
             };
 
             return createStructuredResponse(response);

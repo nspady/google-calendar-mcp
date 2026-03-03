@@ -1,4 +1,4 @@
-import { CallToolResult, McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { UpdateEventInput } from "../../tools/registry.js";
 import { BaseToolHandler } from "./BaseToolHandler.js";
@@ -6,15 +6,12 @@ import { calendar_v3 } from 'googleapis';
 import { RecurringEventHelpers, RecurringEventError, RECURRING_EVENT_ERRORS } from './RecurringEventHelpers.js';
 import { ConflictDetectionService } from "../../services/conflict-detection/index.js";
 import { createTimeObject } from "../../utils/datetime.js";
-import { 
-    createStructuredResponse, 
+import {
+    createStructuredResponse,
     convertConflictsToStructured,
     createWarningsArray
 } from "../../utils/response-builder.js";
-import { 
-    UpdateEventResponse,
-    convertGoogleEventToStructured 
-} from "../../types/structured-responses.js";
+import { UpdateEventResponse } from "../../types/structured-responses.js";
 
 export class UpdateEventHandler extends BaseToolHandler {
     private conflictDetectionService: ConflictDetectionService;
@@ -30,6 +27,9 @@ export class UpdateEventHandler extends BaseToolHandler {
         // Setup write operation: get client, calendar API, and resolve calendar name to ID
         const { client: oauth2Client, calendar, accountId: selectedAccountId, calendarId: resolvedCalendarId } =
             await this.setupOperation(args.account, validArgs.calendarId, accounts, 'write');
+
+        // Resolve timezone once for the entire method
+        const timezone = validArgs.timeZone || await this.getCalendarTimezone(oauth2Client, resolvedCalendarId);
 
         // Fetch existing event if needed for conflict checking or attendees merge
         const needsExistingEvent =
@@ -53,7 +53,6 @@ export class UpdateEventHandler extends BaseToolHandler {
         let conflicts = null;
         if (validArgs.checkConflicts !== false && (validArgs.start || validArgs.end) && existingEvent) {
             // Create updated event object for conflict checking
-            const timezone = validArgs.timeZone || await this.getCalendarTimezone(oauth2Client, resolvedCalendarId);
             const eventToCheck: calendar_v3.Schema$Event = {
                 ...existingEvent,
                 id: validArgs.eventId,
@@ -88,14 +87,19 @@ export class UpdateEventHandler extends BaseToolHandler {
             };
         }
 
-        // Update the event with resolved calendar ID and merged attendees
-        const event = await this.updateEventWithScope(oauth2Client, argsWithMergedAttendees);
+        // Update the event with resolved calendar ID, merged attendees, and pre-resolved timezone
+        const updatedEvent = await this.updateEventWithScope(oauth2Client, { ...argsWithMergedAttendees, timeZone: timezone });
+
+        // Build day context with surrounding events across all calendars
+        const { structuredEvent, dayContext } = await this.buildEventDayContext(
+            updatedEvent, resolvedCalendarId, selectedAccountId, timezone, accounts, oauth2Client
+        );
 
         // Create structured response
         const response: UpdateEventResponse = {
-            event: convertGoogleEventToStructured(event, resolvedCalendarId, selectedAccountId)
+            event: structuredEvent
         };
-        
+
         // Add conflict information if present
         if (conflicts && conflicts.hasConflicts) {
             const structuredConflicts = convertConflictsToStructured(conflicts);
@@ -104,7 +108,12 @@ export class UpdateEventHandler extends BaseToolHandler {
             }
             response.warnings = createWarningsArray(conflicts);
         }
-        
+
+        // Add day context if available
+        if (dayContext) {
+            response.dayContext = dayContext;
+        }
+
         return createStructuredResponse(response);
     }
 
@@ -116,8 +125,8 @@ export class UpdateEventHandler extends BaseToolHandler {
             const calendar = this.getCalendar(client);
             const helpers = new RecurringEventHelpers(calendar);
             
-            // Get calendar's default timezone if not provided
-            const defaultTimeZone = await this.getCalendarTimezone(client, args.calendarId);
+            // Use pre-resolved timezone from runTool, or fetch as fallback
+            const defaultTimeZone = args.timeZone || await this.getCalendarTimezone(client, args.calendarId);
             
             // Detect event type and validate scope usage
             const eventType = await helpers.detectEventType(args.eventId, args.calendarId);
@@ -167,15 +176,13 @@ export class UpdateEventHandler extends BaseToolHandler {
         const instanceId = helpers.formatInstanceId(args.eventId, args.originalStartTime);
 
         const requestBody = helpers.buildUpdateRequestBody(args, defaultTimeZone);
-        const conferenceDataVersion = requestBody.conferenceData !== undefined ? 1 : undefined;
-        const supportsAttachments = requestBody.attachments !== undefined ? true : undefined;
+        const flags = this.getApiFlags(requestBody);
 
         const response = await calendar.events.patch({
             calendarId: args.calendarId,
             eventId: instanceId,
             requestBody,
-            ...(conferenceDataVersion && { conferenceDataVersion }),
-            ...(supportsAttachments && { supportsAttachments })
+            ...flags
         });
 
         if (!response.data) throw new Error('Failed to update event instance');
@@ -190,15 +197,13 @@ export class UpdateEventHandler extends BaseToolHandler {
         const calendar = helpers.getCalendar();
 
         const requestBody = helpers.buildUpdateRequestBody(args, defaultTimeZone);
-        const conferenceDataVersion = requestBody.conferenceData !== undefined ? 1 : undefined;
-        const supportsAttachments = requestBody.attachments !== undefined ? true : undefined;
+        const flags = this.getApiFlags(requestBody);
 
         const response = await calendar.events.patch({
             calendarId: args.calendarId,
             eventId: args.eventId,
             requestBody,
-            ...(conferenceDataVersion && { conferenceDataVersion }),
-            ...(supportsAttachments && { supportsAttachments })
+            ...flags
         });
 
         if (!response.data) throw new Error('Failed to update event');
@@ -264,14 +269,12 @@ export class UpdateEventHandler extends BaseToolHandler {
             }
         };
 
-        const conferenceDataVersion = newEvent.conferenceData !== undefined ? 1 : undefined;
-        const supportsAttachments = newEvent.attachments !== undefined ? true : undefined;
+        const flags = this.getApiFlags(newEvent);
 
         const response = await calendar.events.insert({
             calendarId: args.calendarId,
             requestBody: newEvent,
-            ...(conferenceDataVersion && { conferenceDataVersion }),
-            ...(supportsAttachments && { supportsAttachments })
+            ...flags
         });
 
         if (!response.data) throw new Error('Failed to create new recurring event');

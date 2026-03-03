@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Day View</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Single-day view (time grid) -->
+    <div id="day-view-container">
+      <div id="day-view-header" class="day-view-header">
+        <div class="day-view-title-row">
+          <h2 id="date-heading" class="loading-shimmer">Loading...</h2>
+          <div class="header-actions">
+            <button id="day-fullscreen-btn" class="display-mode-btn" title="Toggle fullscreen" style="display: none;" aria-label="Toggle fullscreen">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <polyline points="9 21 3 21 3 15"></polyline>
+                <line x1="21" y1="3" x2="14" y2="10"></line>
+                <line x1="3" y1="21" x2="10" y2="14"></line>
+              </svg>
+            </button>
+            <button id="day-refresh-btn" class="refresh-btn" title="Refresh events" style="display: none;" aria-label="Refresh events">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+            </button>
+            <a id="day-link" href="#" target="_blank" class="open-calendar-btn" style="display: none;" title="Open in Google Calendar"><svg class="gcal-icon" width="16" height="16" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="10" width="180" height="180" rx="24" fill="#4285F4"/><rect x="24" y="0" width="152" height="40" rx="0" fill="#4285F4"/><rect x="40" y="56" width="120" height="120" rx="4" fill="#fff"/><path d="M160 176h16c13.3 0 24-10.7 24-24v-16L160 176z" fill="#EA4335"/><rect x="0" y="136" width="200" height="64" rx="0" fill="#0B8043" style="clip-path:inset(0 0 0 0 round 0 0 24px 24px)"/><rect x="136" y="0" width="64" height="200" rx="0" fill="#F4B400" style="clip-path:inset(0 24px 0 0 round 0 24px 0 0)"/><rect x="136" y="136" width="64" height="64" fill="#0B8043"/><path d="M160 176h16c13.3 0 24-10.7 24-24v-16L160 176z" fill="#EA4335"/><rect x="40" y="56" width="120" height="120" rx="4" fill="#fff"/><text x="100" y="138" text-anchor="middle" font-family="Google Sans,Roboto,Arial,sans-serif" font-size="80" font-weight="500" fill="#4285F4">31</text></svg></a>
+          </div>
+        </div>
+        <div id="calendar-legend-container"></div>
+      </div>
+      <div id="all-day-section" class="all-day-section" style="display: none;">
+        <div class="all-day-label">All day</div>
+        <div id="all-day-events" class="all-day-events"></div>
+      </div>
+      <div id="time-grid" class="time-grid compact">
+        <!-- Time slots and events rendered here -->
+      </div>
+      <button id="expand-toggle" class="expand-toggle" style="display: none;">
+        <span id="toggle-text">Show more</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Event detail overlay -->
+  <div id="event-detail-overlay" class="event-detail-overlay" style="display: none;">
+    <div class="event-detail-backdrop"></div>
+    <div class="event-detail-card" role="dialog" aria-modal="true" aria-label="Event details">
+      <button class="event-detail-close" aria-label="Close">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+      <div id="event-detail-content"></div>
+    </div>
+  </div>
+
+  <script type="module" src="./day-view.ts"></script>
+</body>
+</html>

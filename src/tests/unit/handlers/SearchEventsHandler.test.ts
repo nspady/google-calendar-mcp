@@ -575,4 +575,5 @@ describe('SearchEventsHandler', () => {
       }, multiAccounts)).rejects.toThrow('None of the requested calendars could be found');
     });
   });
+
 });

@@ -326,8 +326,9 @@ HTTP/1.1 200 OK
 
       await handler.runTool(args, mockAccounts);
 
-      // Should NOT have called calendarList.list since all inputs are IDs
-      expect(mockCalendar.calendarList.list).not.toHaveBeenCalled();
+      // Should call calendarList.list once for fetching calendar colors (not for name resolution)
+      // Name resolution is skipped when all inputs are IDs, but color fetching still needs calendar info
+      expect(mockCalendar.calendarList.list).toHaveBeenCalledTimes(1);
     });
 
     it('should call API only once for multiple name resolutions', async () => {
@@ -356,8 +357,10 @@ HTTP/1.1 200 OK
 
       await handler.runTool(args, mockAccounts);
 
-      // Should have called calendarList.list exactly once
-      expect(mockCalendar.calendarList.list).toHaveBeenCalledTimes(1);
+      // Should call calendarList.list twice:
+      // 1. Once for resolving calendar names to IDs
+      // 2. Once for fetching calendar colors
+      expect(mockCalendar.calendarList.list).toHaveBeenCalledTimes(2);
     });
   });
 

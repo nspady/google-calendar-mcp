@@ -26,6 +26,10 @@ import { HttpTransportHandler, HttpTransportConfig, McpServerFactory } from './t
 // Import config
 import { ServerConfig } from './config/TransportConfig.js';
 
+// Import UI resource registration
+import { registerUIResources } from './ui/register-ui-resources.js';
+
+
 // Read version from package.json
 const __server_dirname = dirname(fileURLToPath(import.meta.url));
 const SERVER_VERSION = JSON.parse(readFileSync(join(__server_dirname, '..', 'package.json'), 'utf-8')).version;
@@ -63,7 +67,10 @@ export class GoogleCalendarMcpServer {
     this.registerPrompts();
     this.registerResources();
 
-    // 5. Set up Graceful Shutdown
+    // 5. Register MCP Apps UI resources
+    await registerUIResources(this.server);
+
+    // 6. Set up Graceful Shutdown
     this.setupGracefulShutdown();
   }
 

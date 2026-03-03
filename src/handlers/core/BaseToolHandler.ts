@@ -6,10 +6,15 @@ import { getCredentialsProjectId } from "../../auth/utils.js";
 import { CalendarRegistry } from "../../services/CalendarRegistry.js";
 import { validateAccountId } from "../../auth/paths.js";
 import { convertToRFC3339 } from "../../utils/datetime.js";
+import { EventColorContext, ExtendedEvent, StructuredEvent, convertGoogleEventToStructured } from "../../types/structured-responses.js";
+import { BatchRequestHandler } from "./BatchRequestHandler.js";
+import { DayContextService } from "../../services/day-context/index.js";
+import { DayContext } from "../../types/day-context.js";
 
 
 export abstract class BaseToolHandler<TArgs = any> {
     protected calendarRegistry: CalendarRegistry = CalendarRegistry.getInstance();
+    protected dayContextService: DayContextService = new DayContextService();
 
     abstract runTool(args: TArgs, accounts: Map<string, OAuth2Client>): Promise<CallToolResult>;
 
@@ -470,6 +475,21 @@ Original error: ${errorMessage}`
     }
 
     /**
+     * Returns API flags for conferenceData and attachments support.
+     * Extracts the repeated pattern of conditionally enabling these features.
+     */
+    protected getApiFlags(requestBody: calendar_v3.Schema$Event): {
+        conferenceDataVersion?: number;
+        supportsAttachments?: boolean;
+    } {
+        return {
+            conferenceDataVersion: requestBody.conferenceData !== undefined ? 1 : undefined,
+            supportsAttachments: requestBody.attachments !== undefined ? true : undefined,
+        };
+    }
+
+
+    /**
      * Combined setup for calendar operations that need both OAuth2Client and Calendar API.
      * Returns the client, calendar instance, resolved calendar ID, and account ID in one call.
      * Use this when you need immediate access to the calendar API in your handler.
@@ -797,6 +817,332 @@ Original error: ${errorMessage}`
         }
 
         return resolvedIds;
+    }
+
+    /**
+     * Fetches calendar default colors for multiple calendars.
+     * Returns a map of calendarId to background/foreground colors.
+     *
+     * Handles both explicit colors (backgroundColor/foregroundColor) and
+     * colorId references (which need to be resolved from the calendar color palette).
+     *
+     * @param client OAuth2Client
+     * @param calendarIds Array of calendar IDs to fetch colors for
+     * @returns Map of calendarId to hex colors
+     */
+    protected async getCalendarColors(
+        client: OAuth2Client,
+        calendarIds: string[]
+    ): Promise<{
+        colors: Record<string, { background: string; foreground: string }>;
+        names: Record<string, string>;
+        eventPalette: Record<string, { background: string; foreground: string }>;
+    }> {
+        const colors: Record<string, { background: string; foreground: string }> = {};
+        const names: Record<string, string> = {};
+        const eventPalette: Record<string, { background: string; foreground: string }> = {};
+
+        try {
+            const calendarApi = this.getCalendar(client);
+
+            // Fetch both calendar list and color palette in parallel
+            const [calendarListResponse, colorsResponse] = await Promise.all([
+                calendarApi.calendarList.list(),
+                calendarApi.colors.get()
+            ]);
+
+            const calendars = calendarListResponse.data.items || [];
+
+            // Extract event color palette from the same response (avoids separate colors.get() call)
+            if (colorsResponse.data.event) {
+                for (const [id, color] of Object.entries(colorsResponse.data.event)) {
+                    eventPalette[id] = {
+                        background: color.background || '',
+                        foreground: color.foreground || ''
+                    };
+                }
+            }
+
+            // Build calendar color palette for resolving colorId references
+            const calendarPalette: Record<string, { background: string; foreground: string }> = {};
+            if (colorsResponse.data.calendar) {
+                for (const [id, color] of Object.entries(colorsResponse.data.calendar)) {
+                    if (color.background && color.foreground) {
+                        calendarPalette[id] = {
+                            background: color.background,
+                            foreground: color.foreground
+                        };
+                    }
+                }
+            }
+
+            // Build a set of requested calendar IDs for fast lookup
+            const requestedIds = new Set(calendarIds);
+            const wantsPrimary = requestedIds.has('primary');
+
+            for (const cal of calendars) {
+                if (!cal.id) {
+                    continue;
+                }
+
+                // Resolve colors: prefer explicit colors, fall back to colorId lookup
+                let colorEntry: { background: string; foreground: string } | undefined;
+
+                if (cal.backgroundColor && cal.foregroundColor) {
+                    // Calendar has explicit colors set
+                    colorEntry = {
+                        background: cal.backgroundColor,
+                        foreground: cal.foregroundColor
+                    };
+                } else if (cal.colorId && calendarPalette[cal.colorId]) {
+                    // Calendar uses a colorId reference - resolve from palette
+                    colorEntry = calendarPalette[cal.colorId];
+                }
+
+                // Calendar display name: user's override takes precedence over calendar title
+                const displayName = cal.summaryOverride || cal.summary || cal.id;
+
+                // If this calendar ID was explicitly requested, add it
+                if (requestedIds.has(cal.id)) {
+                    if (colorEntry) {
+                        colors[cal.id] = colorEntry;
+                    }
+                    names[cal.id] = displayName;
+                }
+
+                // If "primary" was requested and this is the primary calendar,
+                // add for both "primary" alias and the actual calendar ID
+                if (wantsPrimary && cal.primary) {
+                    if (colorEntry) {
+                        colors['primary'] = colorEntry;
+                        colors[cal.id] = colorEntry;
+                    }
+                    names['primary'] = displayName;
+                    names[cal.id] = displayName;
+                }
+            }
+        } catch (error) {
+            // Non-fatal: return empty maps, but log for debugging
+            const message = error instanceof Error ? error.message : String(error);
+            console.error(`[getCalendarColors] Failed to fetch calendar colors: ${message}`);
+        }
+
+        return { colors, names, eventPalette };
+    }
+
+    /**
+     * Builds the complete color context for resolving event display colors.
+     * Fetches both event color palette and calendar default colors.
+     *
+     * @param client OAuth2Client
+     * @param calendarIds Array of calendar IDs being queried
+     * @returns EventColorContext for use with convertGoogleEventToStructured
+     */
+    protected async buildColorContext(
+        client: OAuth2Client,
+        calendarIds: string[]
+    ): Promise<EventColorContext> {
+        // getCalendarColors returns event palette, calendar colors, and names from a single colors.get() call
+        const calendarData = await this.getCalendarColors(client, calendarIds);
+
+        return {
+            eventPalette: calendarData.eventPalette,
+            calendarColors: calendarData.colors,
+            calendarNames: calendarData.names
+        };
+    }
+
+    /**
+     * Builds color context across multiple accounts by collecting calendar colors/names
+     * and event palette from getCalendarColors (single colors.get() call per account).
+     *
+     * @param accountCalendars Array of { accountId, calendarIds } to fetch colors for
+     * @param accounts Map of available OAuth2 clients
+     * @returns Complete EventColorContext for use with convertGoogleEventToStructured
+     */
+    protected async buildMultiAccountColorContext(
+        accountCalendars: Array<{ accountId: string; calendarIds: string[] }>,
+        accounts: Map<string, OAuth2Client>
+    ): Promise<EventColorContext> {
+        const calendarColors: Record<string, { background: string; foreground: string }> = {};
+        const calendarNames: Record<string, string> = {};
+        let eventPalette: Record<string, { background: string; foreground: string }> = {};
+
+        await Promise.all(
+            accountCalendars
+                .filter(entry => entry.calendarIds.length > 0)
+                .map(async (entry) => {
+                    const client = accounts.get(entry.accountId);
+                    if (client) {
+                        const data = await this.getCalendarColors(client, entry.calendarIds);
+                        Object.assign(calendarColors, data.colors);
+                        Object.assign(calendarNames, data.names);
+                        // Event palette is global (same for all accounts) — always assign, last write wins
+                        if (Object.keys(data.eventPalette).length > 0) {
+                            eventPalette = data.eventPalette;
+                        }
+                    }
+                })
+        );
+
+        return { eventPalette, calendarColors, calendarNames };
+    }
+
+    /**
+     * Fetches all events for a given day across all calendars and accounts.
+     * Uses CalendarRegistry for deduplicated calendar list and BatchRequestHandler
+     * for efficient multi-calendar fetching.
+     *
+     * @param date Date string (YYYY-MM-DD)
+     * @param timezone IANA timezone string
+     * @param accounts All available accounts
+     * @returns Events sorted by start time and color context for all calendars
+     */
+    protected async fetchDayEventsAllCalendars(
+        date: string,
+        timezone: string,
+        accounts: Map<string, OAuth2Client>
+    ): Promise<{ events: ExtendedEvent[]; colorContext: EventColorContext }> {
+        const allAccounts = this.getClientsForAccounts(undefined, accounts);
+
+        // Get unified calendar list (cached, 5-min TTL)
+        const unifiedCalendars = await this.calendarRegistry.getUnifiedCalendars(allAccounts);
+
+        // Group calendars by preferredAccount to avoid duplicate fetches
+        const calendarsByAccount = new Map<string, string[]>();
+        for (const cal of unifiedCalendars) {
+            const accountId = cal.preferredAccount;
+            const existing = calendarsByAccount.get(accountId) || [];
+            existing.push(cal.calendarId);
+            calendarsByAccount.set(accountId, existing);
+        }
+
+        // Build time range for the full day (timeMax is exclusive per Google Calendar API)
+        const timeMin = convertToRFC3339(`${date}T00:00:00`, timezone);
+        const nextDate = new Date(`${date}T00:00:00`);
+        nextDate.setDate(nextDate.getDate() + 1);
+        const nextDateStr = nextDate.toISOString().split('T')[0];
+        const timeMax = convertToRFC3339(`${nextDateStr}T00:00:00`, timezone);
+
+        // Fetch events from all accounts in parallel
+        const eventsPerAccount: Array<{ accountId: string; calendarIds: string[]; events: ExtendedEvent[] }> = [];
+
+        await Promise.all(
+            Array.from(calendarsByAccount.entries()).map(async ([accountId, calendarIds]) => {
+                const client = allAccounts.get(accountId);
+                if (!client) return;
+
+                try {
+                    let events: ExtendedEvent[];
+                    if (calendarIds.length === 1) {
+                        const calendar = this.getCalendar(client);
+                        const response = await calendar.events.list({
+                            calendarId: calendarIds[0],
+                            timeMin,
+                            timeMax,
+                            singleEvents: true,
+                            orderBy: 'startTime'
+                        });
+                        events = (response.data.items || []).map(event => ({
+                            ...event,
+                            calendarId: calendarIds[0],
+                            accountId
+                        }));
+                    } else {
+                        const batchHandler = new BatchRequestHandler(client);
+                        const requests = calendarIds.map(calendarId => {
+                            const params = new URLSearchParams({
+                                singleEvents: 'true',
+                                orderBy: 'startTime',
+                                timeMin,
+                                timeMax
+                            });
+                            return {
+                                method: 'GET' as const,
+                                path: `/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`
+                            };
+                        });
+                        const responses = await batchHandler.executeBatch(requests);
+                        events = [];
+                        responses.forEach((response, index) => {
+                            const calendarId = calendarIds[index];
+                            if (response.statusCode === 200 && response.body?.items) {
+                                for (const event of response.body.items) {
+                                    events.push({ ...event, calendarId, accountId });
+                                }
+                            } else {
+                                const errorMessage = response.body?.error?.message || `HTTP ${response.statusCode}`;
+                                process.stderr.write(`[fetchDayEventsAllCalendars] Batch error for calendar "${calendarId}": ${errorMessage}\n`);
+                            }
+                        });
+                    }
+                    eventsPerAccount.push({ accountId, calendarIds, events });
+                } catch (error) {
+                    const reason = error instanceof Error ? error.message : String(error);
+                    process.stderr.write(`[fetchDayEventsAllCalendars] Failed to fetch events for account "${accountId}": ${reason}\n`);
+                    eventsPerAccount.push({ accountId, calendarIds, events: [] });
+                }
+            })
+        );
+
+        // Flatten and sort
+        const allEvents = eventsPerAccount.flatMap(r => r.events);
+        this.sortEventsByStartTime(allEvents);
+
+        // Build color context from all accounts
+        const colorContext = await this.buildMultiAccountColorContext(eventsPerAccount, allAccounts);
+
+        return { events: allEvents, colorContext };
+    }
+
+    /**
+     * Build day context for a focus event (created or updated) with graceful fallback.
+     * Fetches surrounding events across all calendars, converts to structured format,
+     * and assembles the day context. Falls back to single-calendar color context on error.
+     */
+    protected async buildEventDayContext(
+        event: calendar_v3.Schema$Event,
+        calendarId: string,
+        accountId: string,
+        timezone: string,
+        accounts: Map<string, OAuth2Client>,
+        oauth2Client: OAuth2Client
+    ): Promise<{ structuredEvent: StructuredEvent; dayContext: DayContext | undefined }> {
+        const eventDate = event.start?.dateTime || event.start?.date || '';
+        const dateOnly = eventDate.split('T')[0];
+
+        let dayContext: DayContext | undefined;
+        let structuredEvent: StructuredEvent | undefined;
+
+        try {
+            const { events: allDayEvents, colorContext } = await this.fetchDayEventsAllCalendars(
+                dateOnly, timezone, accounts
+            );
+
+            structuredEvent = convertGoogleEventToStructured(event, calendarId, accountId, colorContext);
+
+            const surroundingEvents = allDayEvents
+                .filter(e => e.id !== event.id)
+                .map(e => convertGoogleEventToStructured(e, e.calendarId, e.accountId, colorContext));
+
+            dayContext = this.dayContextService.buildDayContext(structuredEvent, surroundingEvents, timezone);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.error(`[buildEventDayContext] Failed to build day context: ${message}`);
+        }
+
+        // Fallback: if day context fetch failed, convert with single-calendar colors
+        if (!structuredEvent) {
+            try {
+                const colorContext = await this.buildColorContext(oauth2Client, [calendarId]);
+                structuredEvent = convertGoogleEventToStructured(event, calendarId, accountId, colorContext);
+            } catch {
+                // Last resort: convert without color context
+                structuredEvent = convertGoogleEventToStructured(event, calendarId, accountId, { eventPalette: {}, calendarColors: {}, calendarNames: {} });
+            }
+        }
+
+        return { structuredEvent, dayContext };
     }
 
 }

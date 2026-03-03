@@ -59,6 +59,10 @@ Client → Transport Layer → Schema Validation (Zod) → Handler → Google Ca
    - Implement `runTool(args, accounts)` method where `accounts` is `Map<string, OAuth2Client>`
    - Use `this.getCalendar(accounts)` to get Calendar API client
    - Use `this.handleGoogleApiError(error)` for error handling
+   - Use `this.getApiFlags(requestBody)` for conferenceData/attachments API flags
+   - Use `this.dayContextService` for building day context (shared instance)
+   - Use `this.buildEventDayContext()` for create/update handlers needing day context with fallback
+   - Use `this.buildMultiAccountColorContext()` for color resolution across accounts
 
 2. Define schema in `src/tools/registry.ts`:
    - Add to `ToolSchemas` object with Zod schema
@@ -151,6 +155,14 @@ npm run dev test:integration:direct
 - `ConflictDetectionService.ts` - Main service coordinating conflict and duplicate checks
 - Used by `create-event` and `update-event` handlers
 
+**Day Context** (`src/services/day-context/`):
+- `DayContextService` - Builds day context for single-day UI views (time grid)
+- Stateless; shared instance available as `this.dayContextService` on `BaseToolHandler`
+
+**Multi-Day Context** (`src/services/multi-day-context/`):
+- `MultiDayContextService` - Groups events by date for multi-day/week UI views
+
+
 **Calendar Registry** (`src/services/CalendarRegistry.ts`):
 - Calendar deduplication across multiple accounts
 - Permission-based account auto-selection (read vs write)
@@ -159,6 +171,12 @@ npm run dev test:integration:direct
 **Structured Responses** (`src/types/structured-responses.ts`):
 - TypeScript interfaces for consistent response formats
 - All handlers return structured JSON via `createStructuredResponse()`
+
+**View Event Types** (`src/types/view-event.ts`):
+- `BaseViewEvent` - Shared interface for UI display events, extended by `DayViewEvent` and `MultiDayViewEvent`
+- `toBaseViewEvent()` - Converts `StructuredEvent` to base view format
+- `sortViewEvents()` - Sorts view events (all-day first, then by start time)
+- `buildCalendarLink()` - Builds Google Calendar URLs for day/week views
 
 **Utilities**:
 - `src/utils/field-mask-builder.ts` - Builds Google API field masks
@@ -175,6 +193,7 @@ npm run dev test:integration:direct
 - **Also Supported**: ISO 8601 with timezone (e.g., `2024-01-01T10:00:00-08:00`)
 - **All-day Events**: Date only format (e.g., `2024-01-01`)
 - **Helper**: `getCalendarTimezone()` method in `BaseToolHandler`
+  - **Note**: This makes a Google API call — resolve once in `runTool` and pass the result to private methods
 
 ### Multi-Calendar Support
 
@@ -194,7 +213,26 @@ npm run dev test:integration:direct
 - `BaseToolHandler.handleGoogleApiError()` for consistent Google API error handling
 - Maps HTTP status codes to appropriate MCP error codes
 
+### Logging
+
+**stdio transport constraint**: Server MUST NOT write to stdout (breaks JSON-RPC protocol). Use stderr instead.
+
+```typescript
+// Debug logging (appears in Claude Desktop logs)
+console.error('[DEBUG] my message', someData);
+process.stderr.write('Debug info\n');
+
+// Protocol-compliant logging (visible to client)
+server.sendLoggingMessage({ level: "info", data: "message" });
+```
+
+**View Claude Desktop logs** (macOS):
+```bash
+tail -n 20 -F ~/Library/Logs/Claude/mcp*.log
+```
+
 ### Structured Responses
+
 
 All tool outputs use a structured JSON response format. Types are defined in `src/types/structured-responses.ts` and responses are created via `createStructuredResponse()` from `src/utils/response-builder.ts`. When adding new handlers, ensure responses conform to these structured formats.
 

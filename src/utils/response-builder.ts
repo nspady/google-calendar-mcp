@@ -6,12 +6,16 @@ import {
 } from "../types/structured-responses.js";
 
 /**
- * Creates a structured JSON response for MCP tools
+ * Creates a structured JSON response for MCP tools.
  *
  * Note: We use compact JSON (no pretty-printing) because MCP clients
  * are expected to parse and display the JSON themselves. Pretty-printing
  * with escaped newlines (\n) creates poor display in clients that show
  * the raw text.
+ *
+ * For MCP Apps UI rendering, the _meta.ui.resourceUri is set in the tool
+ * definition (via registerAppTool), not in the response. The host reads
+ * the UI metadata from the tool definition when listing tools.
  */
 export function createStructuredResponse<T>(data: T): CallToolResult {
   return {

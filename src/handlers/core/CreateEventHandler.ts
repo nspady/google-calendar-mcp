@@ -1,18 +1,18 @@
-import { CallToolResult, McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
+import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { CreateEventInput } from "../../tools/registry.js";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
-import { createTimeObject } from "../../utils/datetime.js";
+import { createTimeObject, convertToRFC3339 } from "../../utils/datetime.js";
 import { validateEventId } from "../../utils/event-id-validator.js";
 import { ConflictDetectionService } from "../../services/conflict-detection/index.js";
 import { CONFLICT_DETECTION_CONFIG } from "../../services/conflict-detection/config.js";
 import { createStructuredResponse, convertConflictsToStructured, createWarningsArray } from "../../utils/response-builder.js";
-import { CreateEventResponse, convertGoogleEventToStructured } from "../../types/structured-responses.js";
+import { CreateEventResponse } from "../../types/structured-responses.js";
 
 export class CreateEventHandler extends BaseToolHandler {
     private conflictDetectionService: ConflictDetectionService;
-    
+
     constructor() {
         super();
         this.conflictDetectionService = new ConflictDetectionService();
@@ -79,17 +79,23 @@ export class CreateEventHandler extends BaseToolHandler {
             );
         }
 
-        // Create the event with resolved calendar ID
-        const argsWithResolvedCalendar = { ...validArgs, calendarId: resolvedCalendarId };
+        // Create the event with resolved calendar ID, passing already-resolved timezone
+        const argsWithResolvedCalendar = { ...validArgs, calendarId: resolvedCalendarId, timeZone: timezone };
         const event = await this.createEvent(oauth2Client, argsWithResolvedCalendar);
+
+        // Build day context with surrounding events across all calendars
+        const { structuredEvent, dayContext } = await this.buildEventDayContext(
+            event, resolvedCalendarId, selectedAccountId, timezone, accounts, oauth2Client
+        );
 
         // Generate structured response with conflict warnings
         const structuredConflicts = convertConflictsToStructured(conflicts);
         const response: CreateEventResponse = {
-            event: convertGoogleEventToStructured(event, resolvedCalendarId, selectedAccountId),
+            event: structuredEvent,
             conflicts: structuredConflicts.conflicts,
             duplicates: structuredConflicts.duplicates,
-            warnings: createWarningsArray(conflicts)
+            warnings: createWarningsArray(conflicts),
+            dayContext,
         };
 
         return createStructuredResponse(response);
@@ -107,8 +113,8 @@ export class CreateEventHandler extends BaseToolHandler {
                 validateEventId(args.eventId);
             }
             
-            // Use provided timezone or calendar's default timezone
-            const timezone = args.timeZone || await this.getCalendarTimezone(client, args.calendarId);
+            // Use provided timezone (already resolved by runTool) or calendar's default
+            const timezone = args.timeZone || await this.getCalendarTimezone(client, args.calendarId!);
 
             // Determine transparency and visibility based on event type
             const { transparency, visibility } = this.getEventTypeDefaults(args);
@@ -145,16 +151,11 @@ export class CreateEventHandler extends BaseToolHandler {
                 ...(args.eventType === 'workingLocation' && { workingLocationProperties: this.buildWorkingLocationProperties(args) })
             };
             
-            // Determine if we need to enable conference data or attachments
-            const conferenceDataVersion = args.conferenceData ? 1 : undefined;
-            const supportsAttachments = args.attachments ? true : undefined;
-            
             const response = await calendar.events.insert({
                 calendarId: args.calendarId,
                 requestBody: requestBody,
                 sendUpdates: args.sendUpdates,
-                ...(conferenceDataVersion && { conferenceDataVersion }),
-                ...(supportsAttachments && { supportsAttachments })
+                ...this.getApiFlags(requestBody)
             });
             
             if (!response.data) throw new Error('Failed to create event, no data returned');

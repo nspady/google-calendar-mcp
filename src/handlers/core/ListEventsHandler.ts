@@ -1,7 +1,6 @@
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { BaseToolHandler } from "./BaseToolHandler.js";
-import { calendar_v3 } from 'googleapis';
 import { BatchRequestHandler } from "./BatchRequestHandler.js";
 import { buildListFieldMask } from "../../utils/field-mask-builder.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
@@ -18,7 +17,37 @@ interface ListEventsArgs {
   account?: string | string[];
 }
 
+// Maximum hours for a query to be considered "single day" (show day view UI)
+const SINGLE_DAY_MAX_HOURS = 24;
+
 export class ListEventsHandler extends BaseToolHandler {
+    /**
+     * Check if the time range represents a single day (24 hours or less).
+     * Returns the date string (YYYY-MM-DD) if it's a single day, null otherwise.
+     */
+    private isSingleDayQuery(timeMin?: string, timeMax?: string): string | null {
+        if (!timeMin || !timeMax) return null;
+
+        try {
+            const minDate = new Date(timeMin);
+            const maxDate = new Date(timeMax);
+
+            if (isNaN(minDate.getTime()) || isNaN(maxDate.getTime())) return null;
+
+            const diffHours = (maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60);
+
+            if (diffHours <= SINGLE_DAY_MAX_HOURS) {
+                // Extract date from timeMin (the start of the range)
+                return timeMin.split('T')[0];
+            }
+        } catch (error) {
+            // Invalid date format - log for debugging
+            console.error(`[isSingleDayQuery] Failed to parse time range: ${error}`);
+        }
+
+        return null;
+    }
+
     async runTool(args: ListEventsArgs, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
         // Get clients for specified accounts (supports single or multiple)
         const selectedAccounts = this.getClientsForAccounts(args.account, accounts);
@@ -104,9 +133,12 @@ export class ListEventsHandler extends BaseToolHandler {
         // Sort events chronologically
         this.sortEventsByStartTime(allEvents);
 
-        // Convert extended events to structured format
+        // Build color context for resolving event display colors
+        const colorContext = await this.buildMultiAccountColorContext(eventsPerAccount, selectedAccounts);
+
+        // Convert extended events to structured format with resolved colors
         const structuredEvents: StructuredEvent[] = allEvents.map(event =>
-            convertGoogleEventToStructured(event, event.calendarId, event.accountId)
+            convertGoogleEventToStructured(event, event.calendarId, event.accountId, colorContext)
         );
         const warnings: string[] = [...resolutionWarnings];
 
@@ -128,6 +160,21 @@ export class ListEventsHandler extends BaseToolHandler {
             }
         }
 
+        // Build day context for MCP Apps UI visualization (single-day queries only)
+        let dayContext = undefined;
+        const singleDayDate = this.isSingleDayQuery(args.timeMin, args.timeMax);
+
+        if (singleDayDate) {
+            const timezone = args.timeZone ||
+                structuredEvents[0]?.start?.timeZone ||
+                'UTC';
+            dayContext = this.dayContextService.buildDayContextForList(
+                structuredEvents,
+                singleDayDate,
+                timezone
+            );
+        }
+
         const response: ListEventsResponse = {
             events: structuredEvents,
             totalCount: allEvents.length,
@@ -135,7 +182,8 @@ export class ListEventsHandler extends BaseToolHandler {
             ...(partialFailures.length > 0 && { partialFailures }),
             ...(warnings.length > 0 && { warnings }),
             ...(selectedAccounts.size > 1 && { accounts: Array.from(selectedAccounts.keys()) }),
-            ...(note && { note })
+            ...(note && { note }),
+            ...(dayContext && { dayContext })
         };
 
         return createStructuredResponse(response);
@@ -238,15 +286,15 @@ export class ListEventsHandler extends BaseToolHandler {
     }
 
     private processBatchResponses(
-        responses: any[], 
+        responses: any[],
         calendarIds: string[]
     ): { events: ExtendedEvent[]; errors: Array<{ calendarId: string; error: string }> } {
         const events: ExtendedEvent[] = [];
         const errors: Array<{ calendarId: string; error: string }> = [];
-        
+
         responses.forEach((response, index) => {
             const calendarId = calendarIds[index];
-            
+
             if (response.statusCode === 200 && response.body?.items) {
                 const calendarEvents: ExtendedEvent[] = response.body.items.map((event: any) => ({
                     ...event,
@@ -254,13 +302,14 @@ export class ListEventsHandler extends BaseToolHandler {
                 }));
                 events.push(...calendarEvents);
             } else {
-                const errorMessage = response.body?.error?.message || 
-                                   response.body?.message || 
+                const errorMessage = response.body?.error?.message ||
+                                   response.body?.message ||
                                    `HTTP ${response.statusCode}`;
                 errors.push({ calendarId, error: errorMessage });
             }
         });
-        
+
         return { events, errors };
     }
+
 }

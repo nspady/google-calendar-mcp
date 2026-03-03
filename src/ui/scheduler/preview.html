@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Available Times Preview</title>
+  <style>
+    :root {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f5f5f5;
+      --bg-tertiary: #e8e8e8;
+      --text-primary: #1a1a1a;
+      --text-secondary: #666666;
+      --text-tertiary: #999999;
+      --border-color: #e0e0e0;
+      --accent-color: #1a73e8;
+      --success-color: #34a853;
+      --border-radius: 8px;
+      --border-radius-sm: 4px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-primary: #1e1e1e;
+        --bg-secondary: #2d2d2d;
+        --bg-tertiary: #3d3d3d;
+        --text-primary: #e8e8e8;
+        --text-secondary: #a0a0a0;
+        --text-tertiary: #707070;
+        --border-color: #404040;
+        --accent-color: #8ab4f8;
+        --success-color: #81c995;
+      }
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      padding: 16px;
+      max-width: 500px;
+    }
+
+    /* Preview controls */
+    .preview-controls {
+      background: var(--bg-tertiary);
+      padding: 12px;
+      border-radius: var(--border-radius);
+      margin-bottom: 16px;
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      font-size: 13px;
+    }
+
+    .preview-controls label {
+      color: var(--text-secondary);
+    }
+
+    /* Header - matches day-view */
+    .view-header {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .date-number {
+      font-size: 32px;
+      font-weight: 300;
+      color: var(--text-primary);
+    }
+
+    .date-info {
+      font-size: 14px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Context info */
+    .context-info {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+      padding: 12px;
+      background: var(--bg-secondary);
+      border-radius: var(--border-radius-sm);
+    }
+
+    .context-info strong {
+      color: var(--text-primary);
+    }
+
+    /* Available slot item - similar to event item */
+    .available-slot-item {
+      display: flex;
+      align-items: stretch;
+      gap: 12px;
+      padding: 12px;
+      margin-bottom: 8px;
+      background: var(--bg-secondary);
+      border-radius: var(--border-radius-sm);
+      cursor: pointer;
+      transition: background 0.15s ease;
+      border: 2px solid transparent;
+    }
+
+    .available-slot-item:hover {
+      background: var(--bg-tertiary);
+    }
+
+    .available-slot-item.selected {
+      border-color: var(--success-color);
+      background: rgba(52, 168, 83, 0.08);
+    }
+
+    .slot-color-bar {
+      width: 4px;
+      border-radius: 2px;
+      background: var(--success-color);
+      flex-shrink: 0;
+    }
+
+    .slot-time-col {
+      min-width: 70px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .slot-start-time {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .slot-end-time {
+      font-size: 12px;
+      color: var(--text-tertiary);
+    }
+
+    .slot-details {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .slot-duration {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--success-color);
+    }
+
+    .slot-label {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin-top: 2px;
+    }
+
+    /* Multi-day view */
+    .multi-day-container .day-group {
+      margin-bottom: 20px;
+    }
+
+    .day-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 12px;
+    }
+
+    .day-header .day-number {
+      font-size: 24px;
+      font-weight: 300;
+    }
+
+    .day-header .day-info {
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+    }
+
+    .no-slots {
+      padding: 20px;
+      text-align: center;
+      color: var(--text-tertiary);
+      font-size: 13px;
+    }
+
+    /* Actions */
+    .actions {
+      margin-top: 16px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      padding: 10px 16px;
+      border-radius: var(--border-radius-sm);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-primary {
+      background: var(--success-color);
+      color: white;
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div class="preview-controls">
+    <label>
+      View:
+      <select id="view-mode">
+        <option value="single">Single Day</option>
+        <option value="multi">Multi-Day</option>
+      </select>
+    </label>
+    <label>
+      Duration:
+      <select id="duration">
+        <option value="30">30 min</option>
+        <option value="60" selected>1 hour</option>
+        <option value="90">1.5 hours</option>
+      </select>
+    </label>
+  </div>
+
+  <!-- Single Day View -->
+  <div id="single-day-view">
+    <div class="view-header">
+      <div class="date-number" id="day-number">4</div>
+      <div class="date-info" id="day-info">FEB 2026, TUE</div>
+    </div>
+
+    <div class="context-info">
+      Finding <strong id="duration-label">1 hour</strong> slots for meeting with <strong>Alice Chen</strong>, <strong>Bob Smith</strong>
+    </div>
+
+    <div id="single-day-slots"></div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="select-btn" disabled>Select this time</button>
+    </div>
+  </div>
+
+  <!-- Multi-Day View -->
+  <div id="multi-day-view" style="display: none;">
+    <div class="context-info">
+      Finding <strong id="duration-label-multi">1 hour</strong> slots for meeting with <strong>Alice Chen</strong>, <strong>Bob Smith</strong>
+      <br><span style="color: var(--text-tertiary)">Feb 3 - Feb 7, 2026</span>
+    </div>
+
+    <div id="multi-day-container" class="multi-day-container"></div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="select-btn-multi" disabled>Select this time</button>
+    </div>
+  </div>
+
+  <script>
+    // Sample available slots data (would come from free/busy analysis)
+    const singleDaySlots = [
+      { start: '09:00', end: '10:00', duration: 60 },
+      { start: '11:30', end: '12:30', duration: 60 },
+      { start: '14:00', end: '15:30', duration: 90 },
+      { start: '16:00', end: '17:00', duration: 60 },
+    ];
+
+    const multiDayData = [
+      {
+        date: '2026-02-03',
+        dayOfWeek: 'TUE',
+        slots: [
+          { start: '10:00', end: '11:00', duration: 60 },
+          { start: '14:00', end: '15:00', duration: 60 },
+        ]
+      },
+      {
+        date: '2026-02-04',
+        dayOfWeek: 'WED',
+        slots: [
+          { start: '09:00', end: '10:00', duration: 60 },
+          { start: '11:00', end: '12:00', duration: 60 },
+          { start: '15:00', end: '16:30', duration: 90 },
+        ]
+      },
+      {
+        date: '2026-02-05',
+        dayOfWeek: 'THU',
+        slots: [
+          { start: '13:00', end: '14:00', duration: 60 },
+        ]
+      },
+      {
+        date: '2026-02-06',
+        dayOfWeek: 'FRI',
+        slots: [
+          { start: '09:00', end: '10:30', duration: 90 },
+          { start: '11:00', end: '12:00', duration: 60 },
+          { start: '14:00', end: '15:00', duration: 60 },
+          { start: '16:00', end: '17:00', duration: 60 },
+        ]
+      },
+      {
+        date: '2026-02-07',
+        dayOfWeek: 'SAT',
+        slots: []
+      },
+    ];
+
+    let selectedSlot = null;
+    let currentDuration = 60;
+
+    function formatTime(time) {
+      const [hours, minutes] = time.split(':').map(Number);
+      const h = hours % 12 || 12;
+      const ampm = hours < 12 ? 'AM' : 'PM';
+      return minutes === 0 ? h + ' ' + ampm : h + ':' + String(minutes).padStart(2, '0') + ' ' + ampm;
+    }
+
+    function formatDuration(minutes) {
+      if (minutes < 60) return minutes + ' min';
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
+      return m === 0 ? h + ' hour' + (h > 1 ? 's' : '') : h + 'h ' + m + 'm';
+    }
+
+    function createSlotElement(slot, dateStr) {
+      const div = document.createElement('div');
+      div.className = 'available-slot-item';
+      div.dataset.start = slot.start;
+      div.dataset.date = dateStr || '';
+
+      const bar = document.createElement('div');
+      bar.className = 'slot-color-bar';
+
+      const timeCol = document.createElement('div');
+      timeCol.className = 'slot-time-col';
+
+      const startTime = document.createElement('div');
+      startTime.className = 'slot-start-time';
+      startTime.textContent = formatTime(slot.start);
+
+      const endTime = document.createElement('div');
+      endTime.className = 'slot-end-time';
+      endTime.textContent = formatTime(slot.end);
+
+      timeCol.appendChild(startTime);
+      timeCol.appendChild(endTime);
+
+      const details = document.createElement('div');
+      details.className = 'slot-details';
+
+      const duration = document.createElement('div');
+      duration.className = 'slot-duration';
+      duration.textContent = formatDuration(slot.duration) + ' available';
+
+      const label = document.createElement('div');
+      label.className = 'slot-label';
+      label.textContent = 'Everyone is free';
+
+      details.appendChild(duration);
+      details.appendChild(label);
+
+      div.appendChild(bar);
+      div.appendChild(timeCol);
+      div.appendChild(details);
+
+      div.addEventListener('click', function() {
+        document.querySelectorAll('.available-slot-item.selected').forEach(function(el) {
+          el.classList.remove('selected');
+        });
+        div.classList.add('selected');
+        selectedSlot = { date: dateStr, start: slot.start, end: slot.end };
+        document.getElementById('select-btn').disabled = false;
+        document.getElementById('select-btn-multi').disabled = false;
+      });
+
+      return div;
+    }
+
+    function renderSingleDay() {
+      const container = document.getElementById('single-day-slots');
+      container.replaceChildren();
+
+      const filtered = singleDaySlots.filter(function(s) {
+        return s.duration >= currentDuration;
+      });
+
+      if (filtered.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'no-slots';
+        empty.textContent = 'No ' + formatDuration(currentDuration) + ' slots available';
+        container.appendChild(empty);
+        return;
+      }
+
+      for (const slot of filtered) {
+        container.appendChild(createSlotElement(slot, '2026-02-04'));
+      }
+    }
+
+    function renderMultiDay() {
+      const container = document.getElementById('multi-day-container');
+      container.replaceChildren();
+
+      for (const day of multiDayData) {
+        const filtered = day.slots.filter(function(s) {
+          return s.duration >= currentDuration;
+        });
+
+        if (filtered.length === 0) continue;
+
+        const group = document.createElement('div');
+        group.className = 'day-group';
+
+        const header = document.createElement('div');
+        header.className = 'day-header';
+
+        const dayNum = document.createElement('div');
+        dayNum.className = 'day-number';
+        dayNum.textContent = new Date(day.date).getDate();
+
+        const dayInfo = document.createElement('div');
+        dayInfo.className = 'day-info';
+        const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+        const d = new Date(day.date);
+        dayInfo.textContent = months[d.getMonth()] + ' 2026, ' + day.dayOfWeek;
+
+        header.appendChild(dayNum);
+        header.appendChild(dayInfo);
+        group.appendChild(header);
+
+        for (const slot of filtered) {
+          group.appendChild(createSlotElement(slot, day.date));
+        }
+
+        container.appendChild(group);
+      }
+    }
+
+    function updateDurationLabels() {
+      const label = formatDuration(currentDuration);
+      document.getElementById('duration-label').textContent = label;
+      document.getElementById('duration-label-multi').textContent = label;
+    }
+
+    // Event listeners
+    document.getElementById('view-mode').addEventListener('change', function(e) {
+      const isSingle = e.target.value === 'single';
+      document.getElementById('single-day-view').style.display = isSingle ? 'block' : 'none';
+      document.getElementById('multi-day-view').style.display = isSingle ? 'none' : 'block';
+    });
+
+    document.getElementById('duration').addEventListener('change', function(e) {
+      currentDuration = parseInt(e.target.value);
+      updateDurationLabels();
+      renderSingleDay();
+      renderMultiDay();
+      selectedSlot = null;
+      document.getElementById('select-btn').disabled = true;
+      document.getElementById('select-btn-multi').disabled = true;
+    });
+
+    // Initial render
+    renderSingleDay();
+    renderMultiDay();
+  </script>
+</body>
+</html>
