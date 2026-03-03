@@ -60,6 +60,9 @@ export interface AuthSuccessParams {
   tokenPath?: string;
   showCloseButton?: boolean;
   postMessageOrigin?: string;
+  continueUrl?: string;
+  continueButtonLabel?: string;
+  autoRedirectMs?: number;
 }
 
 /**
@@ -81,22 +84,38 @@ export async function renderAuthSuccess(params: AuthSuccessParams): Promise<stri
       <p class="account-label">Saved as <code>${safeAccountId}</code></p>`;
   }
 
-  const closeButtonSection = params.showCloseButton
-    ? `<button onclick="window.close()">Close Window</button>`
-    : '';
+  const actionButtonSection = params.continueUrl
+    ? `<button onclick="window.location.href=${JSON.stringify(params.continueUrl)}">${escapeHtml(params.continueButtonLabel || 'Go to Account Management')}</button>`
+    : (params.showCloseButton ? `<button onclick="window.close()">Close Window</button>` : '');
 
-  const scriptSection = params.postMessageOrigin
-    ? `<script>
-        if (window.opener) {
-          window.opener.postMessage({ type: 'auth-success', accountId: ${JSON.stringify(safeAccountId)} }, ${JSON.stringify(params.postMessageOrigin)});
-        }
-        setTimeout(() => window.close(), 3000);
-      </script>`
-    : '';
+  const nextStepMessage = params.continueUrl
+    ? 'Redirecting to account management...'
+    : 'You can now close this browser window.';
+
+  const scriptParts: string[] = [];
+  if (params.postMessageOrigin) {
+    scriptParts.push(`
+      if (window.opener) {
+        window.opener.postMessage({ type: 'auth-success', accountId: ${JSON.stringify(safeAccountId)} }, ${JSON.stringify(params.postMessageOrigin)});
+      }
+    `);
+  }
+  if (params.continueUrl) {
+    const redirectDelay = params.autoRedirectMs ?? 1200;
+    scriptParts.push(`
+      setTimeout(() => {
+        window.location.assign(${JSON.stringify(params.continueUrl)});
+      }, ${redirectDelay});
+    `);
+  } else if (params.postMessageOrigin) {
+    scriptParts.push('setTimeout(() => window.close(), 3000);');
+  }
+  const scriptSection = scriptParts.length > 0 ? `<script>${scriptParts.join('\n')}</script>` : '';
 
   return template
     .replace('{{accountInfo}}', accountInfoSection)
-    .replace('{{closeButton}}', closeButtonSection)
+    .replace('{{nextStepMessage}}', nextStepMessage)
+    .replace('{{actionButton}}', actionButtonSection)
     .replace('{{script}}', scriptSection);
 }
 

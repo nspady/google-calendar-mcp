@@ -522,7 +522,10 @@ export class HttpTransportHandler {
           accountId,
           email: email !== 'unknown' ? email : undefined,
           showCloseButton: true,
-          postMessageOrigin
+          postMessageOrigin,
+          continueUrl: '/accounts',
+          continueButtonLabel: 'Open Account Management',
+          autoRedirectMs: 1200
         });
         setSecurityHeaders(res);
         res.type('html').send(successHtml);
