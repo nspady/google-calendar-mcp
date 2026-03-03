@@ -803,13 +803,12 @@ interface ToolDefinition {
   name: keyof typeof ToolSchemas;
   title: string;
   description: string;
-  annotations: ToolAnnotations;
   schema: z.ZodType<any>;
   handler: new () => BaseToolHandler;
   handlerFunction?: (args: any) => Promise<any>;
   customInputSchema?: any; // Custom schema shape for MCP registration (overrides extractSchemaShape)
   /** Tool annotations per MCP spec */
-  annotations?: ToolAnnotations;
+  annotations: ToolAnnotations;
   /** Whether this tool has an associated UI (MCP Apps) */
   hasUI?: boolean;
   /** UI visibility scope — controls who can invoke the tool. Default: both model and app. */
@@ -933,6 +932,7 @@ export class ToolRegistry {
     },
     {
       name: "ui-get-event-details",
+      title: "Get Event Details (UI)",
       description: "Get event details for UI display (app-only).",
       schema: ToolSchemas['ui-get-event-details'],
       handler: GetEventHandler,
@@ -942,6 +942,7 @@ export class ToolRegistry {
     },
     {
       name: "ui-get-day-events",
+      title: "Get Day Events (UI)",
       description: "Get all events across all calendars for a single day (app-only).",
       schema: ToolSchemas['ui-get-day-events'],
       handler: GetDayEventsHandler,

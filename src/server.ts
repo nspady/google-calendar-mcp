@@ -160,7 +160,7 @@ export class GoogleCalendarMcpServer {
     };
 
     const manageAccountsHandler = new ManageAccountsHandler();
-    this.server.registerTool(
+    server.registerTool(
       'manage-accounts',
       {
         title: 'Manage Google Accounts',
@@ -186,8 +186,9 @@ export class GoogleCalendarMcpServer {
     );
   }
 
-  private registerPrompts(): void {
-    this.server.registerPrompt(
+  private registerPrompts(server?: McpServer): void {
+    const target = server ?? this.server;
+    target.registerPrompt(
       'daily-agenda-brief',
       {
         title: 'Daily Agenda Brief',
@@ -238,7 +239,7 @@ export class GoogleCalendarMcpServer {
       }
     );
 
-    this.server.registerPrompt(
+    target.registerPrompt(
       'find-and-book-meeting',
       {
         title: 'Find and Book Meeting',
@@ -298,8 +299,9 @@ export class GoogleCalendarMcpServer {
     );
   }
 
-  private registerResources(): void {
-    this.server.registerResource(
+  private registerResources(server?: McpServer): void {
+    const target = server ?? this.server;
+    target.registerResource(
       'calendar-accounts',
       'calendar://accounts',
       {
@@ -427,6 +429,9 @@ export class GoogleCalendarMcpServer {
           const server = new McpServer(buildServerInfo());
           await ToolRegistry.registerAll(server, this.executeWithHandler.bind(this), this.config);
           this.registerAccountManagementToolsOn(server);
+          this.registerPrompts(server);
+          this.registerResources(server);
+          await registerUIResources(server);
           return server;
         };
         const httpHandler = new HttpTransportHandler(

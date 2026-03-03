@@ -4,6 +4,7 @@ import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 const state = vi.hoisted(() => ({
   mcpServerConfig: undefined as any,
   mcpServerInstance: undefined as any,
+  mcpServerInstances: [] as any[],
   oauthClient: { id: 'oauth-client' } as any,
   tokenManagerInstance: undefined as any,
   authServerInstance: undefined as any,
@@ -16,9 +17,7 @@ const state = vi.hoisted(() => ({
   authServerStop: vi.fn(async () => undefined),
   toolRegistryRegisterAll: vi.fn(),
   manageAccountsRunTool: vi.fn(async () => ({ content: [{ type: 'text', text: 'ok' }] })),
-  registerTool: vi.fn(),
-  registerPrompt: vi.fn(),
-  registerResource: vi.fn(),
+  registerUIResources: vi.fn(),
   stdioConnect: vi.fn(async () => undefined),
   httpConnect: vi.fn(async () => undefined),
   processOn: vi.fn(process.on.bind(process)),
@@ -29,13 +28,14 @@ vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
   McpServer: class MockMcpServer {
     connect = vi.fn(async () => undefined);
     tool = vi.fn();
-    registerTool = state.registerTool;
-    registerPrompt = state.registerPrompt;
-    registerResource = state.registerResource;
+    registerTool = vi.fn();
+    registerPrompt = vi.fn();
+    registerResource = vi.fn();
     close = vi.fn();
     constructor(config: any) {
       state.mcpServerConfig = config;
       state.mcpServerInstance = this;
+      state.mcpServerInstances.push(this);
     }
   }
 }));
@@ -104,7 +104,7 @@ vi.mock('../../../transports/http.js', () => ({
 }));
 
 vi.mock('../../../ui/register-ui-resources.js', () => ({
-  registerUIResources: vi.fn(),
+  registerUIResources: state.registerUIResources,
   DAY_VIEW_RESOURCE_URI: 'ui://day-view'
 }));
 
@@ -116,6 +116,7 @@ describe('GoogleCalendarMcpServer', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    state.mcpServerInstances.length = 0;
     state.tokenManagerLoadAllAccounts.mockResolvedValue(new Map());
     state.tokenManagerValidateTokens.mockResolvedValue(false);
     state.tokenManagerGetAccountMode.mockReturnValue('normal');
@@ -139,11 +140,12 @@ describe('GoogleCalendarMcpServer', () => {
     expect(state.initializeOAuth2Client).toHaveBeenCalledTimes(1);
     expect(state.tokenManagerLoadAllAccounts).toHaveBeenCalledTimes(1);
     expect(state.toolRegistryRegisterAll).toHaveBeenCalledTimes(1);
-    expect(state.mcpServerInstance.tool).not.toHaveBeenCalled();
-    expect(state.registerTool).toHaveBeenCalledTimes(1);
-    expect(state.registerPrompt).toHaveBeenCalledTimes(2);
-    expect(state.registerResource).toHaveBeenCalledTimes(1);
-    expect(state.registerTool).toHaveBeenCalledWith(
+    const mainServer = state.mcpServerInstance;
+    expect(mainServer.tool).not.toHaveBeenCalled();
+    expect(mainServer.registerTool).toHaveBeenCalledTimes(1);
+    expect(mainServer.registerPrompt).toHaveBeenCalledTimes(2);
+    expect(mainServer.registerResource).toHaveBeenCalledTimes(1);
+    expect(mainServer.registerTool).toHaveBeenCalledWith(
       'manage-accounts',
       expect.objectContaining({
         title: 'Manage Google Accounts',
@@ -158,21 +160,21 @@ describe('GoogleCalendarMcpServer', () => {
       }),
       expect.any(Function)
     );
-    expect(state.registerPrompt).toHaveBeenCalledWith(
+    expect(mainServer.registerPrompt).toHaveBeenCalledWith(
       'daily-agenda-brief',
       expect.objectContaining({
         title: 'Daily Agenda Brief'
       }),
       expect.any(Function)
     );
-    expect(state.registerPrompt).toHaveBeenCalledWith(
+    expect(mainServer.registerPrompt).toHaveBeenCalledWith(
       'find-and-book-meeting',
       expect.objectContaining({
         title: 'Find and Book Meeting'
       }),
       expect.any(Function)
     );
-    expect(state.registerResource).toHaveBeenCalledWith(
+    expect(mainServer.registerResource).toHaveBeenCalledWith(
       'calendar-accounts',
       'calendar://accounts',
       expect.objectContaining({
@@ -225,6 +227,74 @@ describe('GoogleCalendarMcpServer', () => {
     expect(args[2]).toBe(state.tokenManagerInstance);
   });
 
+  it('HTTP serverFactory registers all capabilities on per-session server, not the main server', async () => {
+    const server = new GoogleCalendarMcpServer({
+      transport: { type: 'http', host: '0.0.0.0', port: 3456 },
+      debug: false
+    } as any);
+
+    await server.initialize();
+    await server.start();
+
+    // The main server was created by the constructor (instances[0])
+    const mainServer = state.mcpServerInstances[0];
+    expect(state.mcpServerInstances).toHaveLength(1);
+
+    // Extract the serverFactory passed to HttpTransportHandler
+    const factoryArgs = (state.httpConnect as any).mockHttpArgs;
+    const serverFactory = factoryArgs[0];
+
+    // Clear call counts on the main server to isolate factory behavior
+    mainServer.registerTool.mockClear();
+    mainServer.registerPrompt.mockClear();
+    mainServer.registerResource.mockClear();
+    state.toolRegistryRegisterAll.mockClear();
+    state.registerUIResources.mockClear();
+
+    // Simulate a new HTTP session — factory creates a fresh McpServer
+    const sessionServer = await serverFactory();
+
+    // A second McpServer should have been created
+    expect(state.mcpServerInstances).toHaveLength(2);
+    expect(sessionServer).toBe(state.mcpServerInstances[1]);
+    expect(sessionServer).not.toBe(mainServer);
+
+    // ToolRegistry.registerAll should target the session server
+    expect(state.toolRegistryRegisterAll).toHaveBeenCalledTimes(1);
+    expect(state.toolRegistryRegisterAll).toHaveBeenCalledWith(
+      sessionServer, expect.any(Function), expect.anything()
+    );
+
+    // manage-accounts should be registered on the SESSION server
+    expect(sessionServer.registerTool).toHaveBeenCalledWith(
+      'manage-accounts', expect.anything(), expect.any(Function)
+    );
+
+    // Prompts should be registered on the session server
+    expect(sessionServer.registerPrompt).toHaveBeenCalledTimes(2);
+    expect(sessionServer.registerPrompt).toHaveBeenCalledWith(
+      'daily-agenda-brief', expect.anything(), expect.any(Function)
+    );
+    expect(sessionServer.registerPrompt).toHaveBeenCalledWith(
+      'find-and-book-meeting', expect.anything(), expect.any(Function)
+    );
+
+    // Resources should be registered on the session server
+    expect(sessionServer.registerResource).toHaveBeenCalledTimes(1);
+    expect(sessionServer.registerResource).toHaveBeenCalledWith(
+      'calendar-accounts', 'calendar://accounts', expect.anything(), expect.any(Function)
+    );
+
+    // UI resources should be registered on the session server
+    expect(state.registerUIResources).toHaveBeenCalledTimes(1);
+    expect(state.registerUIResources).toHaveBeenCalledWith(sessionServer);
+
+    // CRITICAL: main server should NOT have received any additional registrations
+    expect(mainServer.registerTool).not.toHaveBeenCalled();
+    expect(mainServer.registerPrompt).not.toHaveBeenCalled();
+    expect(mainServer.registerResource).not.toHaveBeenCalled();
+  });
+
   it('throws for unsupported transport types', async () => {
     const server = new GoogleCalendarMcpServer({
       transport: { type: 'invalid' },
@@ -258,7 +328,7 @@ describe('GoogleCalendarMcpServer', () => {
         debug: false
       } as any);
       await server.initialize();
-      const call = state.registerPrompt.mock.calls.find(
+      const call = state.mcpServerInstance.registerPrompt.mock.calls.find(
         (c: any[]) => c[0] === promptName
       )!;
       return call[2];
@@ -349,7 +419,7 @@ describe('GoogleCalendarMcpServer', () => {
       } as any);
       await server.initialize();
 
-      const call = state.registerResource.mock.calls.find(
+      const call = state.mcpServerInstance.registerResource.mock.calls.find(
         (c: any[]) => c[0] === 'calendar-accounts'
       )!;
       return call[3];
@@ -403,7 +473,7 @@ describe('GoogleCalendarMcpServer', () => {
       } as any);
       await server.initialize();
 
-      const call = state.registerResource.mock.calls.find(
+      const call = state.mcpServerInstance.registerResource.mock.calls.find(
         (c: any[]) => c[0] === 'calendar-accounts'
       )!;
       const callback = call[3];
