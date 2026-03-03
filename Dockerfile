@@ -1,7 +1,7 @@
 # Google Calendar MCP Server - Optimized Dockerfile
 # syntax=docker/dockerfile:1
 
-FROM node:18-alpine
+FROM node:22-alpine
 
 # Create app user for security
 RUN addgroup -g 1001 -S nodejs && \
@@ -17,6 +17,7 @@ COPY package*.json ./
 COPY scripts ./scripts
 COPY src ./src
 COPY tsconfig.json .
+COPY vite.config.ui.ts .
 
 # Install all dependencies (including dev dependencies for build)
 RUN npm ci --no-audit --no-fund --silent
