@@ -57,28 +57,30 @@ export class HttpTransportHandler {
   }
 
   /**
-   * Creates an OAuth2Client configured for the given account.
-   * Consolidates credential loading and redirect URI construction.
+   * Creates an OAuth2Client configured for OAuth flow.
+   * Uses a clean redirect URI without query parameters to comply with Google's exact-match policy.
    */
-  private async createOAuth2Client(accountId: string, host: string, port: number): Promise<import('google-auth-library').OAuth2Client> {
+  private async createOAuth2Client(host: string, port: number): Promise<import('google-auth-library').OAuth2Client> {
     const { OAuth2Client } = await import('google-auth-library');
     const { loadCredentials } = await import('../auth/client.js');
     const { client_id, client_secret } = await loadCredentials();
     return new OAuth2Client(
       client_id,
       client_secret,
-      `http://${host}:${port}/oauth2callback?account=${accountId}`
+      `http://${host}:${port}/oauth2callback`
     );
   }
 
   /**
    * Generates an OAuth authorization URL with standard settings.
+   * The accountId is passed via the state parameter so the callback can identify which account to save tokens for.
    */
-  private generateOAuthUrl(client: import('google-auth-library').OAuth2Client): string {
+  private generateOAuthUrl(client: import('google-auth-library').OAuth2Client, accountId: string): string {
     return client.generateAuthUrl({
       access_type: 'offline',
       scope: ['https://www.googleapis.com/auth/calendar'],
-      prompt: 'consent'
+      prompt: 'consent',
+      state: accountId
     });
   }
 
@@ -254,8 +256,8 @@ export class HttpTransportHandler {
           }
 
           // Generate OAuth URL for this account
-          const oauth2Client = await this.createOAuth2Client(accountId, host, port);
-          const authUrl = this.generateOAuthUrl(oauth2Client);
+          const oauth2Client = await this.createOAuth2Client(host, port);
+          const authUrl = this.generateOAuthUrl(oauth2Client, accountId);
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
@@ -278,7 +280,7 @@ export class HttpTransportHandler {
           // Use configured host/port instead of req.headers.host for security
           const url = new URL(req.url, `http://${host}:${port}`);
           const code = url.searchParams.get('code');
-          const accountId = url.searchParams.get('account');
+          const accountId = url.searchParams.get('state');
 
           if (!code) {
             res.writeHead(400, { 'Content-Type': 'text/html' });
@@ -293,7 +295,7 @@ export class HttpTransportHandler {
           }
 
           // Exchange code for tokens
-          const oauth2Client = await this.createOAuth2Client(accountId, host, port);
+          const oauth2Client = await this.createOAuth2Client(host, port);
           const { tokens } = await oauth2Client.getToken(code);
 
           // Get user email before saving tokens
@@ -391,8 +393,8 @@ export class HttpTransportHandler {
           await this.validateAccountId(accountId);
 
           // Generate OAuth URL for re-authentication
-          const oauth2Client = await this.createOAuth2Client(accountId, host, port);
-          const authUrl = this.generateOAuthUrl(oauth2Client);
+          const oauth2Client = await this.createOAuth2Client(host, port);
+          const authUrl = this.generateOAuthUrl(oauth2Client, accountId);
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
