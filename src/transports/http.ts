@@ -196,18 +196,18 @@ export class HttpTransportHandler {
   }
 
   /**
-   * Creates an OAuth2Client configured for the given account.
-   * Consolidates credential loading and redirect URI construction.
+   * Creates an OAuth2Client configured for OAuth flow.
+   * Uses a clean redirect URI without query parameters to comply with Google's exact-match policy.
    * Uses OAUTH_REDIRECT_BASE_URL environment variable if set, otherwise falls back to localhost.
    */
-  private async createOAuth2Client(accountId: string, host: string, port: number): Promise<import('google-auth-library').OAuth2Client> {
+  private async createOAuth2Client(host: string, port: number): Promise<import('google-auth-library').OAuth2Client> {
     const { OAuth2Client } = await import('google-auth-library');
     const { loadCredentials } = await import('../auth/client.js');
     const { client_id, client_secret } = await loadCredentials();
 
     // Use environment variable for production, fallback to localhost for development
     const baseUrl = process.env.OAUTH_REDIRECT_BASE_URL || `http://${host}:${port}`;
-    const redirectUri = `${baseUrl}/oauth2callback?account=${accountId}`;
+    const redirectUri = `${baseUrl}/oauth2callback`;
 
     return new OAuth2Client(
       client_id,
@@ -218,12 +218,14 @@ export class HttpTransportHandler {
 
   /**
    * Generates an OAuth authorization URL with standard settings.
+   * The accountId is passed via the state parameter so the callback can identify which account to save tokens for.
    */
-  private generateOAuthUrl(client: import('google-auth-library').OAuth2Client): string {
+  private generateOAuthUrl(client: import('google-auth-library').OAuth2Client, accountId: string): string {
     return client.generateAuthUrl({
       access_type: 'offline',
       scope: ['https://www.googleapis.com/auth/calendar'],
-      prompt: 'consent'
+      prompt: 'consent',
+      state: accountId
     });
   }
 
@@ -401,8 +403,8 @@ export class HttpTransportHandler {
           return;
         }
 
-        const oauth2Client = await this.createOAuth2Client(accountId, host, port);
-        const authUrl = this.generateOAuthUrl(oauth2Client);
+        const oauth2Client = await this.createOAuth2Client(host, port);
+        const authUrl = this.generateOAuthUrl(oauth2Client, accountId);
 
         res.json({ authUrl, accountId });
       } catch (error) {
@@ -448,8 +450,8 @@ export class HttpTransportHandler {
       try {
         await this.validateAccountId(accountId);
 
-        const oauth2Client = await this.createOAuth2Client(accountId, host, port);
-        const authUrl = this.generateOAuthUrl(oauth2Client);
+        const oauth2Client = await this.createOAuth2Client(host, port);
+        const authUrl = this.generateOAuthUrl(oauth2Client, accountId);
 
         res.json({ authUrl, accountId });
       } catch (error) {
@@ -488,13 +490,15 @@ export class HttpTransportHandler {
         }
 
         // Standard account management OAuth callback
-        const accountId = req.query.account as string | undefined;
+        // Account ID is passed via the OAuth state parameter (not as a query param)
+        // to keep the redirect URI clean for Google's exact-match policy
+        const accountId = stateParam;
         if (!accountId) {
-          res.status(400).type('html').send('<h1>Error</h1><p>Account ID missing</p>');
+          res.status(400).type('html').send('<h1>Error</h1><p>Account ID missing from state parameter</p>');
           return;
         }
 
-        const oauth2Client = await this.createOAuth2Client(accountId, host, port);
+        const oauth2Client = await this.createOAuth2Client(host, port);
         const { tokens } = await oauth2Client.getToken(code);
 
         oauth2Client.setCredentials(tokens);
