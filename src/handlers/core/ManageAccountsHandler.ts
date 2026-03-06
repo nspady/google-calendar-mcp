@@ -3,6 +3,7 @@ import { OAuth2Client } from "google-auth-library";
 import { google } from "googleapis";
 import { AuthServer } from "../../auth/server.js";
 import { TokenManager } from "../../auth/tokenManager.js";
+import { loadCredentials } from "../../auth/client.js";
 import { validateAccountId } from "../../auth/paths.js";
 import {
   AddAccountResponse,
@@ -24,6 +25,7 @@ export interface ServerContext {
   authServer: AuthServer;
   accounts: Map<string, OAuth2Client>;
   reloadAccounts: () => Promise<Map<string, OAuth2Client>>;
+  oauthRedirectBaseUrl?: string;
 }
 
 /**
@@ -211,7 +213,52 @@ export class ManageAccountsHandler {
     process.env.GOOGLE_ACCOUNT_MODE = normalizedId;
     context.tokenManager.setAccountMode(normalizedId);
 
-    // Start the authentication server
+    // Remote flow: use the existing HTTP transport's /oauth2callback handler
+    if (context.oauthRedirectBaseUrl) {
+      try {
+        const credentials = await loadCredentials();
+        const baseUrl = context.oauthRedirectBaseUrl.replace(/\/+$/, '');
+        const redirectUri = `${baseUrl}/oauth2callback?account=${normalizedId}`;
+
+        const oauthClient = new OAuth2Client({
+          clientId: credentials.client_id,
+          clientSecret: credentials.client_secret,
+          redirectUri,
+        });
+
+        const authUrl = oauthClient.generateAuthUrl({
+          access_type: 'offline',
+          scope: ['https://www.googleapis.com/auth/calendar'],
+          prompt: 'consent',
+        });
+
+        const response: AddAccountResponse = {
+          status: 'awaiting_authentication',
+          account_id: normalizedId,
+          auth_url: authUrl,
+          callback_url: redirectUri,
+          instructions: `Visit the auth_url in your browser to connect your Google account. This will be saved with the nickname '${normalizedId}'.`,
+          next_step: "After authenticating in your browser, use manage-accounts with action 'list' to verify the account was connected successfully."
+        };
+
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify(response, null, 2)
+          }]
+        };
+      } catch (error) {
+        if (error instanceof McpError) {
+          throw error;
+        }
+        throw new McpError(
+          ErrorCode.InternalError,
+          `Failed to generate auth URL: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
+    }
+
+    // Local flow: use AuthServer on localhost
     try {
       const started = await context.authServer.startForMcpTool(normalizedId);
 

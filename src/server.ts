@@ -156,7 +156,8 @@ export class GoogleCalendarMcpServer {
       reloadAccounts: async () => {
         this.accounts = await this.tokenManager.loadAllAccounts();
         return this.accounts;
-      }
+      },
+      oauthRedirectBaseUrl: process.env.OAUTH_REDIRECT_BASE_URL,
     };
 
     const manageAccountsHandler = new ManageAccountsHandler();
