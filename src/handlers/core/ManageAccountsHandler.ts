@@ -218,7 +218,7 @@ export class ManageAccountsHandler {
       try {
         const credentials = await loadCredentials();
         const baseUrl = context.oauthRedirectBaseUrl.replace(/\/+$/, '');
-        const redirectUri = `${baseUrl}/oauth2callback?account=${normalizedId}`;
+        const redirectUri = `${baseUrl}/oauth2callback`;
 
         const oauthClient = new OAuth2Client({
           clientId: credentials.client_id,
@@ -230,6 +230,7 @@ export class ManageAccountsHandler {
           access_type: 'offline',
           scope: ['https://www.googleapis.com/auth/calendar'],
           prompt: 'consent',
+          state: normalizedId,
         });
 
         const response: AddAccountResponse = {
