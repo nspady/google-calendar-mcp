@@ -162,6 +162,12 @@ const commands = {
     cmd: 'docker',
     args: ['compose', 'exec', 'calendar-mcp', 'npm', 'run', 'auth']
   },
+  'docker:dev': {
+    description: 'Build and run Docker container for local HTTP debugging',
+    cmd: 'docker',
+    args: ['compose', '-f', 'docker-compose.yml', '-f', 'docker-compose.local.yml', 'up', '--build', '-d'],
+    env: { ENV_FILE: '.env.docker' }
+  },
   'docker:test:quick': {
     description: 'Run quick Docker tests (no OAuth required)',
     cmd: 'bash',
@@ -180,7 +186,7 @@ function showHelp() {
     'Authentication': ['auth', 'auth:test', 'account:status', 'account:clear:normal', 'account:clear:test'],
     'Unit Testing': ['test'],
     'Integration Testing': ['test:integration', 'test:integration:direct', 'test:integration:multi-account', 'test:integration:mcp-oauth', 'test:integration:claude', 'test:integration:openai', 'test:integration:llm', 'test:integration:all', 'test:watch:all'],
-    'Docker Operations': ['docker:build', 'docker:up', 'docker:up:http', 'docker:auth', 'docker:logs', 'docker:down', 'docker:exec', 'docker:test:quick'],
+    'Docker Operations': ['docker:dev', 'docker:build', 'docker:up', 'docker:up:http', 'docker:auth', 'docker:logs', 'docker:down', 'docker:exec', 'docker:test:quick'],
     'Coverage & Analysis': ['coverage']
   };
 

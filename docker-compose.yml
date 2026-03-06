@@ -7,10 +7,12 @@ services:
     container_name: calendar-mcp
     restart: unless-stopped
     
-    # Environment configuration via .env file
-    env_file: .env
+    # Environment configuration
+    # Use .env.docker for local debugging, .env for production
+    env_file: ${ENV_FILE:-.env}
 
     # OAuth credentials and token storage
+    # For local dev with host tokens: npm run dev docker:dev
     volumes:
       - ./gcp-oauth.keys.json:/app/gcp-oauth.keys.json:ro
       - calendar-tokens:/home/nodejs/.config/google-calendar-mcp
