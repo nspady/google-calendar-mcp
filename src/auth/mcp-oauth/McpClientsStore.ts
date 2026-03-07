@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { getMcpStoragePath, loadJsonFile, saveJsonFile, MCP_TOKEN_PREFIX } from './persistence.js';
+import { getMcpStoragePath, loadJsonFile, saveJsonFile } from './persistence.js';
 
 import type { OAuthRegisteredClientsStore } from '@modelcontextprotocol/sdk/server/auth/clients.js';
 import type { OAuthClientInformationFull } from '@modelcontextprotocol/sdk/shared/auth.js';
@@ -22,21 +22,29 @@ export class McpClientsStore implements OAuthRegisteredClientsStore {
   }
 
   async getClient(clientId: string): Promise<OAuthClientInformationFull | undefined> {
-    return this.clients.get(clientId);
+    const client = this.clients.get(clientId);
+    if (client && (client as any).client_secret) {
+      // Strip client_secret from legacy registrations — MCP clients (e.g. ChatGPT)
+      // don't send secrets in token exchanges, so treat all clients as public.
+      delete (client as any).client_secret;
+      delete (client as any).client_secret_expires_at;
+    }
+    return client;
   }
 
   async registerClient(
     client: Omit<OAuthClientInformationFull, 'client_id' | 'client_id_issued_at'>
   ): Promise<OAuthClientInformationFull> {
     const clientId = crypto.randomUUID();
-    const clientSecret = `${MCP_TOKEN_PREFIX.CLIENT_SECRET}${crypto.randomUUID()}`;
 
+    // Don't issue a client_secret — many MCP clients (e.g. ChatGPT) register
+    // with token_endpoint_auth_method='client_secret_post' but never actually
+    // send the secret in the token exchange. Without a stored secret, the SDK's
+    // clientAuth middleware skips secret validation (public client behavior).
     const registered: OAuthClientInformationFull = {
       ...client,
       client_id: clientId,
-      client_secret: clientSecret,
       client_id_issued_at: Math.floor(Date.now() / 1000),
-      client_secret_expires_at: 0, // Never expires
     };
 
     this.clients.set(clientId, registered);

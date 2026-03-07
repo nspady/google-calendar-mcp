@@ -259,6 +259,7 @@ MCP tools return errors as successful responses with error content, not as throw
 - **npx**: `npx @cocal/google-calendar-mcp` (requires `GOOGLE_OAUTH_CREDENTIALS` env var)
 - **Docker**: See `docs/docker.md` for Docker deployment with stdio and HTTP modes
 - **Claude Desktop Config**: See README.md for local stdio configuration
+- **Production TODOs**: See `docs/PRODUCTION-TODOS.md` for release tracking
 
 ### Deployment Modes
 
@@ -268,7 +269,15 @@ MCP tools return errors as successful responses with error content, not as throw
 - Direct process communication
 - See README.md for setup
 
+**Railway (Production HTTP):**
+- Branch: `feature/railway-deployment`
+- Deploy: `railway up` (uploads local files, triggers build)
+- URL: configured via Railway service settings
+- Env vars: `OAUTH_REDIRECT_BASE_URL`, `MCP_ISSUER_URL`, `MCP_OAUTH_ENABLED=true`
+- MCP OAuth enabled for ChatGPT/OpenAI app integration
+- Account management UI at `/accounts`
+
 **Key Differences:**
 - **stdio**: For Claude Desktop only, local machine
-- **HTTP**: For testing, development, debugging (local only)
+- **HTTP**: For remote deployment, ChatGPT/OpenAI integration, account management UI
 

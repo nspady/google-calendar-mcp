@@ -1,0 +1,8 @@
+# Local development override — mounts host tokens so you don't need to re-authenticate.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+
+services:
+  calendar-mcp:
+    volumes:
+      - ./gcp-oauth.keys.json:/app/gcp-oauth.keys.json:ro
+      - ~/.config/google-calendar-mcp/tokens.json:/home/nodejs/.config/google-calendar-mcp/tokens.json
