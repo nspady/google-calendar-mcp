@@ -5,6 +5,7 @@ import { BaseToolHandler } from "../handlers/core/BaseToolHandler.js";
 import { ALLOWED_EVENT_FIELDS } from "../utils/field-mask-builder.js";
 import { ServerConfig } from "../config/TransportConfig.js";
 import { DAY_VIEW_RESOURCE_URI } from "../ui/register-ui-resources.js";
+import { generateToolSummary } from "../utils/ui-summary.js";
 
 // Import all handlers
 import { ListCalendarsHandler } from "../handlers/core/ListCalendarsHandler.js";
@@ -1107,7 +1108,7 @@ export class ToolRegistry {
     executeWithHandler: (
       handler: any,
       args: any
-    ) => Promise<{ content: Array<{ type: "text"; text: string }> }>,
+    ) => Promise<{ content: Array<{ type: "text"; text: string }>; isError?: boolean }>,
     config?: ServerConfig
   ) {
     // Validate enabledTools if provided
@@ -1141,7 +1142,7 @@ export class ToolRegistry {
     executeWithHandler: (
       handler: any,
       args: any
-    ) => Promise<{ content: Array<{ type: "text"; text: string }> }>
+    ) => Promise<{ content: Array<{ type: "text"; text: string }>; isError?: boolean }>
   ) {
     const inputSchema = tool.customInputSchema || this.extractSchemaShape(tool.schema);
 
@@ -1159,7 +1160,30 @@ export class ToolRegistry {
 
       // Create handler instance and execute
       const handler = new tool.handler();
-      return executeWithHandler(handler, processedArgs);
+      const result = await executeWithHandler(handler, processedArgs);
+
+      // For UI tools, add audience annotations to save LLM tokens:
+      // - Full JSON data marked audience:["user"] (for display, not sent to LLM)
+      // - Compact summary marked audience:["assistant"] (sent to LLM only)
+      if (tool.hasUI && result.content?.[0]?.type === 'text' && !result.isError) {
+        try {
+          const data = JSON.parse(result.content[0].text);
+          const summary = generateToolSummary(tool.name, data);
+          if (summary) {
+            return {
+              ...result,
+              content: [
+                { type: 'text' as const, text: summary, annotations: { audience: ['assistant' as const] } },
+                { type: 'text' as const, text: result.content[0].text, annotations: { audience: ['user' as const] } }
+              ]
+            };
+          }
+        } catch {
+          // If JSON parsing fails, return original response
+        }
+      }
+
+      return result;
     };
 
     // For tools with UI, use registerAppTool from ext-apps
