@@ -12,11 +12,11 @@ describe('DayContextService', () => {
   describe('calculateTimeRange', () => {
     it('should add 1 hour buffer on each side of events', () => {
       const events: StructuredEvent[] = [
-        createEvent('1', '2026-01-27T10:00:00', '2026-01-27T11:00:00'),
-        createEvent('2', '2026-01-27T14:00:00', '2026-01-27T15:00:00'),
+        createEvent('1', '2026-01-27T10:00:00Z', '2026-01-27T11:00:00Z'),
+        createEvent('2', '2026-01-27T14:00:00Z', '2026-01-27T15:00:00Z'),
       ];
 
-      const range = service.calculateTimeRange(events);
+      const range = service.calculateTimeRange(events, 'UTC');
 
       expect(range.startHour).toBe(9);  // 10:00 - 1 hour
       expect(range.endHour).toBe(16);   // 15:00 + 1 hour
@@ -27,7 +27,7 @@ describe('DayContextService', () => {
         createAllDayEvent('1', '2026-01-27'),
       ];
 
-      const range = service.calculateTimeRange(events);
+      const range = service.calculateTimeRange(events, 'UTC');
 
       expect(range.startHour).toBe(8);   // Default start
       expect(range.endHour).toBe(18);    // Default end
@@ -35,17 +35,17 @@ describe('DayContextService', () => {
 
     it('should not go below hour 0 or above hour 24', () => {
       const events: StructuredEvent[] = [
-        createEvent('1', '2026-01-27T00:30:00', '2026-01-27T23:30:00'),
+        createEvent('1', '2026-01-27T00:30:00Z', '2026-01-27T23:30:00Z'),
       ];
 
-      const range = service.calculateTimeRange(events);
+      const range = service.calculateTimeRange(events, 'UTC');
 
       expect(range.startHour).toBe(0);
       expect(range.endHour).toBe(24);
     });
 
     it('should return default range when no events', () => {
-      const range = service.calculateTimeRange([]);
+      const range = service.calculateTimeRange([], 'UTC');
 
       expect(range.startHour).toBe(8);
       expect(range.endHour).toBe(18);
@@ -53,10 +53,10 @@ describe('DayContextService', () => {
 
     it('should clamp cross-midnight events to end-of-day range', () => {
       const events: StructuredEvent[] = [
-        createEvent('overnight', '2026-01-27T23:00:00', '2026-01-28T01:00:00'),
+        createEvent('overnight', '2026-01-27T23:00:00Z', '2026-01-28T01:00:00Z'),
       ];
 
-      const range = service.calculateTimeRange(events);
+      const range = service.calculateTimeRange(events, 'UTC');
 
       // Overnight events should keep a valid same-day range for the day grid
       expect(range.startHour).toBe(22);
@@ -65,22 +65,36 @@ describe('DayContextService', () => {
 
     it('should handle events ending exactly on the hour', () => {
       const events: StructuredEvent[] = [
-        createEvent('1', '2026-01-27T10:00:00', '2026-01-27T11:00:00'),
+        createEvent('1', '2026-01-27T10:00:00Z', '2026-01-27T11:00:00Z'),
       ];
 
-      const range = service.calculateTimeRange(events);
+      const range = service.calculateTimeRange(events, 'UTC');
 
       // Event ends at 11:00 exactly, so endHour is 11 + 1 buffer = 12
       expect(range.startHour).toBe(9);
       expect(range.endHour).toBe(12);
     });
 
-    it('should handle events ending with minutes past the hour', () => {
+    it('should use timezone-aware hours instead of UTC hours', () => {
+      // Event at 8:00 AM Pacific = 16:00 UTC
+      // Without timezone awareness, getHours() on UTC server returns 16
+      // With timezone awareness, should correctly see hour 8
       const events: StructuredEvent[] = [
-        createEvent('1', '2026-01-27T10:00:00', '2026-01-27T11:30:00'),
+        createEvent('1', '2026-01-27T16:00:00Z', '2026-01-27T17:00:00Z'),
       ];
 
-      const range = service.calculateTimeRange(events);
+      const range = service.calculateTimeRange(events, 'America/Los_Angeles');
+
+      expect(range.startHour).toBe(7);  // 8:00 AM Pacific - 1 buffer
+      expect(range.endHour).toBe(10);   // 9:00 AM Pacific + 1 buffer
+    });
+
+    it('should handle events ending with minutes past the hour', () => {
+      const events: StructuredEvent[] = [
+        createEvent('1', '2026-01-27T10:00:00Z', '2026-01-27T11:30:00Z'),
+      ];
+
+      const range = service.calculateTimeRange(events, 'UTC');
 
       // Event ends at 11:30, so we need hour 12 visible, plus 1 buffer = 13
       expect(range.startHour).toBe(9);
@@ -181,11 +195,11 @@ describe('DayContextService', () => {
     it('should calculate time range from all events', () => {
       const focusEvent: StructuredEvent = createEvent(
         'focus-123',
-        '2026-01-27T14:00:00',
-        '2026-01-27T15:00:00'
+        '2026-01-27T14:00:00Z',
+        '2026-01-27T15:00:00Z'
       );
       const otherEvents: StructuredEvent[] = [
-        createEvent('earlier', '2026-01-27T09:00:00', '2026-01-27T10:00:00'),
+        createEvent('earlier', '2026-01-27T09:00:00Z', '2026-01-27T10:00:00Z'),
       ];
 
       const context = service.buildDayContext(focusEvent, otherEvents, 'UTC');

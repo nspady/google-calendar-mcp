@@ -12,10 +12,70 @@ const BUFFER_HOURS = 1;
  */
 export class DayContextService {
   /**
+   * Extract the hour component of a dateTime string in the given timezone.
+   * Falls back to local Date parsing if Intl fails.
+   */
+  private getHourInTimezone(dateTime: string, timezone: string): number {
+    const date = new Date(dateTime);
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        hour: '2-digit',
+        hour12: false,
+      }).formatToParts(date);
+      const hour = Number(parts.find(p => p.type === 'hour')?.value ?? date.getHours());
+      return hour === 24 ? 0 : hour;
+    } catch {
+      return date.getHours();
+    }
+  }
+
+  /**
+   * Extract the minutes component of a dateTime string in the given timezone.
+   * Falls back to local Date parsing if Intl fails.
+   */
+  private getMinutesInTimezone(dateTime: string, timezone: string): number {
+    const date = new Date(dateTime);
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        minute: '2-digit',
+      }).formatToParts(date);
+      return Number(parts.find(p => p.type === 'minute')?.value ?? date.getMinutes());
+    } catch {
+      return date.getMinutes();
+    }
+  }
+
+  /**
+   * Extract the calendar date (YYYY-MM-DD) of a dateTime string in the given timezone.
+   * Used for detecting events that span into the next day.
+   */
+  private getDatePartsInTimezone(dateTime: string, timezone: string): { year: number; month: number; day: number } {
+    const date = new Date(dateTime);
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).formatToParts(date);
+      return {
+        year: Number(parts.find(p => p.type === 'year')?.value),
+        month: Number(parts.find(p => p.type === 'month')?.value),
+        day: Number(parts.find(p => p.type === 'day')?.value),
+      };
+    } catch {
+      return { year: date.getFullYear(), month: date.getMonth() + 1, day: date.getDate() };
+    }
+  }
+
+  /**
    * Calculate the time range to display based on events.
    * Adds a buffer hour on each side of the event range.
+   * Uses timezone-aware parsing so the grid reflects the user's local time.
    */
-  calculateTimeRange(events: StructuredEvent[]): { startHour: number; endHour: number } {
+  calculateTimeRange(events: StructuredEvent[], timezone: string): { startHour: number; endHour: number } {
     const timedEvents = events.filter(e => e.start.dateTime);
 
     if (timedEvents.length === 0) {
@@ -27,22 +87,21 @@ export class DayContextService {
 
     for (const event of timedEvents) {
       if (event.start.dateTime) {
-        const start = new Date(event.start.dateTime);
-        const startHour = start.getHours();
+        const startHour = this.getHourInTimezone(event.start.dateTime, timezone);
         minHour = Math.min(minHour, startHour);
       }
       if (event.end.dateTime) {
-        const start = event.start.dateTime ? new Date(event.start.dateTime) : null;
-        const end = new Date(event.end.dateTime);
-        const endHour = end.getHours();
-        const endMinutes = end.getMinutes();
+        const endHour = this.getHourInTimezone(event.end.dateTime, timezone);
+        const endMinutes = this.getMinutesInTimezone(event.end.dateTime, timezone);
 
-        const spansIntoNextDay = start
-          ? (
-              end.getFullYear() !== start.getFullYear() ||
-              end.getMonth() !== start.getMonth() ||
-              end.getDate() !== start.getDate()
-            )
+        const spansIntoNextDay = event.start.dateTime
+          ? (() => {
+              const startParts = this.getDatePartsInTimezone(event.start.dateTime!, timezone);
+              const endParts = this.getDatePartsInTimezone(event.end.dateTime!, timezone);
+              return startParts.year !== endParts.year ||
+                     startParts.month !== endParts.month ||
+                     startParts.day !== endParts.day;
+            })()
           : false;
 
         // If an event extends past midnight, clamp to end-of-day for this day view.
@@ -75,7 +134,7 @@ export class DayContextService {
     const dayViewEvents: DayViewEvent[] = sortViewEvents(events.map(toDayViewEvent));
 
     // Calculate time range
-    const timeRange = this.calculateTimeRange(events);
+    const timeRange = this.calculateTimeRange(events, timezone);
 
     return {
       date,
