@@ -86,10 +86,12 @@ See the [Docker deployment guide](docs/docker.md) for detailed configuration opt
 
 ### First Run
 
-1. Start your MCP client (e.g., Claude Desktop, Claude Code)
+1. Start Claude Desktop
 2. **Ask Claude to authenticate with the Google Calendar MCP server** (e.g., "Authenticate with Google Calendar"). This step is required before using any calendar tool — without it, requests will fail with a `-32600` error.
 3. Complete the OAuth flow in your browser
 4. You're ready to use calendar features!
+
+**Using Claude Code?** The same steps apply — just ask Claude to authenticate with the Google Calendar MCP server from your CLI session before using any calendar tool.
 
 ### Re-authentication
 
