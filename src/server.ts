@@ -21,6 +21,9 @@ import { z } from 'zod';
 import { StdioTransportHandler } from './transports/stdio.js';
 import { HttpTransportHandler, HttpTransportConfig } from './transports/http.js';
 
+// Import request auth context for per-request OAuth passthrough
+import { getRequestAccessToken } from './auth/requestContext.js';
+
 // Import config
 import { ServerConfig } from './config/TransportConfig.js';
 
@@ -196,6 +199,20 @@ export class GoogleCalendarMcpServer {
   }
 
   private async executeWithHandler(handler: any, args: any): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+    const requestAccessToken = getRequestAccessToken();
+
+    // In HTTP mode, allow per-request OAuth bearer token passthrough (e.g., via LiteLLM-managed user OAuth).
+    // This avoids requiring shared local token storage for every user.
+    if (requestAccessToken && this.config.transport.type === 'http') {
+      const requestScopedAccounts = new Map<string, OAuth2Client>();
+      const oauthPassthroughClient = new OAuth2Client();
+      oauthPassthroughClient.setCredentials({ access_token: requestAccessToken });
+      requestScopedAccounts.set('oauth_passthrough', oauthPassthroughClient);
+
+      const result = await handler.runTool(args, requestScopedAccounts);
+      return result;
+    }
+
     await this.ensureAuthenticated();
 
     const result = await handler.runTool(args, this.accounts);

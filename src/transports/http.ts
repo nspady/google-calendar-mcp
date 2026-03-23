@@ -4,6 +4,7 @@ import http from "http";
 import { TokenManager } from "../auth/tokenManager.js";
 import { CalendarRegistry } from "../services/CalendarRegistry.js";
 import { renderAuthSuccess, renderAuthError, loadWebFile } from "../web/templates.js";
+import { runWithRequestAuthContext } from "../auth/requestContext.js";
 
 /**
  * Security headers for HTML responses
@@ -64,10 +65,11 @@ export class HttpTransportHandler {
     const { OAuth2Client } = await import('google-auth-library');
     const { loadCredentials } = await import('../auth/client.js');
     const { client_id, client_secret } = await loadCredentials();
+    const redirectHost = process.env.GOOGLE_OAUTH_REDIRECT_HOST || (host === "0.0.0.0" ? "localhost" : host);
     return new OAuth2Client(
       client_id,
       client_secret,
-      `http://${host}:${port}/oauth2callback?account=${accountId}`
+      `http://${redirectHost}:${port}/oauth2callback?account=${accountId}`
     );
   }
 
@@ -91,6 +93,28 @@ export class HttpTransportHandler {
     validateAccountId(accountId);
   }
 
+  private extractBearerToken(authorizationHeader: string | string[] | undefined): string | undefined {
+    if (!authorizationHeader) {
+      return undefined;
+    }
+
+    const headerValue = Array.isArray(authorizationHeader)
+      ? authorizationHeader[0]
+      : authorizationHeader;
+
+    if (!headerValue) {
+      return undefined;
+    }
+
+    const match = headerValue.match(/^Bearer\s+(.+)$/i);
+    if (!match || !match[1]) {
+      return undefined;
+    }
+
+    const token = match[1].trim();
+    return token.length > 0 ? token : undefined;
+  }
+
   private parseRequestBody(req: http.IncomingMessage): Promise<any> {
     return new Promise((resolve, reject) => {
       let body = '';
@@ -110,9 +134,10 @@ export class HttpTransportHandler {
     const port = this.config.port || 3000;
     const host = this.config.host || '127.0.0.1';
 
-    // Configure transport for stateless mode to allow multiple initialization cycles
+    // Use stateless mode for compatibility with clients that re-initialize frequently (e.g. LiteLLM).
+    // The SDK forbids reusing a stateless transport instance unless _hasHandledRequest is reset.
     const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined // Stateless mode - allows multiple initializations
+      sessionIdGenerator: undefined
     });
 
     await this.server.connect(transport);
@@ -170,6 +195,12 @@ export class HttpTransportHandler {
             message: 'Accept header must include application/json or text/event-stream'
           }));
           return;
+        }
+
+        // Streamable HTTP MCP requires clients to accept both application/json and text/event-stream.
+        // Some clients only send one; normalize here to improve interoperability.
+        if (!acceptHeader || !acceptHeader.includes('application/json') || !acceptHeader.includes('text/event-stream')) {
+          req.headers.accept = 'application/json, text/event-stream';
         }
       }
 
@@ -421,7 +452,14 @@ export class HttpTransportHandler {
       }
 
       try {
-        await transport.handleRequest(req, res);
+        // Reset internal stateless guard so this transport can accept a new request cycle.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (transport as any)._webStandardTransport._hasHandledRequest = false;
+
+        const accessToken = this.extractBearerToken(req.headers.authorization);
+        await runWithRequestAuthContext({ accessToken }, async () => {
+          await transport.handleRequest(req, res);
+        });
       } catch (error) {
         process.stderr.write(`Error handling request: ${error instanceof Error ? error.message : error}\n`);
         if (!res.headersSent) {

@@ -42,13 +42,25 @@ services:
     
     # Health check for HTTP mode (safe for stdio mode too)
     healthcheck:
-      test: ["CMD-SHELL", "if [ \"$TRANSPORT\" = \"http\" ]; then curl -f http://localhost:${PORT:-3000}/health || exit 1; else exit 0; fi"]
+      test: ["CMD", "node", "-e", "if (process.env.TRANSPORT && process.env.TRANSPORT !== 'http') process.exit(0); fetch('http://127.0.0.1:' + (process.env.PORT || '3000') + '/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1));"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
+    networks:
+      default:
+      litellm_shared:
+        aliases:
+          - integrahub-calendar-mcp
+          - calendar-mcp
+
 # Persistent volume for OAuth tokens
 volumes:
   calendar-tokens:
     driver: local
+
+networks:
+  litellm_shared:
+    external: true
+    name: litellm_litellm_network
