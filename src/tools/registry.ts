@@ -356,7 +356,7 @@ export const ToolSchemas = {
     ),
     location: z.string().optional().describe("Location of the event"),
     attendees: z.array(z.object({
-      email: z.string().email().describe("Email address of the attendee"),
+      email: z.string().regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Invalid email address").describe("Email address of the attendee"),
       displayName: z.string().optional().describe("Display name of the attendee"),
       optional: z.boolean().optional().describe("Whether this is an optional attendee"),
       responseStatus: z.enum(RESPONSE_STATUS_VALUES).optional().describe("Attendee's response status"),
@@ -515,7 +515,7 @@ export const ToolSchemas = {
       description: z.string().optional().describe("Description/notes for the event"),
       location: z.string().optional().describe("Location of the event"),
       attendees: z.array(z.object({
-        email: z.string().email().describe("Email address of the attendee"),
+        email: z.string().regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Invalid email address").describe("Email address of the attendee"),
         displayName: z.string().optional().describe("Display name of the attendee"),
         optional: z.boolean().optional().describe("Whether this is an optional attendee"),
         responseStatus: z.enum(["needsAction", "declined", "tentative", "accepted"]).optional().describe("Attendee's response status"),
@@ -579,7 +579,7 @@ export const ToolSchemas = {
     timeZone: z.string().optional().describe("Updated timezone as IANA Time Zone Database name. If not provided, uses the calendar's default timezone."),
     location: z.string().optional().describe("Updated location"),
     attendees: z.array(z.object({
-      email: z.string().email().describe("Email address of the attendee")
+      email: z.string().regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Invalid email address").describe("Email address of the attendee")
     })).optional().describe("Updated attendee list"),
     colorId: z.string().optional().describe("Updated color ID"),
     reminders: remindersSchema,
