@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { ToolRegistry } from '../../../tools/registry.js';
+import { z } from 'zod';
+import { ToolRegistry, ToolSchemas } from '../../../tools/registry.js';
 
 describe('Schema $ref Prevention Tests', () => {
   it('should not generate $ref references in JSON schemas, causes issues with Claude Desktop', () => {
@@ -71,6 +72,34 @@ describe('Schema $ref Prevention Tests', () => {
         console.error(`Found potentially problematic schema usage: ${matches[0]}`);
         expect(matches).toBeNull();
       }
+    }
+  });
+
+  it('should not emit regex lookaround in JSON schema patterns, rejected by RE2 validators (OpenAI, Gemini)', () => {
+    const lookaround = /\(\?[=!<]/;
+
+    const collectPatterns = (node: unknown, acc: string[]): string[] => {
+      if (Array.isArray(node)) {
+        for (const item of node) collectPatterns(item, acc);
+      } else if (node && typeof node === 'object') {
+        for (const [key, value] of Object.entries(node)) {
+          if (key === 'pattern' && typeof value === 'string') acc.push(value);
+          collectPatterns(value, acc);
+        }
+      }
+      return acc;
+    };
+
+    for (const [name, schema] of Object.entries(ToolSchemas)) {
+      const jsonSchema = z.toJSONSchema(schema, { io: 'input' });
+      const patterns = collectPatterns(jsonSchema, []);
+      const offenders = patterns.filter((p) => lookaround.test(p));
+
+      if (offenders.length > 0) {
+        console.error(`Tool "${name}" emits lookaround in pattern(s):`, offenders);
+      }
+
+      expect(offenders).toEqual([]);
     }
   });
 });
