@@ -66,6 +66,12 @@ export interface OAuthCredentialsWithProject {
     client_secret?: string;
     redirect_uris?: string[];
   };
+  web?: {
+    project_id?: string;
+    client_id?: string;
+    client_secret?: string;
+    redirect_uris?: string[];
+  };
   project_id?: string;
   client_id?: string;
   client_secret?: string;
@@ -100,9 +106,11 @@ function readCredentialsProjectId(credentialsPath: string): string | undefined {
     const credentialsContent = fs.readFileSync(credentialsPath, 'utf-8');
     const credentials: OAuthCredentialsWithProject = JSON.parse(credentialsContent);
 
-    // Extract project_id from installed format or direct format
+    // Extract project_id from installed (Desktop) / web (Web app) / direct format
     if (credentials.installed?.project_id) {
       return credentials.installed.project_id;
+    } else if (credentials.web?.project_id) {
+      return credentials.web.project_id;
     } else if (credentials.project_id) {
       return credentials.project_id;
     }

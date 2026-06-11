@@ -27,10 +27,23 @@ async function loadCredentialsFromFile(): Promise<OAuthCredentials> {
   const keys = JSON.parse(keysContent);
 
   if (keys.installed) {
-    // Standard OAuth credentials file format
+    // Standard OAuth credentials file format (Desktop app)
     const { client_id, client_secret, redirect_uris } = keys.installed;
     if (!client_id || !client_secret) {
       throw new Error('Invalid credentials file: "installed" object is missing client_id or client_secret.');
+    }
+    return {
+      client_id,
+      client_secret,
+      redirect_uris: Array.isArray(redirect_uris) && redirect_uris.length > 0 ? redirect_uris : DEFAULT_REDIRECT_URIS
+    };
+  } else if (keys.web) {
+    // Web application OAuth credentials file format (e.g. when the OAuth
+    // client is created as "Web application" in Google Cloud Console — typical
+    // when a public HTTPS callback URL is required for an OAuth proxy/bridge).
+    const { client_id, client_secret, redirect_uris } = keys.web;
+    if (!client_id || !client_secret) {
+      throw new Error('Invalid credentials file: "web" object is missing client_id or client_secret.');
     }
     return {
       client_id,
@@ -45,7 +58,7 @@ async function loadCredentialsFromFile(): Promise<OAuthCredentials> {
       redirect_uris: keys.redirect_uris || DEFAULT_REDIRECT_URIS
     };
   } else {
-    throw new Error('Invalid credentials file format. Expected either "installed" object or direct client_id/client_secret fields.');
+    throw new Error('Invalid credentials file format. Expected either "installed" object, "web" object, or direct client_id/client_secret fields.');
   }
 }
 
