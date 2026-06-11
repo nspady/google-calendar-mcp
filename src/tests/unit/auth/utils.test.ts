@@ -27,6 +27,13 @@ describe('getCredentialsProjectId', () => {
     expect(getCredentialsProjectId()).toBe('proj-installed');
   });
 
+  it('reads project_id from web-format credentials', () => {
+    const file = join(dir, 'web.json');
+    writeFileSync(file, JSON.stringify({ web: { project_id: 'proj-web' } }));
+    process.env.GOOGLE_OAUTH_CREDENTIALS = file;
+    expect(getCredentialsProjectId()).toBe('proj-web');
+  });
+
   it('reads the credentials file once per path', () => {
     const file = join(dir, 'cached.json');
     writeFileSync(file, JSON.stringify({ project_id: 'proj-a' }));

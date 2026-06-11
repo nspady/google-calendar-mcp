@@ -125,10 +125,46 @@ describe('initializeOAuth2Client', () => {
     await expect(loadCredentials()).rejects.toThrow(/installed.*missing client_id or client_secret/);
   });
 
+  it('loads web-format credentials and their redirect URI', async () => {
+    await writeKeys({
+      web: {
+        client_id: 'web-id',
+        client_secret: 'web-secret',
+        redirect_uris: ['https://oauth.example.com/cb']
+      }
+    });
+
+    const client = await initializeOAuth2Client(null);
+
+    expect((client as any)._clientId).toBe('web-id');
+    expect((client as any).redirectUri).toBe('https://oauth.example.com/cb');
+    await expect(loadCredentials()).resolves.toEqual({ client_id: 'web-id', client_secret: 'web-secret' });
+  });
+
+  it('defaults the redirect URI when web credentials omit it', async () => {
+    await writeKeys({ web: { client_id: 'id', client_secret: 'secret' } });
+
+    const client = await initializeOAuth2Client(null);
+
+    expect((client as any).redirectUri).toBe('http://localhost:3000/oauth2callback');
+  });
+
+  it('rejects web-format credentials without a client ID or secret', async () => {
+    await writeKeys({ web: { client_id: 'id' } });
+
+    await expect(loadCredentials()).rejects.toThrow(/web.*missing client_id or client_secret/);
+  });
+
   it('loads direct-format credentials', async () => {
     await writeKeys({ client_id: 'id', client_secret: 'secret' });
 
     await expect(loadCredentials()).resolves.toEqual({ client_id: 'id', client_secret: 'secret' });
+  });
+
+  it('rejects a credentials file with no recognized format', async () => {
+    await writeKeys({ random: 'stuff' });
+
+    await expect(loadCredentials()).rejects.toThrow(/Invalid credentials file format/);
   });
 
   it('reports the credentials file path when loading fails', async () => {
