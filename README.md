@@ -1,5 +1,7 @@
 # Google Calendar MCP Server
 
+[![MCP Toplist](https://mcptoplist.com/badge/glama%2Fnspady%2Fgoogle-calendar-mcp.svg)](https://mcptoplist.com/server/glama%2Fnspady%2Fgoogle-calendar-mcp)
+
 A Model Context Protocol (MCP) server that provides Google Calendar integration for AI assistants like Claude.
 
 ## Features
