@@ -62,6 +62,9 @@ describe('AuthServer', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
+    vi.stubEnv('GOOGLE_OAUTH_REDIRECT_HOST', '');
+    vi.stubEnv('GOOGLE_OAUTH_REDIRECT_SCHEME', '');
+    vi.stubEnv('GOOGLE_OAUTH_REDIRECT_PORT', '');
 
     // Create mock OAuth2Client
     mockOAuth2Client = new OAuth2Client('client-id', 'client-secret', 'redirect-uri');
@@ -87,6 +90,7 @@ describe('AuthServer', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllEnvs();
     vi.resetModules();
   });
 

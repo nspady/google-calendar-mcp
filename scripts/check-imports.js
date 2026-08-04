@@ -25,7 +25,8 @@ const builtins = new Set([
   'util', 'events', 'buffer', 'querystring', 'net', 'child_process',
   'fs/promises', 'node:fs', 'node:path', 'node:url', 'node:crypto',
   'node:child_process', 'node:http', 'node:https', 'node:os', 'node:stream',
-  'node:util', 'node:events', 'node:buffer', 'node:querystring', 'node:net'
+  'node:util', 'node:events', 'node:buffer', 'node:querystring', 'node:net',
+  'node:async_hooks'
 ]);
 
 // Find all .ts files in src/

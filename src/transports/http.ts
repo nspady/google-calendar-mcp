@@ -5,6 +5,7 @@ import { TokenManager } from "../auth/tokenManager.js";
 import { CalendarRegistry } from "../services/CalendarRegistry.js";
 import { renderAuthSuccess, renderAuthError, loadWebFile } from "../web/templates.js";
 import { runWithRequestAuthContext } from "../auth/requestContext.js";
+import { buildOAuthRedirectUri } from "../auth/redirectUri.js";
 
 /**
  * Security headers for HTML responses
@@ -65,11 +66,14 @@ export class HttpTransportHandler {
     const { OAuth2Client } = await import('google-auth-library');
     const { loadCredentials } = await import('../auth/client.js');
     const { client_id, client_secret } = await loadCredentials();
-    const redirectHost = process.env.GOOGLE_OAUTH_REDIRECT_HOST || (host === "0.0.0.0" ? "localhost" : host);
     return new OAuth2Client(
       client_id,
       client_secret,
-      `http://${redirectHost}:${port}/oauth2callback?account=${accountId}`
+      buildOAuthRedirectUri({
+        defaultHost: host === "0.0.0.0" ? "localhost" : host,
+        runtimePort: port,
+        query: `?account=${accountId}`
+      })
     );
   }
 

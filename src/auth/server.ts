@@ -6,6 +6,7 @@ import { URL } from 'url';
 import open from 'open';
 import { loadCredentials } from './client.js';
 import { getAccountMode } from './utils.js';
+import { buildOAuthRedirectUri } from './redirectUri.js';
 import { renderAuthSuccess, renderAuthError, renderAuthLanding, loadWebFile } from '../web/templates.js';
 
 export interface StartForMcpToolResult {
@@ -47,7 +48,7 @@ export class AuthServer {
     return new OAuth2Client(
       client_id,
       client_secret,
-      `http://localhost:${port}/oauth2callback`
+      buildOAuthRedirectUri({ defaultHost: 'localhost', runtimePort: port })
     );
   }
 
@@ -415,7 +416,7 @@ export class AuthServer {
     return {
       success: true,
       authUrl,
-      callbackUrl: `http://localhost:${port}/oauth2callback`
+      callbackUrl: buildOAuthRedirectUri({ defaultHost: 'localhost', runtimePort: port })
     };
   }
-} 
+}
