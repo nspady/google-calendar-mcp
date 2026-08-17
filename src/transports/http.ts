@@ -1,6 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import http from "http";
+import { randomUUID } from "node:crypto";
+import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { TokenManager } from "../auth/tokenManager.js";
 import { CalendarRegistry } from "../services/CalendarRegistry.js";
 import { renderAuthSuccess, renderAuthError, loadWebFile } from "../web/templates.js";
@@ -17,6 +19,9 @@ const SECURITY_HEADERS = {
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'X-XSS-Protection': '1; mode=block'
 };
+
+// Maximum number of concurrent HTTP sessions.
+const MAX_SESSIONS = 128;
 
 
 /**
@@ -42,16 +47,16 @@ export interface HttpTransportConfig {
 }
 
 export class HttpTransportHandler {
-  private server: McpServer;
+  private serverFactory: () => McpServer;
   private config: HttpTransportConfig;
   private tokenManager: TokenManager;
 
   constructor(
-    server: McpServer,
+    serverFactory: () => McpServer,
     config: HttpTransportConfig = {},
     tokenManager: TokenManager
   ) {
-    this.server = server;
+    this.serverFactory = serverFactory;
     this.config = config;
     this.tokenManager = tokenManager;
   }
@@ -110,12 +115,8 @@ export class HttpTransportHandler {
     const port = this.config.port || 3000;
     const host = this.config.host || '127.0.0.1';
 
-    // Configure transport for stateless mode to allow multiple initialization cycles
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined // Stateless mode - allows multiple initializations
-    });
-
-    await this.server.connect(transport);
+    // Per-session StreamableHTTP transports, keyed by mcp-session-id.
+    const transports = new Map<string, StreamableHTTPServerTransport>();
 
     // Create HTTP server to handle the StreamableHTTP transport
     const httpServer = http.createServer(async (req, res) => {
@@ -420,8 +421,86 @@ export class HttpTransportHandler {
         return;
       }
 
+      // MCP request handling: per-session StreamableHTTP transports (SDK stateful pattern)
       try {
-        await transport.handleRequest(req, res);
+        const sessionId = req.headers['mcp-session-id'] as string | undefined;
+
+        if (req.method === 'POST') {
+          const body = await this.parseRequestBody(req);
+          let transport = sessionId ? transports.get(sessionId) : undefined;
+
+          if (!transport) {
+            // Only a session-less initialize request may open a new session.
+            if (sessionId || !isInitializeRequest(body)) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                jsonrpc: '2.0',
+                error: {
+                  code: -32000,
+                  message: 'Bad Request: No valid session ID provided',
+                },
+                id: null,
+              }));
+              return;
+            }
+
+            // Bound the session map: evict the oldest session when at capacity
+            // so clients that abandon a session without DELETE cannot leak forever.
+            if (transports.size >= MAX_SESSIONS) {
+              const oldest = transports.keys().next().value;
+              if (oldest !== undefined) {
+                await transports.get(oldest)?.close();
+              }
+            }
+
+            const newTransport = new StreamableHTTPServerTransport({
+              sessionIdGenerator: () => randomUUID(),
+              onsessioninitialized: (id) => {
+                transports.set(id, newTransport);
+              },
+            });
+            newTransport.onclose = () => {
+              if (newTransport.sessionId) {
+                transports.delete(newTransport.sessionId);
+              }
+            };
+
+            await this.serverFactory().connect(newTransport);
+            transport = newTransport;
+          }
+
+          await transport.handleRequest(req, res, body);
+          return;
+        }
+
+        if (req.method === 'GET' || req.method === 'DELETE') {
+          const transport = sessionId ? transports.get(sessionId) : undefined;
+          if (!transport) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              jsonrpc: '2.0',
+              error: {
+                code: -32000,
+                message: 'Bad Request: Missing or unknown session ID',
+              },
+              id: null,
+            }));
+            return;
+          }
+          await transport.handleRequest(req, res);
+          return;
+        }
+
+        // Any other method against the MCP endpoint is unsupported.
+        res.writeHead(405, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          jsonrpc: '2.0',
+          error: {
+            code: -32000,
+            message: 'Method Not Allowed',
+          },
+          id: null,
+        }));
       } catch (error) {
         process.stderr.write(`Error handling request: ${error instanceof Error ? error.message : error}\n`);
         if (!res.headersSent) {
