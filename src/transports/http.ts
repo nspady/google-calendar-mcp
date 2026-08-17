@@ -111,6 +111,15 @@ export class HttpTransportHandler {
     });
   }
 
+  private writeJsonRpcError(res: http.ServerResponse, status: number, code: number, message: string): void {
+    res.writeHead(status, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      jsonrpc: '2.0',
+      error: { code, message },
+      id: null,
+    }));
+  }
+
   async connect(): Promise<void> {
     const port = this.config.port || 3000;
     const host = this.config.host || '127.0.0.1';
@@ -432,15 +441,7 @@ export class HttpTransportHandler {
           if (!transport) {
             // Only a session-less initialize request may open a new session.
             if (sessionId || !isInitializeRequest(body)) {
-              res.writeHead(400, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({
-                jsonrpc: '2.0',
-                error: {
-                  code: -32000,
-                  message: 'Bad Request: No valid session ID provided',
-                },
-                id: null,
-              }));
+              this.writeJsonRpcError(res, 400, -32000, 'Bad Request: No valid session ID provided');
               return;
             }
 
@@ -476,15 +477,7 @@ export class HttpTransportHandler {
         if (req.method === 'GET' || req.method === 'DELETE') {
           const transport = sessionId ? transports.get(sessionId) : undefined;
           if (!transport) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-              jsonrpc: '2.0',
-              error: {
-                code: -32000,
-                message: 'Bad Request: Missing or unknown session ID',
-              },
-              id: null,
-            }));
+            this.writeJsonRpcError(res, 400, -32000, 'Bad Request: Missing or unknown session ID');
             return;
           }
           await transport.handleRequest(req, res);
@@ -492,27 +485,11 @@ export class HttpTransportHandler {
         }
 
         // Any other method against the MCP endpoint is unsupported.
-        res.writeHead(405, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          jsonrpc: '2.0',
-          error: {
-            code: -32000,
-            message: 'Method Not Allowed',
-          },
-          id: null,
-        }));
+        this.writeJsonRpcError(res, 405, -32000, 'Method Not Allowed');
       } catch (error) {
         process.stderr.write(`Error handling request: ${error instanceof Error ? error.message : error}\n`);
         if (!res.headersSent) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            jsonrpc: '2.0',
-            error: {
-              code: -32603,
-              message: 'Internal server error',
-            },
-            id: null,
-          }));
+          this.writeJsonRpcError(res, 500, -32603, 'Internal server error');
         }
       }
     });
