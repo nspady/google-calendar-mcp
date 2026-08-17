@@ -436,41 +436,50 @@ export class HttpTransportHandler {
 
         if (req.method === 'POST') {
           const body = await this.parseRequestBody(req);
-          let transport = sessionId ? transports.get(sessionId) : undefined;
+          const existing = sessionId ? transports.get(sessionId) : undefined;
 
-          if (!transport) {
-            // Only a session-less initialize request may open a new session.
-            if (sessionId || !isInitializeRequest(body)) {
-              this.writeJsonRpcError(res, 400, -32000, 'Bad Request: No valid session ID provided');
-              return;
-            }
-
-            // Bound the session map: evict the oldest session when at capacity
-            // so clients that abandon a session without DELETE cannot leak forever.
-            if (transports.size >= MAX_SESSIONS) {
-              const oldest = transports.keys().next().value;
-              if (oldest !== undefined) {
-                await transports.get(oldest)?.close();
-              }
-            }
-
-            const newTransport = new StreamableHTTPServerTransport({
-              sessionIdGenerator: () => randomUUID(),
-              onsessioninitialized: (id) => {
-                transports.set(id, newTransport);
-              },
-            });
-            newTransport.onclose = () => {
-              if (newTransport.sessionId) {
-                transports.delete(newTransport.sessionId);
-              }
-            };
-
-            await this.serverFactory().connect(newTransport);
-            transport = newTransport;
+          if (existing) {
+            await existing.handleRequest(req, res, body);
+            return;
           }
 
+          // Only a session-less initialize request may open a new session.
+          if (sessionId || !isInitializeRequest(body)) {
+            this.writeJsonRpcError(res, 400, -32000, 'Bad Request: No valid session ID provided');
+            return;
+          }
+
+          // Bound the session map: evict the oldest session when at capacity
+          // so clients that abandon a session without DELETE cannot leak forever.
+          if (transports.size >= MAX_SESSIONS) {
+            const oldest = transports.keys().next().value;
+            if (oldest !== undefined) {
+              await transports.get(oldest)?.close();
+            }
+          }
+
+          const transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: () => randomUUID(),
+            onsessioninitialized: (id) => {
+              transports.set(id, transport);
+            },
+          });
+          transport.onclose = () => {
+            if (transport.sessionId) {
+              transports.delete(transport.sessionId);
+            }
+          };
+
+          await this.serverFactory().connect(transport);
           await transport.handleRequest(req, res, body);
+
+          // If the handshake never assigned a session id, the transport was
+          // never tracked in the map (onsessioninitialized never fired), so
+          // close it to release the connected McpServer deterministically
+          // rather than leaving it for GC.
+          if (!transport.sessionId) {
+            await transport.close();
+          }
           return;
         }
 

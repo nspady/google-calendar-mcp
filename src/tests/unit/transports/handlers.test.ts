@@ -5,6 +5,7 @@ const state = vi.hoisted(() => ({
   requestHandler: undefined as ((req: any, res: any) => Promise<void>) | undefined,
   transport: undefined as { handleRequest: ReturnType<typeof vi.fn> } | undefined,
   transports: [] as any[],
+  suppressSessionInit: false,
   listen: vi.fn(),
   clearCache: vi.fn(),
   renderAuthSuccess: vi.fn(async () => '<html>success</html>'),
@@ -21,7 +22,7 @@ vi.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
     options: any;
     handleRequest = vi.fn(async (_req: any, _res: any, body?: any) => {
       // Simulate the SDK assigning a session id and firing the callback on initialize
-      if (body?.method === 'initialize' && this.options?.sessionIdGenerator) {
+      if (!state.suppressSessionInit && body?.method === 'initialize' && this.options?.sessionIdGenerator) {
         this.sessionId = this.options.sessionIdGenerator();
         this.options.onsessioninitialized?.(this.sessionId);
       }
@@ -169,6 +170,7 @@ describe('Transport Handlers', () => {
     state.requestHandler = undefined;
     state.transport = undefined;
     state.transports = [];
+    state.suppressSessionInit = false;
     state.listen.mockImplementation((_port: number, _host: string, callback?: () => void) => {
       if (callback) {
         callback();
@@ -374,5 +376,24 @@ describe('Transport Handlers', () => {
 
     expect(res.statusCode).toBe(500);
     expect(res.body).toContain('Internal server error');
+  });
+
+  it('closes an initialize transport whose handshake never commits a session id', async () => {
+    const server = { connect: vi.fn(async () => undefined) } as any;
+    const handler = new HttpTransportHandler(() => server, {}, makeTokenManager());
+    await handler.connect();
+
+    // Simulate an initialize whose handshake never assigns a session id (aborted).
+    state.suppressSessionInit = true;
+
+    const req = createMockRequest({ method: 'POST', url: '/', headers: { accept: 'application/json' } });
+    const res = createMockResponse();
+    await postJson(req, res, makeInitializeBody());
+
+    // The uncommitted transport is never tracked in the map and is closed to
+    // release its connected server deterministically.
+    expect(state.transports).toHaveLength(1);
+    expect(state.transports[0].close).toHaveBeenCalledTimes(1);
+    expect(state.transports[0].sessionId).toBeUndefined();
   });
 });
