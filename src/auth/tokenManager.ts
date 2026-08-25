@@ -1,4 +1,4 @@
-import { OAuth2Client, Credentials } from 'google-auth-library';
+import { OAuth2Client, Credentials, JWT } from 'google-auth-library';
 import fs from 'fs/promises';
 import { getSecureTokenPath, getAccountMode, getLegacyTokenPath } from './utils.js';
 import { validateAccountId } from './paths.js';
@@ -151,6 +151,13 @@ export class TokenManager {
   }
 
   private setupTokenRefresh(): void {
+    // A service account mints its own short-lived access tokens and has no refresh
+    // token to persist. Saving them would write throwaway credentials into the
+    // OAuth token store and add a bogus entry for an account that never
+    // authenticated interactively.
+    if (this.oauth2Client instanceof JWT) {
+      return;
+    }
     this.setupTokenRefreshForAccount(this.oauth2Client, this.accountMode);
   }
 
