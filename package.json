@@ -49,6 +49,7 @@
     "test:integration:openai": "npm run build && vitest run src/tests/integration/openai-mcp-integration.test.ts",
     "test:integration:llm": "npm run test:integration:claude && npm run test:integration:openai",
     "test:integration:docker": "npm run build && vitest run src/tests/integration/docker-integration.test.ts",
+    "test:integration:http": "npm run build && vitest run src/tests/integration/http-transport.test.ts",
     "test:integration:all": "npm run build && vitest run src/tests/integration",
     "test:all": "npm run test && npm run test:integration:all",
     "test:coverage": "vitest run src/tests/unit --coverage",

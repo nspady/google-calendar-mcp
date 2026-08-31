@@ -316,7 +316,7 @@ describe('Transport Handlers', () => {
     expect(state.transports).toHaveLength(0);
   });
 
-  it('rejects GET/DELETE with an unknown session id with 400 (never 500)', async () => {
+  it('rejects GET/DELETE with an unknown session id with 404/-32001 (never 500)', async () => {
     const server = { connect: vi.fn(async () => undefined) } as any;
     const handler = new HttpTransportHandler(() => server, {}, makeTokenManager());
     await handler.connect();
@@ -325,9 +325,53 @@ describe('Transport Handlers', () => {
       const req = createMockRequest({ method, url: '/mcp', headers: { accept: 'application/json', 'mcp-session-id': 'unknown' } });
       const res = createMockResponse();
       await invokeHandler(req, res);
-      expect(res.statusCode).toBe(400);
+      expect(res.statusCode).toBe(404);
+      expect(JSON.parse(res.body).error.code).toBe(-32001);
     }
     expect(state.transports).toHaveLength(0);
+  });
+
+  it('rejects GET/DELETE with no session id with 400/-32000', async () => {
+    const server = { connect: vi.fn(async () => undefined) } as any;
+    const handler = new HttpTransportHandler(() => server, {}, makeTokenManager());
+    await handler.connect();
+
+    for (const method of ['GET', 'DELETE']) {
+      const req = createMockRequest({ method, url: '/mcp', headers: { accept: 'application/json' } });
+      const res = createMockResponse();
+      await invokeHandler(req, res);
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body).error.code).toBe(-32000);
+    }
+  });
+
+  it('returns 404/-32001 for a POST carrying an unknown session id', async () => {
+    const server = { connect: vi.fn(async () => undefined) } as any;
+    const handler = new HttpTransportHandler(() => server, {}, makeTokenManager());
+    await handler.connect();
+
+    const req = createMockRequest({ method: 'POST', url: '/', headers: { accept: 'application/json', 'mcp-session-id': 'bogus' } });
+    const res = createMockResponse();
+    await postJson(req, res, { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
+
+    expect(res.statusCode).toBe(404);
+    expect(JSON.parse(res.body).error.code).toBe(-32001);
+  });
+
+  it('returns 400/-32700 for a malformed JSON body, never 500', async () => {
+    const server = { connect: vi.fn(async () => undefined) } as any;
+    const handler = new HttpTransportHandler(() => server, {}, makeTokenManager());
+    await handler.connect();
+
+    const req = createMockRequest({ method: 'POST', url: '/', headers: { accept: 'application/json' } });
+    const res = createMockResponse();
+    const pending = invokeHandler(req, res);
+    req.emit('data', Buffer.from('{not valid json'));
+    req.emit('end');
+    await pending;
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error.code).toBe(-32700);
   });
 
   it('removes a session from the map when the transport closes', async () => {
@@ -338,28 +382,39 @@ describe('Transport Handlers', () => {
     const { transport, sessionId } = await openSession();
     await transport.close(); // fires onclose -> map delete
 
-    // A follow-up carrying the now-removed id is treated as unknown -> 400.
+    // A follow-up carrying the now-removed id is treated as unknown -> 404.
     const req = createMockRequest({ method: 'POST', url: '/', headers: { accept: 'application/json', 'mcp-session-id': sessionId } });
     const res = createMockResponse();
     await postJson(req, res, { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
 
-    expect(res.statusCode).toBe(400);
-    expect(res.body).toContain('No valid session ID');
+    expect(res.statusCode).toBe(404);
+    expect(JSON.parse(res.body).error.code).toBe(-32001);
   });
 
-  it('evicts the oldest session when the session cap is exceeded', async () => {
+  it('evicts the least-recently-used session, sparing recently-touched ones', async () => {
     const server = { connect: vi.fn(async () => undefined) } as any;
     const handler = new HttpTransportHandler(() => server, {}, makeTokenManager());
     await handler.connect();
 
     const MAX_SESSIONS = 128;
-    for (let i = 0; i < MAX_SESSIONS + 1; i++) {
-      await openSession();
+    const sessions: Array<Awaited<ReturnType<typeof openSession>>> = [];
+    for (let i = 0; i < MAX_SESSIONS; i++) {
+      sessions.push(await openSession());
     }
+    expect(state.transports).toHaveLength(MAX_SESSIONS);
 
-    expect(state.transports).toHaveLength(MAX_SESSIONS + 1);
-    // The first (oldest) transport was closed/evicted to make room.
-    expect(state.transports[0].close).toHaveBeenCalledTimes(1);
+    // Touch the oldest-created session so it becomes most-recently-used.
+    const oldest = sessions[0];
+    const touchReq = createMockRequest({ method: 'POST', url: '/', headers: { accept: 'application/json', 'mcp-session-id': oldest.sessionId } });
+    const touchRes = createMockResponse();
+    await postJson(touchReq, touchRes, { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
+
+    // Open one more session at capacity -> LRU eviction fires.
+    await openSession();
+
+    // The touched oldest session survives; the now-LRU (second-created) is evicted.
+    expect(oldest.transport.close).not.toHaveBeenCalled();
+    expect(sessions[1].transport.close).toHaveBeenCalledTimes(1);
   });
 
   it('returns 500 when a mapped transport request handling throws', async () => {

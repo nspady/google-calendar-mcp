@@ -31,7 +31,7 @@ const __server_dirname = dirname(fileURLToPath(import.meta.url));
 const SERVER_VERSION = JSON.parse(readFileSync(join(__server_dirname, '..', 'package.json'), 'utf-8')).version;
 
 export class GoogleCalendarMcpServer {
-  private server: McpServer;
+  private server!: McpServer;
   private oauth2Client!: OAuth2Client;
   private tokenManager!: TokenManager;
   private authServer!: AuthServer;
@@ -40,10 +40,6 @@ export class GoogleCalendarMcpServer {
 
   constructor(config: ServerConfig) {
     this.config = config;
-    this.server = new McpServer({
-      name: "google-calendar",
-      version: SERVER_VERSION
-    });
   }
 
   async initialize(): Promise<void> {

@@ -23,6 +23,12 @@ const SECURITY_HEADERS = {
 // Maximum number of concurrent HTTP sessions.
 const MAX_SESSIONS = 128;
 
+/**
+ * Signals that the request body was present but not valid JSON, so the caller
+ * can map it to a JSON-RPC parse error (-32700) instead of a generic 500.
+ */
+class RequestBodyParseError extends Error {}
+
 
 /**
  * Validate if an origin is from localhost
@@ -104,7 +110,7 @@ export class HttpTransportHandler {
         try {
           resolve(body ? JSON.parse(body) : {});
         } catch (error) {
-          reject(new Error('Invalid JSON in request body'));
+          reject(new RequestBodyParseError('Invalid JSON in request body'));
         }
       });
       req.on('error', reject);
@@ -435,16 +441,35 @@ export class HttpTransportHandler {
         const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
         if (req.method === 'POST') {
-          const body = await this.parseRequestBody(req);
+          let body: unknown;
+          try {
+            body = await this.parseRequestBody(req);
+          } catch (error) {
+            if (error instanceof RequestBodyParseError) {
+              this.writeJsonRpcError(res, 400, -32700, 'Parse error: Invalid JSON in request body');
+              return;
+            }
+            throw error;
+          }
           const existing = sessionId ? transports.get(sessionId) : undefined;
 
-          if (existing) {
+          if (existing && sessionId) {
+            // Refresh recency: move this session to the tail of the insertion
+            // order so eviction targets the least-recently-used session (LRU).
+            transports.delete(sessionId);
+            transports.set(sessionId, existing);
             await existing.handleRequest(req, res, body);
             return;
           }
 
-          // Only a session-less initialize request may open a new session.
-          if (sessionId || !isInitializeRequest(body)) {
+          // A session id that is present but maps to no live transport is unknown.
+          if (sessionId) {
+            this.writeJsonRpcError(res, 404, -32001, 'Not Found: Unknown or expired session ID');
+            return;
+          }
+
+          // A session-less request may open a new session only via initialize.
+          if (!isInitializeRequest(body)) {
             this.writeJsonRpcError(res, 400, -32000, 'Bad Request: No valid session ID provided');
             return;
           }
@@ -484,11 +509,18 @@ export class HttpTransportHandler {
         }
 
         if (req.method === 'GET' || req.method === 'DELETE') {
-          const transport = sessionId ? transports.get(sessionId) : undefined;
-          if (!transport) {
-            this.writeJsonRpcError(res, 400, -32000, 'Bad Request: Missing or unknown session ID');
+          if (!sessionId) {
+            this.writeJsonRpcError(res, 400, -32000, 'Bad Request: Missing session ID');
             return;
           }
+          const transport = transports.get(sessionId);
+          if (!transport) {
+            this.writeJsonRpcError(res, 404, -32001, 'Not Found: Unknown or expired session ID');
+            return;
+          }
+          // Refresh recency so an active streaming session is not evicted (LRU).
+          transports.delete(sessionId);
+          transports.set(sessionId, transport);
           await transport.handleRequest(req, res);
           return;
         }
