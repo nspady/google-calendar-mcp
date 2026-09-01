@@ -1,6 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import http from "http";
+import { randomUUID } from "node:crypto";
+import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { TokenManager } from "../auth/tokenManager.js";
 import { CalendarRegistry } from "../services/CalendarRegistry.js";
 import { renderAuthSuccess, renderAuthError, loadWebFile } from "../web/templates.js";
@@ -17,6 +19,15 @@ const SECURITY_HEADERS = {
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'X-XSS-Protection': '1; mode=block'
 };
+
+// Maximum number of concurrent HTTP sessions.
+const MAX_SESSIONS = 128;
+
+/**
+ * Signals that the request body was present but not valid JSON, so the caller
+ * can map it to a JSON-RPC parse error (-32700) instead of a generic 500.
+ */
+class RequestBodyParseError extends Error {}
 
 
 /**
@@ -42,16 +53,16 @@ export interface HttpTransportConfig {
 }
 
 export class HttpTransportHandler {
-  private server: McpServer;
+  private serverFactory: () => McpServer;
   private config: HttpTransportConfig;
   private tokenManager: TokenManager;
 
   constructor(
-    server: McpServer,
+    serverFactory: () => McpServer,
     config: HttpTransportConfig = {},
     tokenManager: TokenManager
   ) {
-    this.server = server;
+    this.serverFactory = serverFactory;
     this.config = config;
     this.tokenManager = tokenManager;
   }
@@ -99,23 +110,28 @@ export class HttpTransportHandler {
         try {
           resolve(body ? JSON.parse(body) : {});
         } catch (error) {
-          reject(new Error('Invalid JSON in request body'));
+          reject(new RequestBodyParseError('Invalid JSON in request body'));
         }
       });
       req.on('error', reject);
     });
   }
 
+  private writeJsonRpcError(res: http.ServerResponse, status: number, code: number, message: string): void {
+    res.writeHead(status, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      jsonrpc: '2.0',
+      error: { code, message },
+      id: null,
+    }));
+  }
+
   async connect(): Promise<void> {
     const port = this.config.port || 3000;
     const host = this.config.host || '127.0.0.1';
 
-    // Configure transport for stateless mode to allow multiple initialization cycles
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined // Stateless mode - allows multiple initializations
-    });
-
-    await this.server.connect(transport);
+    // Per-session StreamableHTTP transports, keyed by mcp-session-id.
+    const transports = new Map<string, StreamableHTTPServerTransport>();
 
     // Create HTTP server to handle the StreamableHTTP transport
     const httpServer = http.createServer(async (req, res) => {
@@ -420,20 +436,101 @@ export class HttpTransportHandler {
         return;
       }
 
+      // MCP request handling: per-session StreamableHTTP transports (SDK stateful pattern)
       try {
-        await transport.handleRequest(req, res);
+        const sessionId = req.headers['mcp-session-id'] as string | undefined;
+
+        if (req.method === 'POST') {
+          let body: unknown;
+          try {
+            body = await this.parseRequestBody(req);
+          } catch (error) {
+            if (error instanceof RequestBodyParseError) {
+              this.writeJsonRpcError(res, 400, -32700, 'Parse error: Invalid JSON in request body');
+              return;
+            }
+            throw error;
+          }
+          const existing = sessionId ? transports.get(sessionId) : undefined;
+
+          if (existing && sessionId) {
+            // Refresh recency: move this session to the tail of the insertion
+            // order so eviction targets the least-recently-used session (LRU).
+            transports.delete(sessionId);
+            transports.set(sessionId, existing);
+            await existing.handleRequest(req, res, body);
+            return;
+          }
+
+          // A session id that is present but maps to no live transport is unknown.
+          if (sessionId) {
+            this.writeJsonRpcError(res, 404, -32001, 'Not Found: Unknown or expired session ID');
+            return;
+          }
+
+          // A session-less request may open a new session only via initialize.
+          if (!isInitializeRequest(body)) {
+            this.writeJsonRpcError(res, 400, -32000, 'Bad Request: No valid session ID provided');
+            return;
+          }
+
+          // Bound the session map: evict the oldest session when at capacity
+          // so clients that abandon a session without DELETE cannot leak forever.
+          if (transports.size >= MAX_SESSIONS) {
+            const oldest = transports.keys().next().value;
+            if (oldest !== undefined) {
+              await transports.get(oldest)?.close();
+            }
+          }
+
+          const transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: () => randomUUID(),
+            onsessioninitialized: (id) => {
+              transports.set(id, transport);
+            },
+          });
+          transport.onclose = () => {
+            if (transport.sessionId) {
+              transports.delete(transport.sessionId);
+            }
+          };
+
+          await this.serverFactory().connect(transport);
+          await transport.handleRequest(req, res, body);
+
+          // If the handshake never assigned a session id, the transport was
+          // never tracked in the map (onsessioninitialized never fired), so
+          // close it to release the connected McpServer deterministically
+          // rather than leaving it for GC.
+          if (!transport.sessionId) {
+            await transport.close();
+          }
+          return;
+        }
+
+        if (req.method === 'GET' || req.method === 'DELETE') {
+          if (!sessionId) {
+            this.writeJsonRpcError(res, 400, -32000, 'Bad Request: Missing session ID');
+            return;
+          }
+          const transport = transports.get(sessionId);
+          if (!transport) {
+            this.writeJsonRpcError(res, 404, -32001, 'Not Found: Unknown or expired session ID');
+            return;
+          }
+          // Refresh recency so an active streaming session is not evicted (LRU).
+          transports.delete(sessionId);
+          transports.set(sessionId, transport);
+          await transport.handleRequest(req, res);
+          return;
+        }
+
+        // Any other method against the MCP endpoint is unsupported.
+        this.writeJsonRpcError(res, 405, -32000, 'Method Not Allowed');
       } catch (error) {
         process.stderr.write(`Error handling request: ${error instanceof Error ? error.message : error}\n`);
         if (!res.headersSent) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            jsonrpc: '2.0',
-            error: {
-              code: -32603,
-              message: 'Internal server error',
-            },
-            id: null,
-          }));
+          this.writeJsonRpcError(res, 500, -32603, 'Internal server error');
         }
       }
     });
