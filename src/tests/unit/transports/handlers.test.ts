@@ -88,7 +88,8 @@ import { HttpTransportHandler } from '../../../transports/http.js';
 import { StdioTransportHandler } from '../../../transports/stdio.js';
 
 function createMockResponse() {
-  return {
+  const res = new EventEmitter() as any;
+  Object.assign(res, {
     headers: {} as Record<string, string>,
     statusCode: 0,
     body: '',
@@ -108,7 +109,8 @@ function createMockResponse() {
         this.body += chunk;
       }
     }),
-  };
+  });
+  return res;
 }
 
 function createMockRequest(input: {
@@ -224,6 +226,27 @@ describe('Transport Handlers', () => {
     expect(res.statusCode).toBe(200);
     expect(res.headers['Access-Control-Allow-Origin']).toBe('http://127.0.0.1:4001');
     expect(JSON.parse(res.body).status).toBe('healthy');
+  });
+
+  it('allows MCP protocol and SSE resumption headers in CORS preflights', async () => {
+    const server = { connect: vi.fn(async () => undefined) } as any;
+    const handler = new HttpTransportHandler(() => server, { port: 4001, host: '127.0.0.1' }, makeTokenManager());
+    await handler.connect();
+
+    const req = createMockRequest({
+      method: 'OPTIONS',
+      url: '/',
+      headers: { origin: 'http://localhost:5173' }
+    });
+    const res = createMockResponse();
+
+    await invokeHandler(req, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['Access-Control-Allow-Headers']).toBe(
+      'Content-Type, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID'
+    );
+    expect(res.headers['Access-Control-Expose-Headers']).toBe('Mcp-Session-Id');
   });
 
   it('returns account list via API endpoint', async () => {
@@ -374,6 +397,21 @@ describe('Transport Handlers', () => {
     expect(JSON.parse(res.body).error.code).toBe(-32700);
   });
 
+  it('returns 400/-32700 for an empty MCP POST body', async () => {
+    const server = { connect: vi.fn(async () => undefined) } as any;
+    const handler = new HttpTransportHandler(() => server, {}, makeTokenManager());
+    await handler.connect();
+
+    const req = createMockRequest({ method: 'POST', url: '/', headers: { accept: 'application/json' } });
+    const res = createMockResponse();
+    const pending = invokeHandler(req, res);
+    req.emit('end');
+    await pending;
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error.code).toBe(-32700);
+  });
+
   it('removes a session from the map when the transport closes', async () => {
     const server = { connect: vi.fn(async () => undefined) } as any;
     const handler = new HttpTransportHandler(() => server, {}, makeTokenManager());
@@ -415,6 +453,88 @@ describe('Transport Handlers', () => {
     // The touched oldest session survives; the now-LRU (second-created) is evicted.
     expect(oldest.transport.close).not.toHaveBeenCalled();
     expect(sessions[1].transport.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not evict a session with an active SSE response', async () => {
+    const server = { connect: vi.fn(async () => undefined) } as any;
+    const handler = new HttpTransportHandler(() => server, {}, makeTokenManager());
+    await handler.connect();
+
+    const MAX_SESSIONS = 128;
+    const sessions: Array<Awaited<ReturnType<typeof openSession>>> = [];
+    for (let i = 0; i < MAX_SESSIONS; i++) {
+      sessions.push(await openSession());
+    }
+
+    const active = sessions[0];
+    const streamReq = createMockRequest({
+      method: 'GET',
+      url: '/mcp',
+      headers: { accept: 'text/event-stream', 'mcp-session-id': active.sessionId }
+    });
+    const streamRes = createMockResponse();
+    await invokeHandler(streamReq, streamRes);
+
+    // Move every inactive session behind the active one, making the active
+    // session the least-recently-used entry in the map.
+    for (const session of sessions.slice(1)) {
+      const touchReq = createMockRequest({
+        method: 'POST',
+        url: '/',
+        headers: { accept: 'application/json', 'mcp-session-id': session.sessionId }
+      });
+      await postJson(
+        touchReq,
+        createMockResponse(),
+        { jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }
+      );
+    }
+
+    await openSession();
+
+    expect(active.transport.close).not.toHaveBeenCalled();
+    expect(sessions[1].transport.close).toHaveBeenCalledTimes(1);
+
+    // Once the SSE response closes, the session is eligible for LRU eviction.
+    streamRes.emit('close');
+    await openSession();
+    expect(active.transport.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a new session when every session has an active SSE response', async () => {
+    const server = { connect: vi.fn(async () => undefined) } as any;
+    const handler = new HttpTransportHandler(() => server, {}, makeTokenManager());
+    await handler.connect();
+
+    const MAX_SESSIONS = 128;
+    const sessions: Array<Awaited<ReturnType<typeof openSession>>> = [];
+    const streamResponses: any[] = [];
+    for (let i = 0; i < MAX_SESSIONS; i++) {
+      const session = await openSession();
+      sessions.push(session);
+
+      const streamReq = createMockRequest({
+        method: 'GET',
+        url: '/mcp',
+        headers: { accept: 'text/event-stream', 'mcp-session-id': session.sessionId }
+      });
+      const streamRes = createMockResponse();
+      streamResponses.push(streamRes);
+      await invokeHandler(streamReq, streamRes);
+    }
+
+    const req = createMockRequest({ method: 'POST', url: '/', headers: { accept: 'application/json' } });
+    const res = createMockResponse();
+    await postJson(req, res, makeInitializeBody());
+
+    expect(res.statusCode).toBe(503);
+    expect(JSON.parse(res.body).error.code).toBe(-32000);
+    expect(state.transports).toHaveLength(MAX_SESSIONS);
+    expect(sessions.every(({ transport }) => transport.close.mock.calls.length === 0)).toBe(true);
+
+    for (const streamRes of streamResponses) {
+      streamRes.emit('close');
+    }
   });
 
   it('returns 500 when a mapped transport request handling throws', async () => {

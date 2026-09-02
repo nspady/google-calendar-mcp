@@ -24,8 +24,8 @@ const SECURITY_HEADERS = {
 const MAX_SESSIONS = 128;
 
 /**
- * Signals that the request body was present but not valid JSON, so the caller
- * can map it to a JSON-RPC parse error (-32700) instead of a generic 500.
+ * Signals that the request body was empty or not valid JSON, so the caller can
+ * map it to a JSON-RPC parse error (-32700) instead of a generic 500.
  */
 class RequestBodyParseError extends Error {}
 
@@ -102,13 +102,22 @@ export class HttpTransportHandler {
     validateAccountId(accountId);
   }
 
-  private parseRequestBody(req: http.IncomingMessage): Promise<any> {
+  private parseRequestBody(req: http.IncomingMessage, allowEmpty = true): Promise<any> {
     return new Promise((resolve, reject) => {
       let body = '';
       req.on('data', chunk => body += chunk.toString());
       req.on('end', () => {
+        if (!body) {
+          if (allowEmpty) {
+            resolve({});
+          } else {
+            reject(new RequestBodyParseError('Invalid JSON in request body'));
+          }
+          return;
+        }
+
         try {
-          resolve(body ? JSON.parse(body) : {});
+          resolve(JSON.parse(body));
         } catch (error) {
           reject(new RequestBodyParseError('Invalid JSON in request body'));
         }
@@ -132,6 +141,7 @@ export class HttpTransportHandler {
 
     // Per-session StreamableHTTP transports, keyed by mcp-session-id.
     const transports = new Map<string, StreamableHTTPServerTransport>();
+    const activeSseSessions = new Set<string>();
 
     // Create HTTP server to handle the StreamableHTTP transport
     const httpServer = http.createServer(async (req, res) => {
@@ -168,7 +178,11 @@ export class HttpTransportHandler {
         : `http://${host}:${port}`;
       res.setHeader('Access-Control-Allow-Origin', allowedCorsOrigin);
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, mcp-session-id');
+      res.setHeader(
+        'Access-Control-Allow-Headers',
+        'Content-Type, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID'
+      );
+      res.setHeader('Access-Control-Expose-Headers', 'Mcp-Session-Id');
       
       if (req.method === 'OPTIONS') {
         res.writeHead(200);
@@ -443,7 +457,7 @@ export class HttpTransportHandler {
         if (req.method === 'POST') {
           let body: unknown;
           try {
-            body = await this.parseRequestBody(req);
+            body = await this.parseRequestBody(req, false);
           } catch (error) {
             if (error instanceof RequestBodyParseError) {
               this.writeJsonRpcError(res, 400, -32700, 'Parse error: Invalid JSON in request body');
@@ -474,12 +488,26 @@ export class HttpTransportHandler {
             return;
           }
 
-          // Bound the session map: evict the oldest session when at capacity
-          // so clients that abandon a session without DELETE cannot leak forever.
+          // Bound the session map by evicting the least-recently-used inactive
+          // session. Closing a transport with a live SSE response would
+          // disconnect a client that is still actively using its session.
           if (transports.size >= MAX_SESSIONS) {
-            const oldest = transports.keys().next().value;
-            if (oldest !== undefined) {
-              await transports.get(oldest)?.close();
+            let evicted = false;
+            for (const [candidateId, candidate] of transports) {
+              if (activeSseSessions.has(candidateId)) {
+                continue;
+              }
+
+              await candidate.close();
+              transports.delete(candidateId);
+              activeSseSessions.delete(candidateId);
+              evicted = true;
+              break;
+            }
+
+            if (!evicted) {
+              this.writeJsonRpcError(res, 503, -32000, 'Service Unavailable: Session capacity reached');
+              return;
             }
           }
 
@@ -492,6 +520,7 @@ export class HttpTransportHandler {
           transport.onclose = () => {
             if (transport.sessionId) {
               transports.delete(transport.sessionId);
+              activeSseSessions.delete(transport.sessionId);
             }
           };
 
@@ -518,9 +547,34 @@ export class HttpTransportHandler {
             this.writeJsonRpcError(res, 404, -32001, 'Not Found: Unknown or expired session ID');
             return;
           }
-          // Refresh recency so an active streaming session is not evicted (LRU).
+          // Refresh recency for both streaming and terminating session requests.
           transports.delete(sessionId);
           transports.set(sessionId, transport);
+
+          if (req.method === 'GET') {
+            activeSseSessions.add(sessionId);
+            let released = false;
+            const markStreamInactive = () => {
+              if (released) {
+                return;
+              }
+              released = true;
+              res.off('close', markStreamInactive);
+              res.off('finish', markStreamInactive);
+              activeSseSessions.delete(sessionId);
+            };
+            res.once('close', markStreamInactive);
+            res.once('finish', markStreamInactive);
+
+            try {
+              await transport.handleRequest(req, res);
+            } catch (error) {
+              markStreamInactive();
+              throw error;
+            }
+            return;
+          }
+
           await transport.handleRequest(req, res);
           return;
         }
@@ -539,4 +593,4 @@ export class HttpTransportHandler {
       process.stderr.write(`Google Calendar MCP Server listening on http://${host}:${port}\n`);
     });
   }
-} 
+}
