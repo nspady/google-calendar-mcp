@@ -115,6 +115,72 @@ npm run auth
 
 See [Authentication Guide](docs/authentication.md#avoiding-token-expiration) for details.
 
+## Service Account Authentication (optional)
+
+A service account carries its own long-lived key, so there is no browser consent step
+and no refresh token to expire. This is the alternative to publishing your OAuth app
+when the weekly re-authentication above is impractical — headless servers, containers,
+CI, or an app you would rather leave in Testing status.
+
+### Which calendars this works for
+
+| Calendar | Works? | How access is granted |
+|---|---|---|
+| Personal `@gmail.com` calendar | **Yes** | Share the calendar with the service account's e-mail address |
+| Google Workspace calendar | **Yes** | Share it, or use domain-wide delegation to impersonate a user |
+| Any calendar shared with you by someone else | No | The owner must share it with the service account directly |
+
+Sharing is what grants access — the service account is a separate identity and sees
+nothing by default. **Domain-wide delegation is not required** for the personal-calendar
+case; it is only needed if you want the service account to act *as* a user.
+
+### Limitations
+
+- **Attendees cannot be invited.** The API rejects this with *"Service accounts cannot
+  invite attendees without Domain-Wide Delegation of Authority"*. Everything else —
+  creating, updating, deleting, searching, free/busy — works normally.
+- **`calendarId` must be explicit.** `primary` refers to the service account's own,
+  empty calendar; pass the calendar's address (e.g. `you@gmail.com`) instead.
+- **`list-calendars` returns nothing.** A calendar shared with a service account does not
+  appear in its `calendarList` unless explicitly added. Address calendars by id.
+
+### Setup
+
+1. Create a service account and a JSON key in your Google Cloud project:
+
+   ```bash
+   gcloud iam service-accounts create calendar-mcp --project=YOUR_PROJECT
+   gcloud iam service-accounts keys create service-account.json \
+     --iam-account=calendar-mcp@YOUR_PROJECT.iam.gserviceaccount.com
+   ```
+
+2. In Google Calendar, open **Settings → your calendar → Share with specific people**,
+   add the service account's e-mail and grant **"Make changes to events"**.
+
+3. Point the server at the key:
+
+   ```json
+   {
+     "mcpServers": {
+       "google-calendar": {
+         "command": "npx",
+         "args": ["@cocal/google-calendar-mcp"],
+         "env": {
+           "GOOGLE_SERVICE_ACCOUNT_KEY": "/path/to/service-account.json"
+         }
+       }
+     }
+   }
+   ```
+
+The key is detected by its contents (`"type": "service_account"`), so
+`GOOGLE_APPLICATION_CREDENTIALS` and even `GOOGLE_OAUTH_CREDENTIALS` are accepted as
+well — switching an existing install over is a one-file change. Set
+`GOOGLE_SERVICE_ACCOUNT_SUBJECT` only if you are using domain-wide delegation.
+
+Treat the key file as a credential: it does not expire. `chmod 600` it, keep it out of
+version control, and delete the key in the Cloud Console if it is ever exposed.
+
 ## Managing Multiple Accounts
 
 Connect multiple Google accounts and use them simultaneously.

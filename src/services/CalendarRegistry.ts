@@ -1,4 +1,4 @@
-import { OAuth2Client } from 'google-auth-library';
+import { OAuth2Client, JWT } from 'google-auth-library';
 import { calendar_v3, google } from 'googleapis';
 import { getCredentialsProjectId } from '../auth/utils.js';
 
@@ -38,6 +38,19 @@ const PERMISSION_RANK: Record<string, number> = {
  * Implemented as a singleton to ensure cache is shared across all handlers
  * and can be properly invalidated when accounts change.
  */
+/**
+ * A service account's calendarList is empty unless calendars were explicitly added
+ * to it: sharing a calendar with the service account grants access but does not put
+ * the calendar in its list. Enumeration therefore cannot establish access for this
+ * auth mode.
+ */
+function findServiceAccountId(accounts: Map<string, OAuth2Client>): string | null {
+  for (const [accountId, client] of accounts) {
+    if (client instanceof JWT) return accountId;
+  }
+  return null;
+}
+
 export class CalendarRegistry {
   private static instance: CalendarRegistry | null = null;
 
@@ -213,6 +226,14 @@ export class CalendarRegistry {
     const calendar = unified.find(c => c.calendarId === calendarId);
 
     if (!calendar) {
+      // With a service account the calendar may be perfectly accessible yet absent
+      // from calendarList, so address it directly and let Google enforce its own
+      // permissions. Google's error ("You need to have writer access to this
+      // calendar") is also far more actionable than a local "not found".
+      const serviceAccountId = findServiceAccountId(accounts);
+      if (serviceAccountId) {
+        return { accountId: serviceAccountId, accessRole: 'writer' };
+      }
       return null;
     }
 

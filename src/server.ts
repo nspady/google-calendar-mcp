@@ -10,6 +10,8 @@ import { fileURLToPath } from "url";
 import { initializeOAuth2Client } from './auth/client.js';
 import { AuthServer } from './auth/server.js';
 import { TokenManager } from './auth/tokenManager.js';
+import { detectServiceAccountKey, ServiceAccountKey } from './auth/serviceAccount.js';
+import { getAccountMode } from './auth/utils.js';
 
 // Import tool registry
 import { ToolRegistry } from './tools/registry.js';
@@ -37,6 +39,8 @@ export class GoogleCalendarMcpServer {
   private authServer!: AuthServer;
   private config: ServerConfig;
   private accounts!: Map<string, OAuth2Client>;
+  // Set when running on a service account key; null means the normal OAuth flow.
+  private serviceAccount: ServiceAccountKey | null = null;
 
   constructor(config: ServerConfig) {
     this.config = config;
@@ -44,12 +48,18 @@ export class GoogleCalendarMcpServer {
 
   async initialize(): Promise<void> {
     // 1. Initialize Authentication (but don't block on it)
+    this.serviceAccount = await detectServiceAccountKey();
     this.oauth2Client = await initializeOAuth2Client();
     this.tokenManager = new TokenManager(this.oauth2Client);
     this.authServer = new AuthServer(this.oauth2Client);
 
-    // 2. Load all authenticated accounts
-    this.accounts = await this.tokenManager.loadAllAccounts();
+    // 2. Load all authenticated accounts.
+    // A service account is already authenticated by its key, so it is registered
+    // directly and the token store — which only holds OAuth refresh tokens — is
+    // never consulted.
+    this.accounts = this.serviceAccount
+      ? new Map([[getAccountMode(), this.oauth2Client]])
+      : await this.tokenManager.loadAllAccounts();
 
     // 3. Handle startup authentication based on transport type
     await this.handleStartupAuthentication();
@@ -64,6 +74,14 @@ export class GoogleCalendarMcpServer {
   private async handleStartupAuthentication(): Promise<void> {
     // Skip authentication in test environment
     if (process.env.NODE_ENV === 'test') {
+      return;
+    }
+
+    // Service account keys carry their own credentials: there is no consent flow
+    // to run and no refresh token to validate.
+    if (this.serviceAccount) {
+      process.stderr.write(`Using service account ${this.serviceAccount.email}\n`);
+      process.stderr.write(`Share a calendar with that address to grant access.\n`);
       return;
     }
 
@@ -341,6 +359,10 @@ export class GoogleCalendarMcpServer {
   }
 
   private async ensureAuthenticated(): Promise<void> {
+    if (this.serviceAccount) {
+      return;
+    }
+
     const availableAccounts = await this.tokenManager.loadAllAccounts();
     if (availableAccounts.size > 0) {
       this.accounts = availableAccounts;

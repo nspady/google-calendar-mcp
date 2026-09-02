@@ -1,6 +1,7 @@
 import { OAuth2Client } from 'google-auth-library';
 import * as fs from 'fs/promises';
 import { getKeysFilePath, generateCredentialsErrorMessage, OAuthCredentials } from './utils.js';
+import { detectServiceAccountKey, initializeServiceAccountClient } from './serviceAccount.js';
 
 async function loadCredentialsFromFile(): Promise<OAuthCredentials> {
   const keysContent = await fs.readFile(getKeysFilePath(), "utf-8");
@@ -34,6 +35,13 @@ async function loadCredentialsWithFallback(): Promise<OAuthCredentials> {
 }
 
 export async function initializeOAuth2Client(): Promise<OAuth2Client> {
+  // A service account key short-circuits the OAuth flow entirely. JWT extends
+  // OAuth2Client, so callers are unaffected.
+  const serviceAccount = await detectServiceAccountKey();
+  if (serviceAccount) {
+    return await initializeServiceAccountClient(serviceAccount.path);
+  }
+
   // Always use real OAuth credentials - no mocking.
   // Unit tests should mock at the handler level, integration tests need real credentials.
   try {
