@@ -18,6 +18,7 @@ import { DeleteEventHandler } from "../handlers/core/DeleteEventHandler.js";
 import { FreeBusyEventHandler } from "../handlers/core/FreeBusyEventHandler.js";
 import { GetCurrentTimeHandler } from "../handlers/core/GetCurrentTimeHandler.js";
 import { RespondToEventHandler } from "../handlers/core/RespondToEventHandler.js";
+import { DeleteCalendarHandler } from "../handlers/core/DeleteCalendarHandler.js";
 
 // ============================================================================
 // SHARED VALIDATION PATTERNS
@@ -684,6 +685,11 @@ export const ToolSchemas = {
     )
   }),
 
+  'delete-calendar': z.object({
+    account: singleAccountSchema,
+    calendarId: z.string().describe("ID of the calendar to delete/unsubscribe from")
+  }),
+
   'get-freebusy': z.object({
     account: multiAccountSchema.describe(
       "Account nickname(s) to query (e.g., 'work' or ['work', 'personal']). Omit to query all accounts."
@@ -767,6 +773,7 @@ export type CreateEventInput = ToolInputs['create-event'];
 export type CreateEventsInput = ToolInputs['create-events'];
 export type UpdateEventInput = ToolInputs['update-event'];
 export type DeleteEventInput = ToolInputs['delete-event'];
+export type DeleteCalendarInput = ToolInputs['delete-calendar'];
 export type GetFreeBusyInput = ToolInputs['get-freebusy'];
 export type GetCurrentTimeInput = ToolInputs['get-current-time'];
 export type RespondToEventInput = ToolInputs['respond-to-event'];
@@ -960,6 +967,14 @@ export class ToolRegistry {
       annotations: WRITE_DESTRUCTIVE_ANNOTATIONS,
       schema: ToolSchemas['delete-event'],
       handler: DeleteEventHandler
+    },
+    {
+      name: "delete-calendar",
+      title: "Delete Calendar",
+      description: "Delete (unsubscribe from) a calendar. Removes it from the calendar list. For owned calendars this permanently deletes the calendar and all its events.",
+      annotations: WRITE_DESTRUCTIVE_ANNOTATIONS,
+      schema: ToolSchemas['delete-calendar'],
+      handler: DeleteCalendarHandler
     },
     {
       name: "get-freebusy",

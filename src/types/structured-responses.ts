@@ -306,6 +306,15 @@ export interface DeleteEventResponse {
 }
 
 /**
+ * Response format for deleting (unsubscribing from) a calendar
+ */
+export interface DeleteCalendarResponse {
+  success: boolean;
+  calendarId: string;
+  message?: string;
+}
+
+/**
  * Response format for responding to an event invitation
  */
 export interface RespondToEventResponse {
