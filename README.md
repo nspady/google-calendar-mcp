@@ -5,8 +5,8 @@ A Model Context Protocol (MCP) server that provides Google Calendar integration 
 <table>
 <tr>
 <td>
-<h3><a href="https://cocal.io"><img src="docs/images/cocal/logo.svg" alt="Cocal" width="144"></a></h3>
-<p>I built <a href="https://cocal.io">Cocal</a> as a separate hosted calendar assistant, taking this project further with a <strong>full visual calendar inside your chat with Claude.</strong> Connect your Google accounts without creating a Google Cloud project or running a server.</p>
+<h3><a href="https://cocal.io/?utm_source=google_calendar_mcp&amp;utm_medium=listing&amp;utm_campaign=release"><img src="docs/images/cocal/logo.svg" alt="Cocal" width="144"></a></h3>
+<p>I built <a href="https://cocal.io/?utm_source=google_calendar_mcp&amp;utm_medium=listing&amp;utm_campaign=release">Cocal</a> as a separate hosted calendar assistant, taking this project further with a <strong>full visual calendar inside your chat with Claude.</strong> Connect your Google accounts without creating a Google Cloud project or running a server.</p>
 <ul>
 <li><strong>Plan across accounts.</strong> Check availability and catch conflicts across your work, personal, and shared Google Calendars in one conversation.</li>
 <li><strong>Use it on desktop and mobile.</strong> See and manage your calendars in Claude on web, desktop, iOS, and Android.</li>
@@ -17,7 +17,7 @@ A Model Context Protocol (MCP) server that provides Google Calendar integration 
 <a href="docs/images/cocal/event-details.png"><img src="docs/images/cocal/event-details.png" alt="Cocal event card showing attendees, timezone context, a description, and no conflicts" width="300"></a>
 </p>
 <p><sub>Real Cocal UI with sample calendar data. Click either screenshot to enlarge.</sub></p>
-<p><strong><a href="https://cocal.io">Try Cocal →</a></strong></p>
+<p><strong><a href="https://cocal.io/?utm_source=google_calendar_mcp&amp;utm_medium=listing&amp;utm_campaign=release">Try Cocal →</a></strong></p>
 </td>
 </tr>
 </table>
