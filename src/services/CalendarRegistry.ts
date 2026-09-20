@@ -34,11 +34,6 @@ const PERMISSION_RANK: Record<string, number> = {
 };
 
 /**
- * CalendarRegistry service for managing calendar deduplication and permission-based account selection.
- * Implemented as a singleton to ensure cache is shared across all handlers
- * and can be properly invalidated when accounts change.
- */
-/**
  * A service account's calendarList is empty unless calendars were explicitly added
  * to it: sharing a calendar with the service account grants access but does not put
  * the calendar in its list. Enumeration therefore cannot establish access for this
@@ -51,6 +46,11 @@ function findServiceAccountId(accounts: Map<string, OAuth2Client>): string | nul
   return null;
 }
 
+/**
+ * CalendarRegistry service for managing calendar deduplication and permission-based account selection.
+ * Implemented as a singleton to ensure cache is shared across all handlers
+ * and can be properly invalidated when accounts change.
+ */
 export class CalendarRegistry {
   private static instance: CalendarRegistry | null = null;
 

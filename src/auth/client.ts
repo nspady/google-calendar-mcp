@@ -1,7 +1,23 @@
 import { OAuth2Client } from 'google-auth-library';
 import * as fs from 'fs/promises';
 import { getKeysFilePath, generateCredentialsErrorMessage, OAuthCredentials } from './utils.js';
-import { detectServiceAccountKey, initializeServiceAccountClient } from './serviceAccount.js';
+import {
+  detectServiceAccountKey,
+  initializeServiceAccountClient,
+  ServiceAccountKey
+} from './serviceAccount.js';
+
+/**
+ * Announce which credentials were chosen.
+ *
+ * Two files can plausibly satisfy this server, so "why is it authenticating as
+ * that?" has to be answerable from the logs rather than by guessing. stderr, not
+ * stdout: stdout is the stdio transport's MCP channel.
+ */
+function reportAuthMode(description: string): void {
+  if (process.env.NODE_ENV === 'test') return;
+  process.stderr.write(`Authenticating with ${description}\n`);
+}
 
 async function loadCredentialsFromFile(): Promise<OAuthCredentials> {
   const keysContent = await fs.readFile(getKeysFilePath(), "utf-8");
@@ -34,13 +50,24 @@ async function loadCredentialsWithFallback(): Promise<OAuthCredentials> {
   }
 }
 
-export async function initializeOAuth2Client(): Promise<OAuth2Client> {
+/**
+ * @param serviceAccount A key the caller already detected. Passing it avoids a
+ *   second detection pass — and a second read of the key file — during startup.
+ *   Omit it to detect here; pass null to force the OAuth path.
+ */
+export async function initializeOAuth2Client(
+  serviceAccount?: ServiceAccountKey | null
+): Promise<OAuth2Client> {
   // A service account key short-circuits the OAuth flow entirely. JWT extends
   // OAuth2Client, so callers are unaffected.
-  const serviceAccount = await detectServiceAccountKey();
-  if (serviceAccount) {
-    return await initializeServiceAccountClient(serviceAccount.path);
+  const detected =
+    serviceAccount === undefined ? await detectServiceAccountKey() : serviceAccount;
+  if (detected) {
+    reportAuthMode(`service account ${detected.email} from ${detected.source}`);
+    return initializeServiceAccountClient(detected);
   }
+
+  reportAuthMode(`OAuth client credentials from ${getKeysFilePath()}`);
 
   // Always use real OAuth credentials - no mocking.
   // Unit tests should mock at the handler level, integration tests need real credentials.

@@ -23,42 +23,107 @@ export interface ServiceAccountKey {
   path: string;
   /** The service account's e-mail — the address a calendar must be shared with. */
   email: string;
+  /** Which setting pointed at this file, for the startup log. */
+  source: string;
+  /**
+   * Private key read from that same file.
+   *
+   * Carried here so the whole startup reads the key exactly once: detection and
+   * client construction used to open it separately.
+   */
+  privateKey: string;
 }
 
 /**
- * Explicit key path, if the user set one.
- *
- * GOOGLE_SERVICE_ACCOUNT_KEY is checked first so a service account key can live
- * alongside OAuth client credentials without either shadowing the other.
- * GOOGLE_APPLICATION_CREDENTIALS is honoured too, since that is the variable the
- * Google client libraries already use for this purpose.
+ * A detected key without its secret, for callers that only need to know a service
+ * account is in use and which one.
  */
-function getExplicitKeyPaths(): string[] {
-  return [process.env.GOOGLE_SERVICE_ACCOUNT_KEY, process.env.GOOGLE_APPLICATION_CREDENTIALS]
-    .filter((value): value is string => Boolean(value))
-    .map((value) => path.resolve(value));
+export type ServiceAccountSummary = Omit<ServiceAccountKey, 'privateKey'>;
+
+/** What a candidate file turned out to be. */
+type KeyReadResult =
+  | { kind: 'service-account'; key: ServiceAccountKey }
+  /** Readable JSON that is not a service account key — i.e. OAuth client credentials. */
+  | { kind: 'other-credentials' }
+  /** Absent, unreadable, not JSON, or a malformed service account key. */
+  | { kind: 'unusable' };
+
+interface KeyCandidate {
+  path: string;
+  source: string;
+  /**
+   * Whether a broken file here is a fatal configuration error.
+   *
+   * Only GOOGLE_SERVICE_ACCOUNT_KEY is strict: it names *this server's* service
+   * account key, so a typo in it is worth failing on. Every other path is shared
+   * or ambient, and a problem there must never take down an install that is
+   * using OAuth perfectly well.
+   */
+  strict: boolean;
 }
 
-async function readServiceAccountKey(keyPath: string): Promise<ServiceAccountKey | null> {
+function warn(message: string): void {
+  process.stderr.write(`${message}\n`);
+}
+
+async function readCandidate(candidate: KeyCandidate): Promise<KeyReadResult> {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(await fs.readFile(keyPath, 'utf-8'));
-  } catch {
-    // Unreadable or not JSON. Not an error here: the caller falls back to OAuth,
-    // and OAuth reports its own, more specific failure.
-    return null;
+    parsed = JSON.parse(await fs.readFile(candidate.path, 'utf-8'));
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+
+    if (candidate.strict) {
+      throw new Error(
+        `${candidate.source} points at ${candidate.path}, which could not be read as JSON: ${reason}`
+      );
+    }
+
+    // A missing default credentials file is ordinary — the OAuth flow reports it
+    // with a far better message. A *named* path that does not work is worth a
+    // line, because a silent fallback is what makes such a typo hard to find.
+    if (candidate.source !== 'credentials file') {
+      warn(`Ignoring ${candidate.source} (${candidate.path}): not readable as JSON (${reason}).`);
+    }
+    return { kind: 'unusable' };
   }
 
   const key = parsed as Record<string, unknown> | null;
-  if (!key || key.type !== 'service_account') return null;
 
-  if (typeof key.client_email !== 'string' || typeof key.private_key !== 'string') {
-    throw new Error(
-      `${keyPath} declares "type": "service_account" but is missing client_email or private_key.`
-    );
+  if (!key || key.type !== 'service_account') {
+    if (candidate.strict) {
+      throw new Error(
+        `${candidate.source} points at ${candidate.path}, which is not a service account key ` +
+          `(expected "type": "service_account").`
+      );
+    }
+    return { kind: 'other-credentials' };
   }
 
-  return { path: keyPath, email: key.client_email };
+  if (typeof key.client_email !== 'string' || typeof key.private_key !== 'string') {
+    const problem =
+      `${candidate.path} declares "type": "service_account" but is missing ` +
+      `client_email or private_key.`;
+
+    if (candidate.strict) {
+      throw new Error(problem);
+    }
+
+    // Declared itself a service account key and is not one. Always worth saying,
+    // but not worth killing an OAuth install over.
+    warn(`Ignoring ${candidate.source}: ${problem}`);
+    return { kind: 'unusable' };
+  }
+
+  return {
+    kind: 'service-account',
+    key: {
+      path: candidate.path,
+      email: key.client_email,
+      source: candidate.source,
+      privateKey: key.private_key
+    }
+  };
 }
 
 /**
@@ -68,36 +133,72 @@ async function readServiceAccountKey(keyPath: string): Promise<ServiceAccountKey
  * is unambiguously identified by `"type": "service_account"`, so an operator only
  * has to point the server at the right file. Returns null when no service account
  * key is present, in which case the normal OAuth flow applies.
+ *
+ * Precedence, and the reason for it:
+ *
+ * 1. `GOOGLE_SERVICE_ACCOUNT_KEY` — an explicit demand for service account mode.
+ * 2. This server's own credentials file — `GOOGLE_OAUTH_CREDENTIALS` when set,
+ *    otherwise the default `gcp-oauth.keys.json`. Content-checked, so dropping a
+ *    service account key in that same path stays a one-file change. If it holds
+ *    ordinary OAuth client credentials, *that is the answer*: the operator has an
+ *    OAuth setup, and an ambient variable must not override it.
+ * 3. `GOOGLE_APPLICATION_CREDENTIALS` — the shared Google variable, often set for
+ *    unrelated tooling. Consulted only when this server has no credentials file of
+ *    its own, so a restart can never silently switch a working OAuth install over.
  */
 export async function detectServiceAccountKey(): Promise<ServiceAccountKey | null> {
-  for (const candidate of getExplicitKeyPaths()) {
-    const key = await readServiceAccountKey(candidate);
-    if (key) return key;
+  const explicitPath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+  if (explicitPath) {
+    // Strict: anything other than a usable key throws out of readCandidate.
+    const explicit = await readCandidate({
+      path: path.resolve(explicitPath),
+      source: 'GOOGLE_SERVICE_ACCOUNT_KEY',
+      strict: true
+    });
+    if (explicit.kind === 'service-account') return explicit.key;
   }
 
-  // Also accept a service account key supplied through the regular credentials
-  // path, so switching an existing install over is a one-file change.
-  return await readServiceAccountKey(getKeysFilePath());
+  const own = await readCandidate({
+    path: getKeysFilePath(),
+    source: process.env.GOOGLE_OAUTH_CREDENTIALS ? 'GOOGLE_OAUTH_CREDENTIALS' : 'credentials file',
+    strict: false
+  });
+  if (own.kind === 'service-account') return own.key;
+  if (own.kind === 'other-credentials') return null;
+
+  const ambientPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  if (ambientPath) {
+    const ambient = await readCandidate({
+      path: path.resolve(ambientPath),
+      source: 'GOOGLE_APPLICATION_CREDENTIALS',
+      strict: false
+    });
+    if (ambient.kind === 'service-account') return ambient.key;
+  }
+
+  return null;
 }
 
 /**
- * Build an authenticated client for a service account key.
+ * Build an authenticated client from an already-detected key.
  *
  * JWT extends OAuth2Client, so the result is a drop-in replacement everywhere the
  * server already expects an OAuth2Client, and token acquisition happens lazily on
  * the first API call.
  *
+ * Takes the detected key rather than a path so startup does not open the file a
+ * second time.
+ *
  * GOOGLE_SERVICE_ACCOUNT_SUBJECT is optional and only meaningful with Google
  * Workspace domain-wide delegation, where the service account impersonates a user.
  * Without it the service account acts as itself.
  */
-export async function initializeServiceAccountClient(keyPath: string): Promise<JWT> {
-  const raw = JSON.parse(await fs.readFile(keyPath, 'utf-8'));
+export function initializeServiceAccountClient(key: ServiceAccountKey): JWT {
   const subject = process.env.GOOGLE_SERVICE_ACCOUNT_SUBJECT;
 
   return new JWT({
-    email: raw.client_email,
-    key: raw.private_key,
+    email: key.email,
+    key: key.privateKey,
     scopes: SERVICE_ACCOUNT_SCOPES,
     ...(subject ? { subject } : {})
   });

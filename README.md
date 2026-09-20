@@ -173,10 +173,25 @@ case; it is only needed if you want the service account to act *as* a user.
    }
    ```
 
-The key is detected by its contents (`"type": "service_account"`), so
-`GOOGLE_APPLICATION_CREDENTIALS` and even `GOOGLE_OAUTH_CREDENTIALS` are accepted as
-well — switching an existing install over is a one-file change. Set
-`GOOGLE_SERVICE_ACCOUNT_SUBJECT` only if you are using domain-wide delegation.
+The key is detected by its contents (`"type": "service_account"`), not by a mode flag,
+so switching an existing install over is a one-file change. Three things are consulted,
+and the first one that yields an answer wins:
+
+1. **`GOOGLE_SERVICE_ACCOUNT_KEY`** — an explicit demand for service account mode. If
+   that file is missing, unreadable, or not a service account key, the server **fails
+   to start** and says so, rather than falling back to OAuth and leaving you to guess
+   why.
+2. **This server's own credentials file** — `GOOGLE_OAUTH_CREDENTIALS` if you set it,
+   otherwise `gcp-oauth.keys.json`. It is read by content, so putting a service account
+   key at that path works. If it holds ordinary OAuth client credentials, that settles
+   it: you have an OAuth setup, and step 3 is skipped.
+3. **`GOOGLE_APPLICATION_CREDENTIALS`** — the shared Google variable, often already set
+   for unrelated tooling. It is consulted only when this server has no credentials file
+   of its own, so it can never silently switch a working OAuth install to a service
+   account on the next restart. A problem with it is warned about, never fatal.
+
+The server logs which credentials it chose, and where they came from, on every startup.
+Set `GOOGLE_SERVICE_ACCOUNT_SUBJECT` only if you are using domain-wide delegation.
 
 Treat the key file as a credential: it does not expire. `chmod 600` it, keep it out of
 version control, and delete the key in the Cloud Console if it is ever exposed.
