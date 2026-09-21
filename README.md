@@ -332,7 +332,10 @@ CLI flags take precedence over environment variables. Malformed values (for exam
 | `PORT` | `--port` | `3000` | HTTP transport port (1-65535) |
 | `HOST` | `--host` | `127.0.0.1` | HTTP transport bind address |
 | `DEBUG` | `--debug` | `false` | Reserved: `true` is accepted and shown in the startup log but currently enables no extra logging |
+| `GOOGLE_CALENDAR_API_BASE_URL` |  | `https://www.googleapis.com` | Send Calendar API calls to this base URL instead (see below) |
 | `NODE_ENV` |  | unset | `test` skips startup authentication and uses the `test` account namespace (for the test suite) |
+
+`GOOGLE_CALENDAR_API_BASE_URL` is for an egress proxy that originates TLS itself, e.g. `http://127.0.0.1:10255/tenant-a/calendar`. A path prefix is kept, so requests go to `<url>/calendar/v3/...`. Token refresh and the login flow are unchanged.
 
 ### Tool Filtering
 

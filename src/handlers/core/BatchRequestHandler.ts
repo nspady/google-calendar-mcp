@@ -1,4 +1,5 @@
 import { OAuth2Client } from "google-auth-library";
+import { getApiBaseUrl } from "../../utils/api-base-url.js";
 
 export interface BatchRequest {
   method: string;
@@ -33,7 +34,7 @@ export class BatchRequestError extends Error {
 }
 
 export class BatchRequestHandler {
-  private readonly batchEndpoint = "https://www.googleapis.com/batch/calendar/v3";
+  private readonly batchEndpoint = `${getApiBaseUrl()}/batch/calendar/v3`;
   private readonly boundary: string;
   private readonly maxRetries = 3;
   private readonly baseDelay = 1000; // 1 second
