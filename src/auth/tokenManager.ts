@@ -2,6 +2,7 @@ import { OAuth2Client, Credentials } from 'google-auth-library';
 import fs from 'fs/promises';
 import { getSecureTokenPath, getAccountMode, getLegacyTokenPath } from './utils.js';
 import { validateAccountId } from './paths.js';
+import { applyApiBaseUrl } from '../utils/api-base-url.js';
 import { GaxiosError } from 'gaxios';
 import { mkdir } from 'fs/promises';
 import { dirname } from 'path';
@@ -487,11 +488,11 @@ export class TokenManager {
 
           if (!client) {
             // Create a new OAuth2Client for this account using stored credentials
-            client = new OAuth2Client(
+            client = applyApiBaseUrl(new OAuth2Client(
               this.credentials.clientId,
               this.credentials.clientSecret,
               this.credentials.redirectUri
-            );
+            ));
 
             // Set up token refresh handler for this new client
             this.setupTokenRefreshForAccount(client, accountId);
@@ -572,11 +573,11 @@ export class TokenManager {
         // Create client and refresh if needed
         if (tokens.access_token || tokens.refresh_token) {
           try {
-            client = new OAuth2Client(
+            client = applyApiBaseUrl(new OAuth2Client(
               this.credentials.clientId,
               this.credentials.clientSecret,
               this.credentials.redirectUri
-            );
+            ));
             client.setCredentials(tokens);
 
             // Try to refresh token if access token is expired or missing

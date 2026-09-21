@@ -235,6 +235,7 @@ Thanks! – Nate
 - `GOOGLE_OAUTH_CREDENTIALS` - Path to OAuth credentials file
 - `GOOGLE_CALENDAR_MCP_TOKEN_PATH` - Custom token storage location (optional)
 - `ENABLED_TOOLS` - Comma-separated list of tools to enable (see Tool Filtering below)
+- `GOOGLE_CALENDAR_API_BASE_URL` - Send Calendar API calls to this base URL instead of `https://www.googleapis.com` (optional). For an egress proxy that originates TLS itself, e.g. `http://127.0.0.1:10255/tenant-a/calendar`; a path prefix is kept, so requests go to `<url>/calendar/v3/...`. Token refresh and the login flow are unchanged
 
 ### Tool Filtering
 
