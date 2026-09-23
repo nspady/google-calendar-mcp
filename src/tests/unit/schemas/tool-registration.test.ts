@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ToolRegistry, ToolSchemas } from '../../../tools/registry.js';
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { existsSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 
 /**
  * Tool Registration Tests
@@ -86,6 +89,18 @@ describe('Tool Registration', () => {
         expect(typeof annotations.idempotentHint, `${tool.name} idempotentHint`).toBe('boolean');
       }
     }
+  });
+
+  // Per-file floor for handlers: folder-level coverage thresholds let an untested handler
+  // pass on the strength of the others, so require a dedicated test file for each one
+  it('should have a dedicated unit test file for every registered handler', () => {
+    const handlerTestsDir = resolve(dirname(fileURLToPath(import.meta.url)), '../handlers');
+    const tools = (ToolRegistry as any).tools as Array<{ name: string; handler: { name: string } }>;
+
+    const missing = tools
+      .map(t => t.handler.name)
+      .filter(handlerName => !existsSync(resolve(handlerTestsDir, `${handlerName}.test.ts`)));
+    expect(missing).toEqual([]);
   });
 
   it('should mark tools that modify or remove existing events as destructive', async () => {
