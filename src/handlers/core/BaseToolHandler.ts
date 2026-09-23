@@ -352,7 +352,9 @@ export abstract class BaseToolHandler<TArgs = any> {
             if (errorData?.error === 'invalid_grant') {
                 throw new McpError(
                     ErrorCode.InvalidRequest,
-                    'Authentication token is invalid or expired. Please re-run the authentication process (e.g., `npm run auth`).'
+                    "Google rejected this account's stored credentials (invalid_grant): access was revoked or the refresh token expired. " +
+                    "Use the manage-accounts tool with action 'list' to find the account marked 'needs-reauth', then 'remove' and 'add' it again " +
+                    "(or run 'npx @cocal/google-calendar-mcp auth <account>')."
                 );
             }
 

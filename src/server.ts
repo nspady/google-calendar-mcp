@@ -96,7 +96,7 @@ export class GoogleCalendarMcpServer {
       const hasValidTokens = await this.tokenManager.validateTokens(accountMode);
       if (!hasValidTokens) {
         process.stderr.write(`⚠️  No valid ${accountMode} user authentication tokens found.\n`);
-        process.stderr.write('Visit the server URL in your browser to authenticate, or run "npm run auth" separately.\n');
+        process.stderr.write('Visit the server URL in your browser to authenticate, or run "npx @cocal/google-calendar-mcp auth" separately.\n');
       } else {
         process.stderr.write(`Valid ${accountMode} user tokens found.\n`);
         this.accounts = await this.tokenManager.loadAllAccounts();
@@ -361,7 +361,8 @@ export class GoogleCalendarMcpServer {
     if (this.config.transport.type === 'stdio') {
       throw new McpError(
         ErrorCode.InvalidRequest,
-        "Authentication tokens are no longer valid. Please restart the server to re-authenticate."
+        "No valid Google account tokens. Use the manage-accounts tool with action 'add' to connect an account " +
+        "(or run 'npx @cocal/google-calendar-mcp auth'), then retry."
       );
     }
 
@@ -372,7 +373,8 @@ export class GoogleCalendarMcpServer {
       if (!authSuccess) {
         throw new McpError(
           ErrorCode.InvalidRequest,
-          "Authentication required. Please run 'npm run auth' to authenticate, or visit the auth URL shown in the logs for HTTP mode."
+          "Authentication required. Use the manage-accounts tool with action 'add', visit the auth URL shown in the server logs, " +
+          "or run 'npx @cocal/google-calendar-mcp auth'."
         );
       }
     } catch (error) {
@@ -382,7 +384,7 @@ export class GoogleCalendarMcpServer {
       if (error instanceof Error) {
         throw new McpError(ErrorCode.InvalidRequest, error.message);
       }
-      throw new McpError(ErrorCode.InvalidRequest, "Authentication required. Please run 'npm run auth' to authenticate.");
+      throw new McpError(ErrorCode.InvalidRequest, "Authentication required. Use the manage-accounts tool with action 'add', or run 'npx @cocal/google-calendar-mcp auth'.");
     }
   }
 

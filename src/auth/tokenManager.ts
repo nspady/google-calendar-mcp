@@ -24,8 +24,25 @@ interface CachedCredentials extends Credentials {
   calendars_cached_at?: number;
 }
 
-// Interface for multi-account token storage
-// Now supports arbitrary account IDs
+/**
+ * True when Google rejected a refresh token (revoked access, expired refresh token, or
+ * password change). The account must be re-authenticated; retrying will not help.
+ */
+export function isInvalidGrantError(error: unknown): boolean {
+  if (error instanceof GaxiosError && error.response?.data?.error === 'invalid_grant') {
+    return true;
+  }
+  return error instanceof Error && error.message.includes('invalid_grant');
+}
+
+/**
+ * Re-authentication instructions for an account, in-band option first.
+ */
+export function reauthInstructions(accountId: string): string {
+  return `Re-authenticate "${accountId}": use the manage-accounts tool with action 'remove' then action 'add' ` +
+    `(account_id '${accountId}'), or run 'npx @cocal/google-calendar-mcp auth ${accountId}'.`;
+}
+
 /**
  * tokens.json could not be parsed. The file has been moved aside (never deleted) so every
  * account's tokens remain recoverable; the message names both paths and how to re-authenticate.
@@ -43,6 +60,8 @@ export class TokenFileCorruptError extends Error {
   }
 }
 
+// Interface for multi-account token storage
+// Now supports arbitrary account IDs
 interface MultiAccountTokens {
   [accountId: string]: CachedCredentials;
 }
@@ -612,6 +631,7 @@ export class TokenManager {
       }
 
       let client: OAuth2Client | null = null;
+      let refreshRejected = false;
 
       // Create client and refresh if needed
       if (tokens.access_token || tokens.refresh_token) {
@@ -630,8 +650,9 @@ export class TokenManager {
               client.setCredentials(response.credentials);
               Object.assign(tokens, response.credentials);
               tokensUpdated = true;
-            } catch {
-              // Refresh failed
+            } catch (refreshError) {
+              // Revoked/expired grants need re-auth; other failures (network) may be transient
+              refreshRejected = isInvalidGrantError(refreshError);
             }
           }
         } catch {
@@ -669,9 +690,11 @@ export class TokenManager {
         }
       }
 
-      // Determine status
+      // Determine status from the refresh outcome, not just the presence of a refresh token
       let status = 'active';
-      if (!tokens.refresh_token) {
+      if (refreshRejected) {
+        status = 'needs-reauth';
+      } else if (!tokens.refresh_token) {
         if (!tokens.access_token || (tokens.expiry_date && tokens.expiry_date < Date.now())) {
           status = 'expired';
         }
