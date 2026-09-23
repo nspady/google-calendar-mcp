@@ -123,9 +123,13 @@ export class TokenManager {
     return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'ENOENT';
   }
 
+  // Write-then-rename so concurrent readers never see a truncated file (which they
+  // would otherwise treat as corrupt and move aside)
   private async writeTokenFile(tokens: MultiAccountTokens): Promise<void> {
     await this.ensureTokenDirectoryExists();
-    await fs.writeFile(this.tokenPath, JSON.stringify(tokens, null, 2), { mode: 0o600 });
+    const tempPath = `${this.tokenPath}.tmp-${process.pid}-${Date.now()}`;
+    await fs.writeFile(tempPath, JSON.stringify(tokens, null, 2), { mode: 0o600 });
+    await fs.rename(tempPath, this.tokenPath);
   }
 
   /**

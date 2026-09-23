@@ -121,8 +121,13 @@ export class UpdateEventHandler extends BaseToolHandler {
             const calendar = this.getCalendar(client);
             const helpers = new RecurringEventHelpers(calendar);
             
-            // Get calendar's default timezone if not provided
-            const defaultTimeZone = await this.getCalendarTimezone(client, args.calendarId, 'write');
+            // The calendar's default zone only determines stored times when new times are given
+            // without an explicit timeZone; otherwise a failed lookup must not block the update
+            const needsDefaultZone = !args.timeZone &&
+                Boolean(args.start || args.end || args.modificationScope === 'thisAndFollowing');
+            const defaultTimeZone = await this.getCalendarTimezone(
+                client, args.calendarId, needsDefaultZone ? 'write' : 'read'
+            );
             
             // Detect event type and validate scope usage
             const eventType = await helpers.detectEventType(args.eventId, args.calendarId);

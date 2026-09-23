@@ -7,6 +7,7 @@ vi.mock('fs/promises', () => ({
   default: {
     readFile: vi.fn(),
     writeFile: vi.fn(),
+    rename: vi.fn(),
     unlink: vi.fn(),
     access: vi.fn(),
     mkdir: vi.fn()
@@ -155,6 +156,17 @@ describe('TokenManager - removeAccount', () => {
     // Verify writeFile was called with correct options
     const writeCall = mockedFs.writeFile.mock.calls[0];
     expect(writeCall[2]).toEqual({ mode: 0o600 });
+  });
+
+  it('should write to a temp file and rename it into place', async () => {
+    mockedFs.readFile.mockResolvedValue(JSON.stringify({ work: { access_token: 'a' }, personal: { access_token: 'b' } }));
+    mockedFs.writeFile.mockResolvedValue(undefined);
+
+    await tokenManager.removeAccount('work');
+
+    const tempPath = mockedFs.writeFile.mock.calls[0][0];
+    expect(tempPath).toMatch(/^\/mock\/path\/tokens\.json\.tmp-/);
+    expect(mockedFs.rename).toHaveBeenCalledWith(tempPath, '/mock/path/tokens.json');
   });
 });
 

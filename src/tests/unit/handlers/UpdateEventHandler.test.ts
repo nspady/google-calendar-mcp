@@ -128,6 +128,32 @@ describe('UpdateEventHandler', () => {
     });
   });
 
+  describe('Default time zone lookup', () => {
+    beforeEach(() => {
+      mockCalendar.events.get.mockResolvedValue({ data: { recurrence: null } });
+      mockCalendar.events.patch.mockResolvedValue({ data: { id: 'event123', summary: 'x' } });
+    });
+
+    it('does not require the lookup for updates without new times', async () => {
+      await handler.runTool({ calendarId: 'primary', eventId: 'event123', summary: 'Renamed' }, mockAccounts);
+      expect((handler as any).getCalendarTimezone).toHaveBeenCalledWith(mockOAuth2Client, 'primary', 'read');
+    });
+
+    it('does not require the lookup when timeZone is explicit', async () => {
+      await handler.runTool({
+        calendarId: 'primary', eventId: 'event123', start: '2025-01-15T10:00:00', end: '2025-01-15T11:00:00', timeZone: 'Europe/Paris'
+      }, mockAccounts);
+      expect((handler as any).getCalendarTimezone).toHaveBeenCalledWith(mockOAuth2Client, 'primary', 'read');
+    });
+
+    it('requires the lookup for timezone-naive times', async () => {
+      await handler.runTool({
+        calendarId: 'primary', eventId: 'event123', start: '2025-01-15T10:00:00', end: '2025-01-15T11:00:00'
+      }, mockAccounts);
+      expect((handler as any).getCalendarTimezone).toHaveBeenCalledWith(mockOAuth2Client, 'primary', 'write');
+    });
+  });
+
   describe('Basic Event Updates', () => {
     it('should update event summary', async () => {
       const mockUpdatedEvent = {
