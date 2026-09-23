@@ -46,7 +46,6 @@ async function runAuthServer(accountId?: string): Promise<void> {
       process.stderr.write('Invalid account ID. Must be 1-64 characters: lowercase letters, numbers, dashes, underscores only.\n');
       process.exit(1);
     }
-    process.env.GOOGLE_ACCOUNT_MODE = accountId;
     process.stderr.write(`Authenticating account: ${accountId}\n`);
   }
 
@@ -56,7 +55,7 @@ async function runAuthServer(accountId?: string): Promise<void> {
     const oauth2Client = await initializeOAuth2Client();
 
     // Create and start the auth server
-    const authServerInstance = new AuthServer(oauth2Client);
+    const authServerInstance = new AuthServer(oauth2Client, accountId || undefined);
 
     // Start with browser opening (true by default)
     const success = await authServerInstance.start(true);

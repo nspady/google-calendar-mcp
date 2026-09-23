@@ -208,7 +208,6 @@ export class ManageAccountsHandler {
     }
 
     // Set the account mode for this authentication
-    process.env.GOOGLE_ACCOUNT_MODE = normalizedId;
     context.tokenManager.setAccountMode(normalizedId);
 
     // Start the authentication server

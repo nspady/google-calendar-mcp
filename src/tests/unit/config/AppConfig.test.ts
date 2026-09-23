@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as path from 'path';
+import { readdirSync, readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
 import { ConfigError, formatResolvedConfig, loadAppConfig } from '../../../config/AppConfig.js';
 
 // Minimal env so tests don't depend on the developer's shell
@@ -118,5 +120,28 @@ describe('formatResolvedConfig', () => {
 
   it('tolerates a bare ServerConfig', () => {
     expect(formatResolvedConfig({ transport: { type: 'stdio' } })).toContain('transport: stdio');
+  });
+});
+
+describe('process.env access', () => {
+  // Env reads belong in AppConfig.ts (paths.js is shared with scripts/ under plain Node).
+  // Runtime writes to process.env are shared mutable state across HTTP sessions.
+  const ALLOWED = new Set(['config/AppConfig.ts', 'auth/paths.js']);
+  const srcRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+
+  function sourceFiles(dir: string): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) return entry.name === 'tests' ? [] : sourceFiles(full);
+      return /\.(ts|js)$/.test(entry.name) && !entry.name.endsWith('.d.ts') ? [full] : [];
+    });
+  }
+
+  it('is confined to the config module', () => {
+    const offenders = sourceFiles(srcRoot)
+      .map(file => path.relative(srcRoot, file).split(path.sep).join('/'))
+      .filter(rel => !ALLOWED.has(rel))
+      .filter(rel => /process\.env\b/.test(readFileSync(path.join(srcRoot, rel), 'utf-8')));
+    expect(offenders).toEqual([]);
   });
 });

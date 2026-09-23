@@ -42,10 +42,13 @@ export class TokenManager {
   };
   private writeQueue: Promise<void> = Promise.resolve();
 
-  constructor(oauth2Client: OAuth2Client) {
+  /**
+   * @param accountMode Account to operate on; defaults to GOOGLE_ACCOUNT_MODE (or 'normal'/'test')
+   */
+  constructor(oauth2Client: OAuth2Client, accountMode?: string) {
     this.oauth2Client = oauth2Client;
     this.tokenPath = getSecureTokenPath();
-    this.accountMode = getAccountMode();
+    this.accountMode = accountMode !== undefined ? validateAccountId(accountMode) : getAccountMode();
 
     // Store credentials to avoid accessing private properties later
     this.credentials = {

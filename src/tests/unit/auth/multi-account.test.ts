@@ -16,6 +16,17 @@ describe('TokenManager - Multi-Account Support', () => {
     tokenManager = new TokenManager(oauth2Client);
   });
 
+  describe('constructor accountMode', () => {
+    it('uses an explicit account instead of GOOGLE_ACCOUNT_MODE', () => {
+      expect(new TokenManager(oauth2Client, 'work').getAccountMode()).toBe('work');
+    });
+
+    it('validates an explicit account', () => {
+      expect(() => new TokenManager(oauth2Client, 'Bad Name')).toThrow(/Invalid account ID/);
+      expect(() => new TokenManager(oauth2Client, 'con')).toThrow(/reserved/);
+    });
+  });
+
   describe('loadAllAccounts', () => {
     it('should load all accounts from token file', async () => {
       const mockTokens = {

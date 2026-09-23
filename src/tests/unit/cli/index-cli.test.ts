@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
   authStart: vi.fn(async () => true),
   authStop: vi.fn(async () => undefined),
   authCompletedSuccessfully: false,
+  authServerAccountId: undefined as string | undefined,
 }));
 
 vi.mock('../../../config/TransportConfig.js', () => ({
@@ -34,7 +35,9 @@ vi.mock('../../../auth/server.js', () => ({
     authCompletedSuccessfully = state.authCompletedSuccessfully;
     start = state.authStart;
     stop = state.authStop;
-    constructor(_oauthClient: any) {}
+    constructor(_oauthClient: any, accountId?: string) {
+      state.authServerAccountId = accountId;
+    }
   }
 }));
 
@@ -115,7 +118,8 @@ describe('CLI Entry (index.ts)', () => {
     const exitSpy = mockProcessExit();
 
     await expect(mod.runAuthServer('work')).rejects.toThrow('EXIT:1');
-    expect(process.env.GOOGLE_ACCOUNT_MODE).toBe('work');
+    expect(state.authServerAccountId).toBe('work');
+    expect(process.env.GOOGLE_ACCOUNT_MODE).toBe(originalAccountMode);
     expect(state.initializeOAuth2Client).toHaveBeenCalledTimes(1);
     expect(state.authStart).toHaveBeenCalledWith(true);
     expect(exitSpy).toHaveBeenCalledWith(0);
