@@ -287,11 +287,16 @@ export abstract class BaseToolHandler<TArgs = any> {
         if (!resolution) {
             const availableAccounts = Array.from(accounts.keys()).join(', ');
             const accessType = operation === 'write' ? 'write' : 'read';
+            const unavailable = this.calendarRegistry.getUnavailableAccounts(accounts);
+            const unavailableNote = unavailable.length > 0
+                ? ` Calendars for account(s) ${unavailable.join(', ')} could not be loaded (Google API error); retry, or specify the 'account' parameter.`
+                : '';
             throw new McpError(
                 ErrorCode.InvalidRequest,
                 `No account has ${accessType} access to calendar "${calendarNameOrId}". ` +
                 `Available accounts: ${availableAccounts}. Please ensure the calendar exists and ` +
-                `you have the necessary permissions, or specify the 'account' parameter explicitly.`
+                `you have the necessary permissions, or specify the 'account' parameter explicitly.` +
+                unavailableNote
             );
         }
 

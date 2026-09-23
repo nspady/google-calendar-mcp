@@ -47,6 +47,10 @@ export class CalendarRegistry {
   // Track in-flight requests to prevent duplicate API calls during concurrent access
   private inFlightRequests: Map<string, Promise<UnifiedCalendar[]>> = new Map();
 
+  // Accounts whose calendar list failed in the latest build, keyed like the cache.
+  // Builds with failures are not cached, so the next call retries them.
+  private failedAccounts: Map<string, string[]> = new Map();
+
   /**
    * Get the singleton instance of CalendarRegistry
    */
@@ -133,14 +137,19 @@ export class CalendarRegistry {
             calendars: response.data.items || []
           };
         } catch (error) {
-          // If one account fails, continue with others
+          // If one account fails, continue with others but leave a trace
+          const message = error instanceof Error ? error.message : String(error);
+          process.stderr.write(`CalendarRegistry: failed to list calendars for account "${accountId}": ${message}\n`);
           return {
             accountId,
-            calendars: [] as calendar_v3.Schema$CalendarListEntry[]
+            calendars: [] as calendar_v3.Schema$CalendarListEntry[],
+            failed: true
           };
         }
       })
     );
+
+    const failed = calendarsByAccount.filter(result => 'failed' in result).map(result => result.accountId);
 
     // Build calendar map: calendarId -> CalendarAccess[]
     const calendarMap = new Map<string, CalendarAccess[]>();
@@ -190,11 +199,17 @@ export class CalendarRegistry {
       };
     });
 
-    // Cache results
-    this.cache.set(cacheKey, {
-      data: unified,
-      timestamp: Date.now()
-    });
+    // Only cache complete results: a transient failure on one account must not hide
+    // its calendars for the full TTL
+    if (failed.length === 0) {
+      this.cache.set(cacheKey, {
+        data: unified,
+        timestamp: Date.now()
+      });
+      this.failedAccounts.delete(cacheKey);
+    } else {
+      this.failedAccounts.set(cacheKey, failed);
+    }
 
     return unified;
   }
@@ -256,8 +271,18 @@ export class CalendarRegistry {
   /**
    * Clear cache and in-flight requests (useful for testing or when accounts change)
    */
+  /**
+   * Accounts whose calendar list could not be fetched in the most recent lookup for this
+   * account set. Their calendars are missing from registry results until a retry succeeds.
+   */
+  getUnavailableAccounts(accounts: Map<string, OAuth2Client>): string[] {
+    const cacheKey = Array.from(accounts.keys()).sort().join(',');
+    return this.failedAccounts.get(cacheKey) ?? [];
+  }
+
   clearCache(): void {
     this.cache.clear();
+    this.failedAccounts.clear();
     this.inFlightRequests.clear();
   }
 
@@ -422,6 +447,11 @@ export class CalendarRegistry {
         accountCalendars.push(calendarId);
       }
       resolved.set(accountId, accountCalendars);
+    }
+
+    const unavailable = this.getUnavailableAccounts(availableAccounts);
+    if (unavailable.length > 0) {
+      warnings.push(`Could not load calendars for account(s) ${unavailable.join(', ')}; results may be partial`);
     }
 
     return { resolved, warnings };
