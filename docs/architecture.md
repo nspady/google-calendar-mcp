@@ -12,7 +12,7 @@ OAuth 2.0 with refresh tokens, multi-account support, secure storage in `~/.conf
 ## Handler Architecture
 
 - `src/handlers/core/` - Individual tool handlers extending `BaseToolHandler`
-- `src/tools/registry.ts` - Auto-registration, schemas (Zod), and type definitions
+- `src/tools/registry.ts` - Tool registration, schemas (Zod), and type definitions
 
 ## Request Flow
 
@@ -42,7 +42,7 @@ The server provides calendar management tools that LLMs can use for calendar ope
 
 ## Key Features
 
-- **Auto-registration**: Handlers automatically discovered
+- **Central registry**: Every tool is declared once in `ToolRegistry.tools`
 - **Multi-account**: Normal/test account support  
 - **Rate limiting**: Respects Google Calendar quotas
 - **Batch operations**: Efficient multi-calendar queries

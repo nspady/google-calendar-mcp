@@ -42,7 +42,7 @@ npm run dev http:public          # HTTP server accessible from any host
 
 All MCP tools follow a consistent handler pattern:
 
-1. **Handler Registration**: Handlers are auto-registered via `src/tools/registry.ts`
+1. **Handler Registration**: Handlers are registered manually in the `ToolRegistry.tools` array in `src/tools/registry.ts`
 2. **Base Class**: All handlers extend `BaseToolHandler` from `src/handlers/core/BaseToolHandler.ts`
 3. **Schema Definition**: Input schemas defined in `src/tools/registry.ts` using Zod
 4. **Handler Implementation**: Core logic in `src/handlers/core/` directory
@@ -62,13 +62,15 @@ Client → Transport Layer → Schema Validation (Zod) → Handler → Google Ca
 
 2. Define schema in `src/tools/registry.ts`:
    - Add to `ToolSchemas` object with Zod schema
-   - Add to `ToolRegistry.tools` array with name, description, handler class
+   - Add to `ToolRegistry.tools` array with name, title, description, annotations, schema, handler class (and import the handler)
 
 3. Add tests:
    - Unit tests in `src/tests/unit/handlers/YourToolHandler.test.ts`
    - Integration tests in `src/tests/integration/` if needed
 
-**No manual registration needed** - handlers are auto-discovered by the registry system.
+4. Document the tool in README.md (Available Tools table and the "Available tool names" list) and `docs/architecture.md`.
+
+**Registration is manual** - nothing is auto-discovered. Both registry.ts edits in step 2 are required, and `src/tests/unit/docs/docs-sync.test.ts` fails if step 4 is skipped. See CONTRIBUTING.md for the full checklist.
 
 ### Authentication System
 
