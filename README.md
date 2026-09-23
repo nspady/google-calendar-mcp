@@ -233,9 +233,21 @@ Thanks! – Nate
 ## Configuration
 
 **Environment Variables:**
-- `GOOGLE_OAUTH_CREDENTIALS` - Path to OAuth credentials file
-- `GOOGLE_CALENDAR_MCP_TOKEN_PATH` - Custom token storage location (optional)
-- `ENABLED_TOOLS` - Comma-separated list of tools to enable (see Tool Filtering below)
+
+CLI flags take precedence over environment variables. Malformed values (for example a non-numeric `PORT` or an unknown `TRANSPORT`) stop the server at startup with an error, and the resolved configuration is logged to stderr on start.
+
+| Variable | CLI flag | Default | Description |
+|----------|----------|---------|-------------|
+| `GOOGLE_OAUTH_CREDENTIALS` |  | `gcp-oauth.keys.json` in the package root | Path to the OAuth credentials file |
+| `GOOGLE_CALENDAR_MCP_TOKEN_PATH` |  | `$XDG_CONFIG_HOME/google-calendar-mcp/tokens.json` | Custom token storage location |
+| `XDG_CONFIG_HOME` |  | `~/.config` | Base config directory for token storage (ignored if GOOGLE_CALENDAR_MCP_TOKEN_PATH is set) |
+| `GOOGLE_ACCOUNT_MODE` |  | `normal` | Account nickname used for single-account operations and the `auth` command |
+| `ENABLED_TOOLS` | `--enable-tools` | all tools | Comma-separated list of tools to expose (see Tool Filtering) |
+| `TRANSPORT` | `--transport` | `stdio` | Transport type: `stdio` or `http` |
+| `PORT` | `--port` | `3000` | HTTP transport port (1-65535) |
+| `HOST` | `--host` | `127.0.0.1` | HTTP transport bind address |
+| `DEBUG` | `--debug` | `false` | Enable debug logging when set to `true` |
+| `NODE_ENV` |  | unset | `test` skips startup authentication and uses the `test` account namespace (for the test suite) |
 
 ### Tool Filtering
 

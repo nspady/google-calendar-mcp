@@ -11,14 +11,16 @@ import { homedir } from 'os';
 /**
  * Get the secure token storage path
  * Priority: GOOGLE_CALENDAR_MCP_TOKEN_PATH > XDG_CONFIG_HOME > ~/.config
+ * Documented alongside the other settings in src/config/AppConfig.ts; kept in plain JS
+ * because scripts/account-manager.js imports this file directly.
  */
-export function getSecureTokenPath() {
+export function getSecureTokenPath(env = process.env) {
   // Priority 1: Custom token path from environment variable
-  if (process.env.GOOGLE_CALENDAR_MCP_TOKEN_PATH) {
-    return path.resolve(process.env.GOOGLE_CALENDAR_MCP_TOKEN_PATH);
+  if (env.GOOGLE_CALENDAR_MCP_TOKEN_PATH) {
+    return path.resolve(env.GOOGLE_CALENDAR_MCP_TOKEN_PATH);
   }
   // Priority 2: XDG Base Directory specification
-  const configDir = process.env.XDG_CONFIG_HOME || path.join(homedir(), '.config');
+  const configDir = env.XDG_CONFIG_HOME || path.join(homedir(), '.config');
   return path.join(configDir, 'google-calendar-mcp', 'tokens.json');
 }
 
@@ -62,16 +64,16 @@ export function validateAccountId(accountId) {
  * Get current account mode from environment
  * Uses same logic as utils.ts but compatible with both JS and TS
  */
-export function getAccountMode() {
+export function getAccountMode(env = process.env) {
   // If set explicitly via environment variable use that instead
-  const explicitMode = process.env.GOOGLE_ACCOUNT_MODE;
+  const explicitMode = env.GOOGLE_ACCOUNT_MODE;
   if (explicitMode !== undefined && explicitMode !== null) {
     // Validate the account ID (no lowercasing - must be lowercase already)
     return validateAccountId(explicitMode);
   }
 
   // Auto-detect test environment
-  if (process.env.NODE_ENV === 'test') {
+  if (env.NODE_ENV === 'test') {
     return 'test';
   }
 
