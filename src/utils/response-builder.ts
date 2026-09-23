@@ -92,11 +92,11 @@ export function convertConflictsToStructured(
  * Creates a warning message for conflicts/duplicates
  */
 export function createWarningsArray(conflicts?: ConflictCheckResult): string[] | undefined {
-  if (!conflicts || !conflicts.hasConflicts) {
+  if (!conflicts) {
     return undefined;
   }
-  
-  const warnings: string[] = [];
+
+  const warnings: string[] = [...(conflicts.warnings ?? [])];
   
   if (conflicts.duplicates.length > 0) {
     warnings.push(`Found ${conflicts.duplicates.length} potential duplicate(s)`);

@@ -96,13 +96,18 @@ export class UpdateEventHandler extends BaseToolHandler {
             event: convertGoogleEventToStructured(event, resolvedCalendarId, selectedAccountId)
         };
         
-        // Add conflict information if present
-        if (conflicts && conflicts.hasConflicts) {
-            const structuredConflicts = convertConflictsToStructured(conflicts);
-            if (structuredConflicts.conflicts) {
-                response.conflicts = structuredConflicts.conflicts;
+        // Add conflict information and any calendars that could not be checked
+        if (conflicts) {
+            if (conflicts.hasConflicts) {
+                const structuredConflicts = convertConflictsToStructured(conflicts);
+                if (structuredConflicts.conflicts) {
+                    response.conflicts = structuredConflicts.conflicts;
+                }
             }
-            response.warnings = createWarningsArray(conflicts);
+            const warnings = createWarningsArray(conflicts);
+            if (warnings) {
+                response.warnings = warnings;
+            }
         }
         
         return createStructuredResponse(response);

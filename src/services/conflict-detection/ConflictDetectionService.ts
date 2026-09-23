@@ -1,4 +1,5 @@
 import { OAuth2Client } from "google-auth-library";
+import { GaxiosError } from "gaxios";
 import { google, calendar_v3 } from "googleapis";
 import {
   ConflictCheckResult,
@@ -116,8 +117,16 @@ export class ConflictDetectionService {
           result.conflicts.push(...conflicts);
         }
       } catch (error) {
-        // If we can't access a calendar, skip it silently
-        // Errors are expected for calendars without access permissions
+        // Calendars without access (403/404) are expected and skipped quietly. Anything else
+        // (timeouts, rate limits, 5xx) means this calendar went unchecked, so say so rather
+        // than reporting "no conflicts".
+        const status = error instanceof GaxiosError ? error.response?.status : undefined;
+        if (status === 403 || status === 404) {
+          continue;
+        }
+        const reason = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`Conflict check skipped calendar "${checkCalendarId}": ${reason}\n`);
+        (result.warnings ??= []).push(`Could not check calendar "${checkCalendarId}" for conflicts: ${reason}`);
       }
     }
 

@@ -46,6 +46,8 @@ export interface ConflictCheckResult {
   hasConflicts: boolean;
   conflicts: InternalConflictInfo[];
   duplicates: InternalDuplicateInfo[];
+  /** Calendars that could not be checked (e.g. timeout, rate limit), so "no conflicts" may be incomplete */
+  warnings?: string[];
 }
 
 export interface EventTimeRange {
