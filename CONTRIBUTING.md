@@ -37,7 +37,7 @@ Registration is manual. Nothing is auto-discovered, so every step below is requi
 
 ## Adding an environment variable
 
-Read it in one place (see `src/config/`), document it in the README "Configuration" section, and fail with a clear error on malformed values rather than silently falling back.
+All settings live in `src/config/AppConfig.ts`; the header comment there has the steps. In short: add a row to `CONFIG_ENV_VARS`, resolve and validate it in `loadAppConfig()` (throw `ConfigError` on malformed values rather than silently falling back), and add the README "Configuration" table row. Tests fail if the README row is missing or if `process.env` is read anywhere else in `src/`.
 
 ## Commit messages
 

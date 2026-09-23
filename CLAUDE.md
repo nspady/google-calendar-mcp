@@ -87,7 +87,7 @@ Client → Transport Layer → Schema Validation (Zod) → Handler → Google Ca
 
 - **stdio** (default): Process communication for Claude Desktop
 - **HTTP**: RESTful API with SSE for remote deployment
-- **Configuration**: `src/config/TransportConfig.ts`
+- **Configuration**: `src/config/AppConfig.ts` is the single place env vars and CLI flags are read and validated (`TransportConfig.ts` wraps it for the CLI). Add new settings there, never via `process.env` elsewhere
 - **Handlers**: `src/transports/stdio.ts` and `src/transports/http.ts`
 
 ### Testing Strategy
