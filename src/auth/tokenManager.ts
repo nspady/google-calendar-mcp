@@ -26,6 +26,23 @@ interface CachedCredentials extends Credentials {
 
 // Interface for multi-account token storage
 // Now supports arbitrary account IDs
+/**
+ * tokens.json could not be parsed. The file has been moved aside (never deleted) so every
+ * account's tokens remain recoverable; the message names both paths and how to re-authenticate.
+ */
+export class TokenFileCorruptError extends Error {
+  constructor(public readonly tokenPath: string, public readonly backupPath: string | null, cause: string) {
+    super(
+      `Token file ${tokenPath} is not valid JSON (${cause}). ` +
+      (backupPath
+        ? `It was moved to ${backupPath}. `
+        : `It could not be moved aside; delete or fix it manually. `) +
+      `Re-authenticate your accounts with the manage-accounts tool (action 'add') or 'npx @cocal/google-calendar-mcp auth <account>'.`
+    );
+    this.name = 'TokenFileCorruptError';
+  }
+}
+
 interface MultiAccountTokens {
   [accountId: string]: CachedCredentials;
 }
@@ -84,7 +101,7 @@ export class TokenManager {
   }
 
   private isFileNotFoundError(error: unknown): boolean {
-    return error instanceof Error && 'code' in error && (error as any).code === 'ENOENT';
+    return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'ENOENT';
   }
 
   private async writeTokenFile(tokens: MultiAccountTokens): Promise<void> {
@@ -92,10 +109,41 @@ export class TokenManager {
     await fs.writeFile(this.tokenPath, JSON.stringify(tokens, null, 2), { mode: 0o600 });
   }
 
+  /**
+   * Move an unparseable token file aside and return the error to throw.
+   * Only called for SyntaxError: the file exists but its contents are unusable.
+   */
+  private async backupCorruptTokenFile(error: SyntaxError): Promise<TokenFileCorruptError> {
+    const backupPath = `${this.tokenPath}.corrupt-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+    let movedTo: string | null = backupPath;
+    try {
+      await fs.rename(this.tokenPath, backupPath);
+    } catch (renameError) {
+      // ENOENT: a concurrent load already moved it
+      if (!this.isFileNotFoundError(renameError)) {
+        movedTo = null;
+      }
+    }
+    const corruptError = new TokenFileCorruptError(this.tokenPath, movedTo, error.message);
+    process.stderr.write(`${corruptError.message}\n`);
+    return corruptError;
+  }
+
+  private async parseTokenFile(): Promise<any> {
+    const fileContent = await fs.readFile(this.tokenPath, "utf-8");
+    try {
+      return JSON.parse(fileContent);
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw await this.backupCorruptTokenFile(error);
+      }
+      throw error;
+    }
+  }
+
   private async loadMultiAccountTokens(): Promise<MultiAccountTokens> {
     try {
-      const fileContent = await fs.readFile(this.tokenPath, "utf-8");
-      const parsed = JSON.parse(fileContent);
+      const parsed = await this.parseTokenFile();
 
       // Check if this is the old single-account format
       if (parsed.access_token || parsed.refresh_token) {
@@ -123,8 +171,7 @@ export class TokenManager {
    */
   private async loadMultiAccountTokensRaw(): Promise<MultiAccountTokens> {
     try {
-      const fileContent = await fs.readFile(this.tokenPath, "utf-8");
-      return JSON.parse(fileContent) as MultiAccountTokens;
+      return await this.parseTokenFile() as MultiAccountTokens;
     } catch (error: unknown) {
       if (this.isFileNotFoundError(error)) {
         return {};
@@ -259,13 +306,10 @@ export class TokenManager {
       process.stderr.write(`Loaded tokens for ${this.accountMode} account\n`);
       return true;
     } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : String(error);
-      process.stderr.write(`Error loading tokens for ${this.accountMode} account: ${msg}\n`);
-      if (error instanceof SyntaxError) {
-        try {
-          await fs.unlink(this.tokenPath);
-          process.stderr.write("Removed corrupted token file\n");
-        } catch { /* ignore */ }
+      // A corrupt file has already been backed up and reported by parseTokenFile
+      if (!(error instanceof TokenFileCorruptError)) {
+        const msg = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`Error loading tokens for ${this.accountMode} account: ${msg}\n`);
       }
       return false;
     }
@@ -407,12 +451,8 @@ export class TokenManager {
 
   // Method to list available accounts
   async listAvailableAccounts(): Promise<string[]> {
-    try {
-      const multiAccountTokens = await this.loadMultiAccountTokens();
-      return Object.keys(multiAccountTokens);
-    } catch (error) {
-      return [];
-    }
+    const multiAccountTokens = await this.loadMultiAccountTokens();
+    return Object.keys(multiAccountTokens);
   }
 
   /**
@@ -552,126 +592,127 @@ export class TokenManager {
     status: string;
     calendars: CachedCalendar[];
   }>> {
-    try {
-      const multiAccountTokens = await this.loadMultiAccountTokens();
-      const accountList: Array<{
-        id: string;
-        email: string;
-        status: string;
-        calendars: CachedCalendar[];
-      }> = [];
-      let tokensUpdated = false;
+    // A corrupt token file throws TokenFileCorruptError rather than reporting "no accounts"
+    const multiAccountTokens = await this.loadMultiAccountTokens();
+    const accountList: Array<{
+      id: string;
+      email: string;
+      status: string;
+      calendars: CachedCalendar[];
+    }> = [];
+    let tokensUpdated = false;
 
-      // Cache TTL: 5 minutes for calendars
-      const CALENDAR_CACHE_TTL = 5 * 60 * 1000;
+    // Cache TTL: 5 minutes for calendars
+    const CALENDAR_CACHE_TTL = 5 * 60 * 1000;
 
-      for (const [accountId, tokens] of Object.entries(multiAccountTokens)) {
-        // Skip invalid entries
-        if (!tokens || typeof tokens !== 'object') {
-          continue;
-        }
+    for (const [accountId, tokens] of Object.entries(multiAccountTokens)) {
+      // Skip invalid entries
+      if (!tokens || typeof tokens !== 'object') {
+        continue;
+      }
 
-        let client: OAuth2Client | null = null;
+      let client: OAuth2Client | null = null;
 
-        // Create client and refresh if needed
-        if (tokens.access_token || tokens.refresh_token) {
-          try {
-            client = new OAuth2Client(
-              this.credentials.clientId,
-              this.credentials.clientSecret,
-              this.credentials.redirectUri
-            );
-            client.setCredentials(tokens);
+      // Create client and refresh if needed
+      if (tokens.access_token || tokens.refresh_token) {
+        try {
+          client = new OAuth2Client(
+            this.credentials.clientId,
+            this.credentials.clientSecret,
+            this.credentials.redirectUri
+          );
+          client.setCredentials(tokens);
 
-            // Try to refresh token if access token is expired or missing
-            if (tokens.refresh_token && (!tokens.access_token || (tokens.expiry_date && tokens.expiry_date < Date.now()))) {
-              try {
-                const response = await client.refreshAccessToken();
-                client.setCredentials(response.credentials);
-                Object.assign(tokens, response.credentials);
-                tokensUpdated = true;
-              } catch {
-                // Refresh failed
-              }
-            }
-          } catch {
-            client = null;
-          }
-        }
-
-        // Get email address - use cached value if available
-        let email = tokens.cached_email || 'unknown';
-        if (!tokens.cached_email && client) {
-          try {
-            email = await this.getUserEmail(client);
-            if (email !== 'unknown') {
-              tokens.cached_email = email;
+          // Try to refresh token if access token is expired or missing
+          if (tokens.refresh_token && (!tokens.access_token || (tokens.expiry_date && tokens.expiry_date < Date.now()))) {
+            try {
+              const response = await client.refreshAccessToken();
+              client.setCredentials(response.credentials);
+              Object.assign(tokens, response.credentials);
               tokensUpdated = true;
+            } catch {
+              // Refresh failed
             }
-          } catch {
-            // Email retrieval failed
           }
+        } catch {
+          client = null;
         }
+      }
 
-        // Get calendars - use cached if fresh, otherwise fetch
-        let calendars: CachedCalendar[] = tokens.cached_calendars || [];
-        const cacheExpired = !tokens.calendars_cached_at ||
-          (Date.now() - tokens.calendars_cached_at) > CALENDAR_CACHE_TTL;
-
-        if (cacheExpired && client) {
-          try {
-            calendars = await this.fetchCalendarsForClient(client);
-            tokens.cached_calendars = calendars;
-            tokens.calendars_cached_at = Date.now();
+      // Get email address - use cached value if available
+      let email = tokens.cached_email || 'unknown';
+      if (!tokens.cached_email && client) {
+        try {
+          email = await this.getUserEmail(client);
+          if (email !== 'unknown') {
+            tokens.cached_email = email;
             tokensUpdated = true;
-          } catch {
-            // Calendar fetch failed, use cached or empty
           }
+        } catch {
+          // Email retrieval failed
         }
-
-        // Determine status
-        let status = 'active';
-        if (!tokens.refresh_token) {
-          if (!tokens.access_token || (tokens.expiry_date && tokens.expiry_date < Date.now())) {
-            status = 'expired';
-          }
-        }
-
-        accountList.push({ id: accountId, email, status, calendars });
       }
 
-      // Save updated tokens with cached data using atomic read-modify-write
-      // This prevents race conditions when multiple listAccounts() calls run concurrently
-      if (tokensUpdated) {
-        await this.enqueueTokenWrite(async () => {
-          // Re-read current token state to preserve any concurrent auth changes
-          const latestTokens = await this.loadMultiAccountTokensRaw();
+      // Get calendars - use cached if fresh, otherwise fetch
+      let calendars: CachedCalendar[] = tokens.cached_calendars || [];
+      const cacheExpired = !tokens.calendars_cached_at ||
+        (Date.now() - tokens.calendars_cached_at) > CALENDAR_CACHE_TTL;
 
-          // Merge our cached metadata updates into the latest token state
-          for (const accountId of Object.keys(multiAccountTokens)) {
-            const localUpdates = multiAccountTokens[accountId];
-            const latestAccount = latestTokens[accountId];
+      if (cacheExpired && client) {
+        try {
+          calendars = await this.fetchCalendarsForClient(client);
+          tokens.cached_calendars = calendars;
+          tokens.calendars_cached_at = Date.now();
+          tokensUpdated = true;
+        } catch {
+          // Calendar fetch failed, use cached or empty
+        }
+      }
 
-            if (latestAccount && localUpdates) {
-              // Only update cached metadata, not auth tokens
-              if (localUpdates.cached_email) {
-                latestAccount.cached_email = localUpdates.cached_email;
-              }
-              if (localUpdates.cached_calendars) {
-                latestAccount.cached_calendars = localUpdates.cached_calendars;
-                latestAccount.calendars_cached_at = localUpdates.calendars_cached_at;
-              }
+      // Determine status
+      let status = 'active';
+      if (!tokens.refresh_token) {
+        if (!tokens.access_token || (tokens.expiry_date && tokens.expiry_date < Date.now())) {
+          status = 'expired';
+        }
+      }
+
+      accountList.push({ id: accountId, email, status, calendars });
+    }
+
+    // Save updated tokens with cached data using atomic read-modify-write
+    // This prevents race conditions when multiple listAccounts() calls run concurrently
+    if (tokensUpdated) {
+      // Best-effort: failing to persist cached metadata must not fail the listing
+      await this.enqueueTokenWrite(async () => {
+        // Re-read current token state to preserve any concurrent auth changes
+        const latestTokens = await this.loadMultiAccountTokensRaw();
+
+        // Merge our cached metadata updates into the latest token state
+        for (const accountId of Object.keys(multiAccountTokens)) {
+          const localUpdates = multiAccountTokens[accountId];
+          const latestAccount = latestTokens[accountId];
+
+          if (latestAccount && localUpdates) {
+            // Only update cached metadata, not auth tokens
+            if (localUpdates.cached_email) {
+              latestAccount.cached_email = localUpdates.cached_email;
+            }
+            if (localUpdates.cached_calendars) {
+              latestAccount.cached_calendars = localUpdates.cached_calendars;
+              latestAccount.calendars_cached_at = localUpdates.calendars_cached_at;
             }
           }
+        }
 
-          await this.writeTokenFile(latestTokens);
-        });
-      }
-
-      return accountList;
-    } catch (error) {
-      return [];
+        await this.writeTokenFile(latestTokens);
+      }).catch((error: unknown) => {
+        const msg = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`Failed to cache account metadata in ${this.tokenPath}: ${msg}\n`);
+      });
     }
+
+    return accountList;
   }
 
   /**
