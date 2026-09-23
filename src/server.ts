@@ -25,6 +25,7 @@ import { HttpTransportHandler, HttpTransportConfig } from './transports/http.js'
 
 // Import config
 import { ServerConfig } from './config/TransportConfig.js';
+import { isTestEnvironment } from './config/AppConfig.js';
 
 // Read version from package.json
 const __server_dirname = dirname(fileURLToPath(import.meta.url));
@@ -63,7 +64,7 @@ export class GoogleCalendarMcpServer {
 
   private async handleStartupAuthentication(): Promise<void> {
     // Skip authentication in test environment
-    if (process.env.NODE_ENV === 'test') {
+    if (isTestEnvironment()) {
       return;
     }
 

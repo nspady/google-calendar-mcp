@@ -2,6 +2,7 @@ import { OAuth2Client, Credentials } from 'google-auth-library';
 import fs from 'fs/promises';
 import { getSecureTokenPath, getAccountMode, getLegacyTokenPath } from './utils.js';
 import { validateAccountId } from './paths.js';
+import { isTestEnvironment } from '../config/AppConfig.js';
 import { GaxiosError } from 'gaxios';
 import { mkdir } from 'fs/promises';
 import { dirname } from 'path';
@@ -176,7 +177,7 @@ export class TokenManager {
           await this.writeTokenFile(multiAccountTokens);
         });
 
-        if (process.env.NODE_ENV !== 'test') {
+        if (!isTestEnvironment()) {
           process.stderr.write(`Tokens updated and saved for ${accountId} account\n`);
         }
       } catch (error: unknown) {
@@ -274,7 +275,7 @@ export class TokenManager {
       : !this.oauth2Client.credentials.access_token; // No token means we need one
 
     if (isExpired && this.oauth2Client.credentials.refresh_token) {
-      if (process.env.NODE_ENV !== 'test') {
+      if (!isTestEnvironment()) {
         process.stderr.write(`Auth token expired or nearing expiry for ${this.accountMode} account, refreshing...\n`);
       }
       try {
@@ -286,7 +287,7 @@ export class TokenManager {
         }
         // The 'tokens' event listener should handle saving
         this.oauth2Client.setCredentials(newTokens);
-        if (process.env.NODE_ENV !== 'test') {
+        if (!isTestEnvironment()) {
           process.stderr.write(`Token refreshed successfully for ${this.accountMode} account\n`);
         }
         return true;
@@ -504,7 +505,7 @@ export class TokenManager {
 
         } catch (error) {
           // Skip invalid account IDs
-          if (process.env.NODE_ENV !== 'test') {
+          if (!isTestEnvironment()) {
             process.stderr.write(`Skipping invalid account "${accountId}": ${error}\n`);
           }
           continue;

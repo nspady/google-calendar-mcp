@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
+import { getCredentialsPathSetting } from '../config/AppConfig.js';
 import { getSecureTokenPath as getSharedSecureTokenPath, getLegacyTokenPath as getSharedLegacyTokenPath, getAccountMode as getSharedAccountMode } from './paths.js';
 
 // Helper to get the project root directory reliably
@@ -34,9 +35,9 @@ export function getLegacyTokenPath(): string {
 // 2. Default file path (lowest priority)
 export function getKeysFilePath(): string {
   // Priority 1: Environment variable
-  const envCredentialsPath = process.env.GOOGLE_OAUTH_CREDENTIALS;
+  const envCredentialsPath = getCredentialsPathSetting();
   if (envCredentialsPath) {
-    return path.resolve(envCredentialsPath);
+    return envCredentialsPath;
   }
   
   // Priority 2: Default file path
