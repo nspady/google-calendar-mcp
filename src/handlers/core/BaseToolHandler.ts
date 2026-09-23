@@ -509,36 +509,34 @@ Original error: ${errorMessage}`
     }
 
     /**
-     * Gets calendar details including default timezone
+     * Gets the default timezone for a calendar, falling back to UTC if not available.
+     *
+     * A calendar with no timeZone field, or one missing from the account's calendar list
+     * (403/404, e.g. a calendar shared by ID), falls back to UTC. Other failures (timeouts,
+     * rate limits, 5xx) also fall back on read paths, with a stderr warning, but throw on
+     * write paths so an event is never written at a silently shifted time.
      * @param client OAuth2Client
-     * @param calendarId Calendar ID to fetch details for
-     * @returns Calendar details with timezone
+     * @param calendarId Calendar ID
+     * @param operation 'write' when the result determines a stored event time
+     * @returns Timezone string (IANA format)
      */
-    protected async getCalendarDetails(client: OAuth2Client, calendarId: string): Promise<calendar_v3.Schema$CalendarListEntry> {
+    protected async getCalendarTimezone(
+        client: OAuth2Client,
+        calendarId: string,
+        operation: 'read' | 'write' = 'read'
+    ): Promise<string> {
         try {
             const calendar = this.getCalendar(client);
             const response = await calendar.calendarList.get({ calendarId });
-            if (!response.data) {
-                throw new Error(`Calendar ${calendarId} not found`);
+            return response.data?.timeZone || 'UTC';
+        } catch (error) {
+            const status = error instanceof GaxiosError ? error.response?.status : undefined;
+            const notInCalendarList = status === 403 || status === 404;
+            if (operation === 'write' && !notInCalendarList) {
+                this.handleGoogleApiError(error);
             }
-            return response.data;
-        } catch (error) {
-            throw this.handleGoogleApiError(error);
-        }
-    }
-
-    /**
-     * Gets the default timezone for a calendar, falling back to UTC if not available
-     * @param client OAuth2Client
-     * @param calendarId Calendar ID
-     * @returns Timezone string (IANA format)
-     */
-    protected async getCalendarTimezone(client: OAuth2Client, calendarId: string): Promise<string> {
-        try {
-            const calendarDetails = await this.getCalendarDetails(client, calendarId);
-            return calendarDetails.timeZone || 'UTC';
-        } catch (error) {
-            // If we can't get calendar details, fall back to UTC
+            const reason = error instanceof Error ? error.message : String(error);
+            process.stderr.write(`Could not read time zone for calendar "${calendarId}" (${reason}); using UTC\n`);
             return 'UTC';
         }
     }

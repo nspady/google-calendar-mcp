@@ -4,6 +4,19 @@
  */
 
 /**
+ * Checks whether a string is a time zone the runtime can resolve (IANA names like
+ * 'America/Los_Angeles'). Unresolvable names would otherwise silently become UTC.
+ */
+export function isValidTimeZone(timeZone: string): boolean {
+    try {
+        new Intl.DateTimeFormat('en-US', { timeZone });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
  * Checks if a datetime string includes timezone information
  * @param datetime ISO 8601 datetime string
  * @returns True if timezone is included, false if timezone-naive
@@ -28,7 +41,11 @@ export function convertToRFC3339(datetime: string, fallbackTimezone: string): st
         // Already has timezone, use as-is
         return datetime;
     } else {
-        // Timezone-naive, interpret as local time in fallbackTimezone and convert to UTC
+        // Timezone-naive, interpret as local time in fallbackTimezone and convert to UTC.
+        // An unresolvable zone would shift the time silently, so fail instead.
+        if (!isValidTimeZone(fallbackTimezone)) {
+            throw new Error(`Invalid time zone "${fallbackTimezone}": use an IANA name such as "America/Los_Angeles"`);
+        }
         try {
             // Parse the datetime components
             const match = datetime.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/);
@@ -47,7 +64,7 @@ export function convertToRFC3339(datetime: string, fallbackTimezone: string): st
             
             return targetDate.toISOString().replace(/\.000Z$/, 'Z');
         } catch (error) {
-            // Fallback: if timezone conversion fails, append Z for UTC
+            // Fallback for datetimes that don't match the expected format: append Z for UTC
             return datetime + 'Z';
         }
     }

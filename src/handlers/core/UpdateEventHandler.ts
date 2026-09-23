@@ -117,7 +117,7 @@ export class UpdateEventHandler extends BaseToolHandler {
             const helpers = new RecurringEventHelpers(calendar);
             
             // Get calendar's default timezone if not provided
-            const defaultTimeZone = await this.getCalendarTimezone(client, args.calendarId);
+            const defaultTimeZone = await this.getCalendarTimezone(client, args.calendarId, 'write');
             
             // Detect event type and validate scope usage
             const eventType = await helpers.detectEventType(args.eventId, args.calendarId);

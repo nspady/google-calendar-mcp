@@ -108,7 +108,7 @@ export class CreateEventHandler extends BaseToolHandler {
             }
             
             // Use provided timezone or calendar's default timezone
-            const timezone = args.timeZone || await this.getCalendarTimezone(client, args.calendarId);
+            const timezone = args.timeZone || await this.getCalendarTimezone(client, args.calendarId, 'write');
 
             // Determine transparency and visibility based on event type
             const { transparency, visibility } = this.getEventTypeDefaults(args);

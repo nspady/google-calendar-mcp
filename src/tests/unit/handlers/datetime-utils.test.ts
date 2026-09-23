@@ -35,12 +35,13 @@ describe('Datetime Utilities', () => {
       expect(result).not.toBe(datetime); // Should be different from input
     });
 
-    it('should fallback to UTC for invalid timezone conversion', () => {
+    it('should reject an invalid timezone instead of silently using UTC', () => {
       const datetime = '2024-01-01T10:00:00';
-      const result = convertToRFC3339(datetime, 'Invalid/Timezone');
-      
-      // Should fallback to UTC
-      expect(result).toBe('2024-01-01T10:00:00Z');
+      expect(() => convertToRFC3339(datetime, 'Invalid/Timezone')).toThrow(/Invalid time zone "Invalid\/Timezone"/);
+    });
+
+    it('should still use an embedded offset when the fallback timezone is invalid', () => {
+      expect(convertToRFC3339('2024-01-01T10:00:00Z', 'Invalid/Timezone')).toBe('2024-01-01T10:00:00Z');
     });
   });
 

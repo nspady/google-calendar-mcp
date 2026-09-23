@@ -76,7 +76,7 @@ export class CreateEventsHandler extends BaseToolHandler {
                     const tzCacheKey = `${selectedAccountId}:${resolvedCalendarId}`;
                     let cachedTz = timezoneCache.get(tzCacheKey);
                     if (!cachedTz) {
-                        cachedTz = await this.getCalendarTimezone(oauth2Client, resolvedCalendarId);
+                        cachedTz = await this.getCalendarTimezone(oauth2Client, resolvedCalendarId, 'write');
                         timezoneCache.set(tzCacheKey, cachedTz);
                     }
                     tz = cachedTz;

@@ -147,7 +147,7 @@ export class FreeBusyEventHandler extends BaseToolHandler {
       // 1. Explicit timeZone parameter (highest priority)
       // 2. Primary calendar's default timezone (fallback)
       // 3. UTC if calendar timezone retrieval fails
-      // getCalendarTimezone already falls back to UTC on failure
+      // getCalendarTimezone falls back to UTC (with a stderr warning) on read paths
       const timezone = args.timeZone || await this.getCalendarTimezone(client, 'primary');
 
       // Convert time boundaries to RFC3339 format for Google Calendar API
