@@ -244,7 +244,9 @@ jobs:
 
         cat /tmp/comparison.md
 
+    # GITHUB_TOKEN is read-only on fork PRs, so commenting would fail; the report is still in the log above
     - name: Find existing comment
+      if: github.event.pull_request.head.repo.full_name == github.repository
       uses: peter-evans/find-comment@v3
       id: find-comment
       with:
@@ -253,6 +255,7 @@ jobs:
         body-includes: 'Tool Description Token Analysis'
 
     - name: Post or update PR comment
+      if: github.event.pull_request.head.repo.full_name == github.repository
       uses: peter-evans/create-or-update-comment@v4
       with:
         comment-id: ${{ steps.find-comment.outputs.comment-id }}
