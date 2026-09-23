@@ -38,6 +38,8 @@ jobs:
       run: npm run build
 
     - name: Run unit tests with coverage
+      # Explicit shell enables pipefail so a failing vitest run isn't masked by tee
+      shell: bash
       run: |
         echo "🧪 Running unit tests with coverage..."
         echo "======================================"
