@@ -31,6 +31,7 @@ The server provides calendar management tools that LLMs can use for calendar ope
 - `search-events` - Search events by text query
 - `get-event` - Get details of a specific event by ID
 - `create-event` - Create new calendar events
+- `create-events` - Create multiple events in one call with shared defaults
 - `update-event` - Update existing events
 - `delete-event` - Delete events
 - `respond-to-event` - Accept, decline, or tentatively accept event invitations
