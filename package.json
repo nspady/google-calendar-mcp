@@ -76,6 +76,6 @@
     "js-tiktoken": "^1.0.21",
     "openai": "^6.22.0",
     "typescript": "^5.3.3",
-    "vitest": "^4.0.18"
+    "vitest": "^5.0.1"
   }
 }
