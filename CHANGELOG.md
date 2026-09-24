@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.4](https://github.com/nspady/google-calendar-mcp/compare/v2.6.3...v2.6.4) (2026-09-24)
+
+
+### Bug Fixes
+
+* repo hardening (CI test gate, central config, silent-failure and token fixes) ([#200](https://github.com/nspady/google-calendar-mcp/issues/200)) ([72afe99](https://github.com/nspady/google-calendar-mcp/commit/72afe99462b77cf6a53148bbbab15a7e8ff39363))
+
 ## [2.6.3](https://github.com/nspady/google-calendar-mcp/compare/v2.6.2...v2.6.3) (2026-09-02)
 
 
