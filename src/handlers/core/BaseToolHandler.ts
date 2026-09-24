@@ -6,6 +6,7 @@ import { getCredentialsProjectId } from "../../auth/utils.js";
 import { CalendarRegistry } from "../../services/CalendarRegistry.js";
 import { validateAccountId } from "../../auth/paths.js";
 import { convertToRFC3339 } from "../../utils/datetime.js";
+import { isCalendarNotAccessibleError } from "../../utils/google-api-errors.js";
 
 
 export abstract class BaseToolHandler<TArgs = any> {
@@ -537,9 +538,7 @@ Original error: ${errorMessage}`
             const response = await calendar.calendarList.get({ calendarId });
             return response.data?.timeZone || 'UTC';
         } catch (error) {
-            const status = error instanceof GaxiosError ? error.response?.status : undefined;
-            const notInCalendarList = status === 403 || status === 404;
-            if (operation === 'write' && !notInCalendarList) {
+            if (operation === 'write' && !isCalendarNotAccessibleError(error)) {
                 this.handleGoogleApiError(error);
             }
             const reason = error instanceof Error ? error.message : String(error);

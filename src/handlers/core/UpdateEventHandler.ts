@@ -92,24 +92,13 @@ export class UpdateEventHandler extends BaseToolHandler {
         const event = await this.updateEventWithScope(oauth2Client, argsWithMergedAttendees);
 
         // Create structured response
+        // Conflicts and any calendars that could not be checked (both undefined when empty)
         const response: UpdateEventResponse = {
-            event: convertGoogleEventToStructured(event, resolvedCalendarId, selectedAccountId)
+            event: convertGoogleEventToStructured(event, resolvedCalendarId, selectedAccountId),
+            conflicts: conflicts ? convertConflictsToStructured(conflicts).conflicts : undefined,
+            warnings: createWarningsArray(conflicts ?? undefined)
         };
-        
-        // Add conflict information and any calendars that could not be checked
-        if (conflicts) {
-            if (conflicts.hasConflicts) {
-                const structuredConflicts = convertConflictsToStructured(conflicts);
-                if (structuredConflicts.conflicts) {
-                    response.conflicts = structuredConflicts.conflicts;
-                }
-            }
-            const warnings = createWarningsArray(conflicts);
-            if (warnings) {
-                response.warnings = warnings;
-            }
-        }
-        
+
         return createStructuredResponse(response);
     }
 

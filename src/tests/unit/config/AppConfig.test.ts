@@ -127,10 +127,6 @@ describe('formatResolvedConfig', () => {
     const output = formatResolvedConfig(loadAppConfig([], baseEnv()));
     expect(output).not.toContain('  port:');
   });
-
-  it('tolerates a bare ServerConfig', () => {
-    expect(formatResolvedConfig({ transport: { type: 'stdio' } })).toContain('transport: stdio');
-  });
 });
 
 describe('process.env access', () => {

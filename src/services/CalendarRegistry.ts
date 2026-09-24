@@ -96,7 +96,7 @@ export class CalendarRegistry {
    * Uses in-flight request tracking to prevent duplicate API calls during concurrent access.
    */
   async getUnifiedCalendars(accounts: Map<string, OAuth2Client>): Promise<UnifiedCalendar[]> {
-    const cacheKey = Array.from(accounts.keys()).sort().join(',');
+    const cacheKey = this.cacheKeyFor(accounts);
 
     // Check if there's already an in-flight request for this cache key
     const inFlight = this.inFlightRequests.get(cacheKey);
@@ -274,19 +274,22 @@ export class CalendarRegistry {
   /**
    * Clear cache and in-flight requests (useful for testing or when accounts change)
    */
+  clearCache(): void {
+    this.cache.clear();
+    this.failedAccounts.clear();
+    this.inFlightRequests.clear();
+  }
+
   /**
    * Accounts whose calendar list could not be fetched in the most recent lookup for this
    * account set. Their calendars are missing from registry results until a retry succeeds.
    */
   getUnavailableAccounts(accounts: Map<string, OAuth2Client>): string[] {
-    const cacheKey = Array.from(accounts.keys()).sort().join(',');
-    return this.failedAccounts.get(cacheKey) ?? [];
+    return this.failedAccounts.get(this.cacheKeyFor(accounts)) ?? [];
   }
 
-  clearCache(): void {
-    this.cache.clear();
-    this.failedAccounts.clear();
-    this.inFlightRequests.clear();
+  private cacheKeyFor(accounts: Map<string, OAuth2Client>): string {
+    return Array.from(accounts.keys()).sort().join(',');
   }
 
   /**

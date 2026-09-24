@@ -90,8 +90,9 @@ function parseTransport(raw: string, origin: string): TransportType {
 }
 
 function parsePort(raw: string, origin: string): number {
-  const port = /^\d+$/.test(raw.trim()) ? Number(raw.trim()) : NaN;
-  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+  const trimmed = raw.trim();
+  const port = Number(trimmed);
+  if (!/^\d+$/.test(trimmed) || port < 1 || port > 65535) {
     throw new ConfigError(`${origin} must be an integer between 1 and 65535, got "${raw}"`);
   }
   return port;
@@ -196,7 +197,7 @@ export function loadAppConfig(args: string[], env: Env = process.env): AppConfig
   return Object.freeze({
     transport: Object.freeze({ type: transportType, port, host }),
     debug,
-    enabledTools: enabledTools ? Object.freeze([...enabledTools]) as string[] : undefined,
+    enabledTools: enabledTools ? Object.freeze(enabledTools) as string[] : undefined,
     credentialsPath,
     tokenPath: getSecureTokenPath(env),
     accountMode,
@@ -206,8 +207,8 @@ export function loadAppConfig(args: string[], env: Env = process.env): AppConfig
 }
 
 /** One line per setting with its source, for the startup stderr log. */
-export function formatResolvedConfig(config: ServerConfig & Partial<AppConfig>): string {
-  const sources = config.sources ?? {};
+export function formatResolvedConfig(config: AppConfig): string {
+  const sources = config.sources;
   const line = (label: string, value: unknown, key: string) =>
     `  ${label}: ${value}${sources[key] ? ` (${sources[key]})` : ''}`;
 
@@ -220,12 +221,10 @@ export function formatResolvedConfig(config: ServerConfig & Partial<AppConfig>):
     lines.push(line('port', config.transport.port, 'port'));
   }
   lines.push(line('enabledTools', config.enabledTools ? config.enabledTools.join(',') : 'all', 'enabledTools'));
-  lines.push(line('debug', config.debug ?? false, 'debug'));
-  if (config.accountMode !== undefined) {
-    lines.push(line('credentials', config.credentialsPath ?? 'package default (gcp-oauth.keys.json)', 'credentialsPath'));
-    lines.push(line('tokenPath', config.tokenPath, 'tokenPath'));
-    lines.push(line('accountMode', config.accountMode, 'accountMode'));
-  }
+  lines.push(line('debug', config.debug, 'debug'));
+  lines.push(line('credentials', config.credentialsPath ?? 'package default (gcp-oauth.keys.json)', 'credentialsPath'));
+  lines.push(line('tokenPath', config.tokenPath, 'tokenPath'));
+  lines.push(line('accountMode', config.accountMode, 'accountMode'));
   if (config.isTest) {
     lines.push('  NODE_ENV=test: startup authentication skipped');
   }

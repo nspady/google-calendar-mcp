@@ -363,7 +363,7 @@ export class TokenManager {
         }
         return true;
       } catch (refreshError) {
-        if (refreshError instanceof GaxiosError && refreshError.response?.data?.error === 'invalid_grant') {
+        if (isInvalidGrantError(refreshError)) {
             process.stderr.write(`Error refreshing auth token for ${this.accountMode} account: Invalid grant. Token likely expired or revoked. Please re-authenticate.\n`);
             return false; // Indicate failure due to invalid grant
         } else {

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { loadAppConfig } from '../../../config/AppConfig.js';
 
 const state = vi.hoisted(() => ({
   parseArgs: vi.fn(),
@@ -41,6 +42,9 @@ vi.mock('../../../auth/server.js', () => ({
   }
 }));
 
+// A fully resolved config, as the real parseArgs returns
+const parsedConfig = loadAppConfig([], { XDG_CONFIG_HOME: '/tmp/xdg' });
+
 const originalArgv = process.argv.slice();
 const originalAccountMode = process.env.GOOGLE_ACCOUNT_MODE;
 
@@ -59,7 +63,7 @@ function mockProcessExit() {
 describe('CLI Entry (index.ts)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    state.parseArgs.mockReturnValue({ transport: { type: 'stdio' }, debug: false });
+    state.parseArgs.mockReturnValue(parsedConfig);
     state.serverInitialize.mockResolvedValue(undefined);
     state.serverStart.mockResolvedValue(undefined);
     state.initializeOAuth2Client.mockResolvedValue({ id: 'oauth-client' });
@@ -88,7 +92,7 @@ describe('CLI Entry (index.ts)', () => {
     expect(state.parseArgs).toHaveBeenCalledTimes(1);
     expect(state.serverInitialize).toHaveBeenCalledTimes(1);
     expect(state.serverStart).toHaveBeenCalledTimes(1);
-    expect(state.receivedServerConfig).toEqual({ transport: { type: 'stdio' }, debug: false });
+    expect(state.receivedServerConfig).toBe(parsedConfig);
   });
 
   it('exits with code 1 when main throws', async () => {

@@ -26,10 +26,15 @@ import { RespondToEventHandler } from "../handlers/core/RespondToEventHandler.js
 // Note: We use validation functions instead of shared schemas to avoid $ref
 // generation in JSON schema output, which can cause issues with some MCP clients.
 
-// ISO 8601 datetime regex patterns
 const INVALID_TIME_ZONE_MESSAGE = "Must be an IANA time zone name, e.g. 'America/Los_Angeles' or 'Europe/London'";
-// Empty strings keep meaning "not provided" (handlers fall back to the calendar's zone)
-const isValidTimeZoneOrEmpty = (timeZone: string) => timeZone === '' || isValidTimeZone(timeZone);
+// IANA time zone field. A factory, not a shared instance, to avoid $ref (see note above).
+// Empty strings keep meaning "not provided" (handlers fall back to the calendar's zone).
+const ianaTimeZone = () => z.string().refine(
+  (timeZone) => timeZone === '' || isValidTimeZone(timeZone),
+  INVALID_TIME_ZONE_MESSAGE
+);
+
+// ISO 8601 datetime regex patterns
 const ISO_DATETIME_WITH_TZ = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/;
 const ISO_DATETIME_WITHOUT_TZ = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
 const ISO_DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
@@ -152,7 +157,7 @@ const timeMaxSchema = z.string()
   .describe("End of time range (ISO 8601, e.g., '2024-01-31T23:59:59').")
   .optional();
 
-const timeZoneSchema = z.string().refine(isValidTimeZoneOrEmpty, INVALID_TIME_ZONE_MESSAGE).optional().describe(
+const timeZoneSchema = ianaTimeZone().optional().describe(
   "IANA timezone (e.g., 'America/Los_Angeles'). Defaults to calendar's timezone."
 );
 
@@ -363,7 +368,7 @@ export const ToolSchemas = {
         "Per-field timezone is useful for events spanning multiple timezones (e.g., flights). " +
         "Note: If the dateTime already includes a timezone offset (e.g., 'Z' or '+05:00'), the embedded timezone takes precedence over the timeZone field."
       ),
-    timeZone: z.string().refine(isValidTimeZoneOrEmpty, INVALID_TIME_ZONE_MESSAGE).optional().describe(
+    timeZone: ianaTimeZone().optional().describe(
       "Timezone as IANA Time Zone Database name (e.g., America/Los_Angeles). Takes priority over calendar's default timezone. Only used for timezone-naive datetime strings."
     ),
     location: z.string().optional().describe("Location of the event"),
@@ -504,7 +509,7 @@ export const ToolSchemas = {
     calendarId: z.string().optional().describe(
       "Default calendar ID for all events (use 'primary' for the main calendar). Individual events can override this. Defaults to 'primary' if not specified."
     ),
-    timeZone: z.string().refine(isValidTimeZoneOrEmpty, INVALID_TIME_ZONE_MESSAGE).optional().describe(
+    timeZone: ianaTimeZone().optional().describe(
       "Default IANA timezone for all events (e.g., 'America/Los_Angeles'). Individual events can override this."
     ),
     sendUpdates: z.enum(["all", "externalOnly", "none"]).optional().describe(
@@ -523,7 +528,7 @@ export const ToolSchemas = {
         .regex(/^[a-z0-9_-]{1,64}$/, "Account nickname must be 1-64 characters: lowercase letters, numbers, dashes, underscores only")
         .optional()
         .describe("Override account for this event"),
-      timeZone: z.string().refine(isValidTimeZoneOrEmpty, INVALID_TIME_ZONE_MESSAGE).optional().describe("Override timezone for this event"),
+      timeZone: ianaTimeZone().optional().describe("Override timezone for this event"),
       description: z.string().optional().describe("Description/notes for the event"),
       location: z.string().optional().describe("Location of the event"),
       attendees: z.array(z.object({
@@ -588,7 +593,7 @@ export const ToolSchemas = {
         "Note: If the dateTime already includes a timezone offset, the embedded timezone takes precedence over the timeZone field."
       )
       .optional(),
-    timeZone: z.string().refine(isValidTimeZoneOrEmpty, INVALID_TIME_ZONE_MESSAGE).optional().describe("Updated timezone as IANA Time Zone Database name. If not provided, uses the calendar's default timezone."),
+    timeZone: ianaTimeZone().optional().describe("Updated timezone as IANA Time Zone Database name. If not provided, uses the calendar's default timezone."),
     location: z.string().optional().describe("Updated location"),
     attendees: z.array(z.object({
       email: z.string().regex(emailRegex, "Invalid email address").describe("Email address of the attendee")
@@ -706,7 +711,7 @@ export const ToolSchemas = {
     timeMax: z.string()
       .refine(isValidIsoDateTime, "Must be ISO 8601 format: '2026-01-01T00:00:00'")
       .describe("End of time range (ISO 8601, e.g., '2024-01-31T23:59:59')."),
-    timeZone: z.string().refine(isValidTimeZoneOrEmpty, INVALID_TIME_ZONE_MESSAGE).optional().describe("IANA timezone for the query."),
+    timeZone: ianaTimeZone().optional().describe("IANA timezone for the query."),
     groupExpansionMax: z.number().int().max(100).optional().describe(
       "Maximum number of calendars to expand per group (max 100)"
     ),
@@ -717,7 +722,7 @@ export const ToolSchemas = {
   
   'get-current-time': z.object({
     account: singleAccountSchema,
-    timeZone: z.string().refine(isValidTimeZoneOrEmpty, INVALID_TIME_ZONE_MESSAGE).optional().describe(
+    timeZone: ianaTimeZone().optional().describe(
       "IANA timezone (e.g., 'America/Los_Angeles'). Defaults to calendar's timezone."
     )
   }),

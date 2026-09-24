@@ -1,5 +1,5 @@
 import { OAuth2Client } from "google-auth-library";
-import { GaxiosError } from "gaxios";
+import { isCalendarNotAccessibleError } from "../../utils/google-api-errors.js";
 import { google, calendar_v3 } from "googleapis";
 import {
   ConflictCheckResult,
@@ -126,8 +126,7 @@ export class ConflictDetectionService {
         // Calendars without access (403/404) are expected and skipped quietly. Anything else
         // (timeouts, rate limits, 5xx) means this calendar went unchecked, so say so rather
         // than reporting "no conflicts".
-        const status = error instanceof GaxiosError ? error.response?.status : undefined;
-        if (status === 403 || status === 404) {
+        if (isCalendarNotAccessibleError(error)) {
           continue;
         }
         const reason = error instanceof Error ? error.message : String(error);
