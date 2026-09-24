@@ -204,6 +204,7 @@ Along with the normal capabilities you would expect for a calendar integration y
 | `get-event` | Get details of a specific event by ID |
 | `search-events` | Search events by text query |
 | `create-event` | Create new calendar events |
+| `create-events` | Create multiple events in one call with shared defaults (skips conflict detection) |
 | `update-event` | Update existing events |
 | `delete-event` | Delete events |
 | `respond-to-event` | Respond to event invitations (Accept, Decline, Maybe, No Response) |
@@ -232,9 +233,21 @@ Thanks! – Nate
 ## Configuration
 
 **Environment Variables:**
-- `GOOGLE_OAUTH_CREDENTIALS` - Path to OAuth credentials file
-- `GOOGLE_CALENDAR_MCP_TOKEN_PATH` - Custom token storage location (optional)
-- `ENABLED_TOOLS` - Comma-separated list of tools to enable (see Tool Filtering below)
+
+CLI flags take precedence over environment variables. Malformed values (for example a non-numeric `PORT` or an unknown `TRANSPORT`) stop the server at startup with an error, and the resolved configuration is logged to stderr on start.
+
+| Variable | CLI flag | Default | Description |
+|----------|----------|---------|-------------|
+| `GOOGLE_OAUTH_CREDENTIALS` |  | `gcp-oauth.keys.json` in the package root | Path to the OAuth credentials file |
+| `GOOGLE_CALENDAR_MCP_TOKEN_PATH` |  | `$XDG_CONFIG_HOME/google-calendar-mcp/tokens.json` | Custom token storage location |
+| `XDG_CONFIG_HOME` |  | `~/.config` | Base config directory for token storage (ignored if GOOGLE_CALENDAR_MCP_TOKEN_PATH is set) |
+| `GOOGLE_ACCOUNT_MODE` |  | `normal` | Account nickname used for single-account operations and the `auth` command |
+| `ENABLED_TOOLS` | `--enable-tools` | all tools | Comma-separated list of tools to expose (see Tool Filtering) |
+| `TRANSPORT` | `--transport` | `stdio` | Transport type: `stdio` or `http` |
+| `PORT` | `--port` | `3000` | HTTP transport port (1-65535) |
+| `HOST` | `--host` | `127.0.0.1` | HTTP transport bind address |
+| `DEBUG` | `--debug` | `false` | Reserved: `true` is accepted and shown in the startup log but currently enables no extra logging |
+| `NODE_ENV` |  | unset | `test` skips startup authentication and uses the `test` account namespace (for the test suite) |
 
 ### Tool Filtering
 
@@ -264,7 +277,7 @@ npx @cocal/google-calendar-mcp start --enable-tools list-events,create-event,get
 }
 ```
 
-**Available tool names:** `list-calendars`, `list-events`, `search-events`, `get-event`, `list-colors`, `create-event`, `update-event`, `delete-event`, `get-freebusy`, `get-current-time`, `respond-to-event`, `manage-accounts`
+**Available tool names:** `list-calendars`, `list-events`, `search-events`, `get-event`, `list-colors`, `create-event`, `create-events`, `update-event`, `delete-event`, `get-freebusy`, `get-current-time`, `respond-to-event`, `manage-accounts`
 
 **Note:** The `manage-accounts` tool is always available regardless of filtering, as it's needed for authentication management.
 

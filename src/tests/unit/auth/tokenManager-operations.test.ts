@@ -7,6 +7,7 @@ vi.mock('fs/promises', () => ({
   default: {
     readFile: vi.fn(),
     writeFile: vi.fn(),
+    rename: vi.fn(),
     unlink: vi.fn(),
     access: vi.fn(),
     mkdir: vi.fn()
@@ -156,6 +157,17 @@ describe('TokenManager - removeAccount', () => {
     const writeCall = mockedFs.writeFile.mock.calls[0];
     expect(writeCall[2]).toEqual({ mode: 0o600 });
   });
+
+  it('should write to a temp file and rename it into place', async () => {
+    mockedFs.readFile.mockResolvedValue(JSON.stringify({ work: { access_token: 'a' }, personal: { access_token: 'b' } }));
+    mockedFs.writeFile.mockResolvedValue(undefined);
+
+    await tokenManager.removeAccount('work');
+
+    const tempPath = mockedFs.writeFile.mock.calls[0][0];
+    expect(tempPath).toMatch(/^\/mock\/path\/tokens\.json\.tmp-/);
+    expect(mockedFs.rename).toHaveBeenCalledWith(tempPath, '/mock/path/tokens.json');
+  });
 });
 
 describe('TokenManager - listAvailableAccounts', () => {
@@ -204,12 +216,27 @@ describe('TokenManager - listAvailableAccounts', () => {
     expect(accounts).toEqual([]);
   });
 
-  it('should return empty array on file read error', async () => {
+  it('should surface file read errors instead of reporting no accounts', async () => {
     mockedFs.readFile.mockRejectedValue(new Error('Permission denied'));
 
-    const accounts = await tokenManager.listAvailableAccounts();
+    await expect(tokenManager.listAvailableAccounts()).rejects.toThrow('Permission denied');
+  });
 
-    expect(accounts).toEqual([]);
+  it('should back up a corrupt token file instead of deleting it', async () => {
+    mockedFs.readFile.mockResolvedValue('{"work": {"access_token": ');
+    mockedFs.rename = vi.fn().mockResolvedValue(undefined);
+    mockedFs.unlink = vi.fn();
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    const error = await tokenManager.listAvailableAccounts().catch((e: Error) => e);
+
+    expect(error.name).toBe('TokenFileCorruptError');
+    expect(error.message).toContain('/mock/path/tokens.json');
+    expect(error.message).toMatch(/moved to \/mock\/path\/tokens\.json\.corrupt-/);
+    expect(error.message).toContain('manage-accounts');
+    expect(mockedFs.rename).toHaveBeenCalledWith('/mock/path/tokens.json', expect.stringMatching(/^\/mock\/path\/tokens\.json\.corrupt-/));
+    expect(mockedFs.unlink).not.toHaveBeenCalled();
+    stderrSpy.mockRestore();
   });
 });
 

@@ -2,6 +2,7 @@ import { OAuth2Client, Credentials } from 'google-auth-library';
 import fs from 'fs/promises';
 import { getSecureTokenPath, getAccountMode, getLegacyTokenPath } from './utils.js';
 import { validateAccountId } from './paths.js';
+import { isTestEnvironment } from '../config/AppConfig.js';
 import { GaxiosError } from 'gaxios';
 import { mkdir } from 'fs/promises';
 import { dirname } from 'path';
@@ -23,6 +24,45 @@ interface CachedCredentials extends Credentials {
   calendars_cached_at?: number;
 }
 
+/**
+ * True when Google rejected a refresh token (revoked access, expired refresh token, or
+ * password change). The account must be re-authenticated; retrying will not help.
+ */
+export function isInvalidGrantError(error: unknown): boolean {
+  if (error instanceof GaxiosError && error.response?.data?.error === 'invalid_grant') {
+    return true;
+  }
+  return error instanceof Error && error.message.includes('invalid_grant');
+}
+
+/**
+ * Re-authentication instructions for an account, in-band option first.
+ */
+export function reauthInstructions(accountId: string): string {
+  // manage-accounts 'add' refuses an id that is still connected and 'remove' refuses the last
+  // account, so the CLI (which overwrites the stored token) is the path that always works
+  return `Re-authenticate "${accountId}": run 'npx @cocal/google-calendar-mcp auth ${accountId}' ` +
+    `(overwrites the stored token), or, if other accounts are connected, use manage-accounts ` +
+    `action 'remove' then 'add' with account_id '${accountId}'.`;
+}
+
+/**
+ * tokens.json could not be parsed. The file has been moved aside (never deleted) so every
+ * account's tokens remain recoverable; the message names both paths and how to re-authenticate.
+ */
+export class TokenFileCorruptError extends Error {
+  constructor(public readonly tokenPath: string, public readonly backupPath: string | null, cause: string) {
+    super(
+      `Token file ${tokenPath} is not valid JSON (${cause}). ` +
+      (backupPath
+        ? `It was moved to ${backupPath}. `
+        : `It could not be moved aside; delete or fix it manually. `) +
+      `Re-authenticate your accounts with the manage-accounts tool (action 'add') or 'npx @cocal/google-calendar-mcp auth <account>'.`
+    );
+    this.name = 'TokenFileCorruptError';
+  }
+}
+
 // Interface for multi-account token storage
 // Now supports arbitrary account IDs
 interface MultiAccountTokens {
@@ -41,10 +81,13 @@ export class TokenManager {
   };
   private writeQueue: Promise<void> = Promise.resolve();
 
-  constructor(oauth2Client: OAuth2Client) {
+  /**
+   * @param accountMode Account to operate on; defaults to GOOGLE_ACCOUNT_MODE (or 'normal'/'test')
+   */
+  constructor(oauth2Client: OAuth2Client, accountMode?: string) {
     this.oauth2Client = oauth2Client;
     this.tokenPath = getSecureTokenPath();
-    this.accountMode = getAccountMode();
+    this.accountMode = accountMode !== undefined ? validateAccountId(accountMode) : getAccountMode();
 
     // Store credentials to avoid accessing private properties later
     this.credentials = {
@@ -80,18 +123,51 @@ export class TokenManager {
   }
 
   private isFileNotFoundError(error: unknown): boolean {
-    return error instanceof Error && 'code' in error && (error as any).code === 'ENOENT';
+    return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'ENOENT';
   }
 
+  // Write-then-rename so concurrent readers never see a truncated file (which they
+  // would otherwise treat as corrupt and move aside)
   private async writeTokenFile(tokens: MultiAccountTokens): Promise<void> {
     await this.ensureTokenDirectoryExists();
-    await fs.writeFile(this.tokenPath, JSON.stringify(tokens, null, 2), { mode: 0o600 });
+    const tempPath = `${this.tokenPath}.tmp-${process.pid}-${Date.now()}`;
+    await fs.writeFile(tempPath, JSON.stringify(tokens, null, 2), { mode: 0o600 });
+    await fs.rename(tempPath, this.tokenPath);
+  }
+
+  /**
+   * Move an unparseable token file aside and return the error to throw.
+   * Only called for SyntaxError: the file exists but its contents are unusable.
+   */
+  private async backupCorruptTokenFile(error: SyntaxError): Promise<TokenFileCorruptError> {
+    const backupPath = `${this.tokenPath}.corrupt-${new Date().toISOString().replace(/[:.]/g, '-')}`;
+    let movedTo: string | null = backupPath;
+    try {
+      await fs.rename(this.tokenPath, backupPath);
+    } catch (renameError) {
+      // ENOENT: a concurrent load already moved it aside under its own timestamp
+      movedTo = this.isFileNotFoundError(renameError) ? `${this.tokenPath}.corrupt-*` : null;
+    }
+    const corruptError = new TokenFileCorruptError(this.tokenPath, movedTo, error.message);
+    process.stderr.write(`${corruptError.message}\n`);
+    return corruptError;
+  }
+
+  private async parseTokenFile(): Promise<any> {
+    const fileContent = await fs.readFile(this.tokenPath, "utf-8");
+    try {
+      return JSON.parse(fileContent);
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw await this.backupCorruptTokenFile(error);
+      }
+      throw error;
+    }
   }
 
   private async loadMultiAccountTokens(): Promise<MultiAccountTokens> {
     try {
-      const fileContent = await fs.readFile(this.tokenPath, "utf-8");
-      const parsed = JSON.parse(fileContent);
+      const parsed = await this.parseTokenFile();
 
       // Check if this is the old single-account format
       if (parsed.access_token || parsed.refresh_token) {
@@ -119,8 +195,7 @@ export class TokenManager {
    */
   private async loadMultiAccountTokensRaw(): Promise<MultiAccountTokens> {
     try {
-      const fileContent = await fs.readFile(this.tokenPath, "utf-8");
-      return JSON.parse(fileContent) as MultiAccountTokens;
+      return await this.parseTokenFile() as MultiAccountTokens;
     } catch (error: unknown) {
       if (this.isFileNotFoundError(error)) {
         return {};
@@ -176,7 +251,7 @@ export class TokenManager {
           await this.writeTokenFile(multiAccountTokens);
         });
 
-        if (process.env.NODE_ENV !== 'test') {
+        if (!isTestEnvironment()) {
           process.stderr.write(`Tokens updated and saved for ${accountId} account\n`);
         }
       } catch (error: unknown) {
@@ -255,13 +330,10 @@ export class TokenManager {
       process.stderr.write(`Loaded tokens for ${this.accountMode} account\n`);
       return true;
     } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : String(error);
-      process.stderr.write(`Error loading tokens for ${this.accountMode} account: ${msg}\n`);
-      if (error instanceof SyntaxError) {
-        try {
-          await fs.unlink(this.tokenPath);
-          process.stderr.write("Removed corrupted token file\n");
-        } catch { /* ignore */ }
+      // A corrupt file has already been backed up and reported by parseTokenFile
+      if (!(error instanceof TokenFileCorruptError)) {
+        const msg = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`Error loading tokens for ${this.accountMode} account: ${msg}\n`);
       }
       return false;
     }
@@ -274,7 +346,7 @@ export class TokenManager {
       : !this.oauth2Client.credentials.access_token; // No token means we need one
 
     if (isExpired && this.oauth2Client.credentials.refresh_token) {
-      if (process.env.NODE_ENV !== 'test') {
+      if (!isTestEnvironment()) {
         process.stderr.write(`Auth token expired or nearing expiry for ${this.accountMode} account, refreshing...\n`);
       }
       try {
@@ -286,12 +358,12 @@ export class TokenManager {
         }
         // The 'tokens' event listener should handle saving
         this.oauth2Client.setCredentials(newTokens);
-        if (process.env.NODE_ENV !== 'test') {
+        if (!isTestEnvironment()) {
           process.stderr.write(`Token refreshed successfully for ${this.accountMode} account\n`);
         }
         return true;
       } catch (refreshError) {
-        if (refreshError instanceof GaxiosError && refreshError.response?.data?.error === 'invalid_grant') {
+        if (isInvalidGrantError(refreshError)) {
             process.stderr.write(`Error refreshing auth token for ${this.accountMode} account: Invalid grant. Token likely expired or revoked. Please re-authenticate.\n`);
             return false; // Indicate failure due to invalid grant
         } else {
@@ -403,12 +475,8 @@ export class TokenManager {
 
   // Method to list available accounts
   async listAvailableAccounts(): Promise<string[]> {
-    try {
-      const multiAccountTokens = await this.loadMultiAccountTokens();
-      return Object.keys(multiAccountTokens);
-    } catch (error) {
-      return [];
-    }
+    const multiAccountTokens = await this.loadMultiAccountTokens();
+    return Object.keys(multiAccountTokens);
   }
 
   /**
@@ -504,7 +572,7 @@ export class TokenManager {
 
         } catch (error) {
           // Skip invalid account IDs
-          if (process.env.NODE_ENV !== 'test') {
+          if (!isTestEnvironment()) {
             process.stderr.write(`Skipping invalid account "${accountId}": ${error}\n`);
           }
           continue;
@@ -548,126 +616,131 @@ export class TokenManager {
     status: string;
     calendars: CachedCalendar[];
   }>> {
-    try {
-      const multiAccountTokens = await this.loadMultiAccountTokens();
-      const accountList: Array<{
-        id: string;
-        email: string;
-        status: string;
-        calendars: CachedCalendar[];
-      }> = [];
-      let tokensUpdated = false;
+    // A corrupt token file throws TokenFileCorruptError rather than reporting "no accounts"
+    const multiAccountTokens = await this.loadMultiAccountTokens();
+    const accountList: Array<{
+      id: string;
+      email: string;
+      status: string;
+      calendars: CachedCalendar[];
+    }> = [];
+    let tokensUpdated = false;
 
-      // Cache TTL: 5 minutes for calendars
-      const CALENDAR_CACHE_TTL = 5 * 60 * 1000;
+    // Cache TTL: 5 minutes for calendars
+    const CALENDAR_CACHE_TTL = 5 * 60 * 1000;
 
-      for (const [accountId, tokens] of Object.entries(multiAccountTokens)) {
-        // Skip invalid entries
-        if (!tokens || typeof tokens !== 'object') {
-          continue;
-        }
+    for (const [accountId, tokens] of Object.entries(multiAccountTokens)) {
+      // Skip invalid entries
+      if (!tokens || typeof tokens !== 'object') {
+        continue;
+      }
 
-        let client: OAuth2Client | null = null;
+      let client: OAuth2Client | null = null;
+      let refreshRejected = false;
 
-        // Create client and refresh if needed
-        if (tokens.access_token || tokens.refresh_token) {
-          try {
-            client = new OAuth2Client(
-              this.credentials.clientId,
-              this.credentials.clientSecret,
-              this.credentials.redirectUri
-            );
-            client.setCredentials(tokens);
+      // Create client and refresh if needed
+      if (tokens.access_token || tokens.refresh_token) {
+        try {
+          client = new OAuth2Client(
+            this.credentials.clientId,
+            this.credentials.clientSecret,
+            this.credentials.redirectUri
+          );
+          client.setCredentials(tokens);
 
-            // Try to refresh token if access token is expired or missing
-            if (tokens.refresh_token && (!tokens.access_token || (tokens.expiry_date && tokens.expiry_date < Date.now()))) {
-              try {
-                const response = await client.refreshAccessToken();
-                client.setCredentials(response.credentials);
-                Object.assign(tokens, response.credentials);
-                tokensUpdated = true;
-              } catch {
-                // Refresh failed
-              }
-            }
-          } catch {
-            client = null;
-          }
-        }
-
-        // Get email address - use cached value if available
-        let email = tokens.cached_email || 'unknown';
-        if (!tokens.cached_email && client) {
-          try {
-            email = await this.getUserEmail(client);
-            if (email !== 'unknown') {
-              tokens.cached_email = email;
+          // Try to refresh token if access token is expired or missing
+          if (tokens.refresh_token && (!tokens.access_token || (tokens.expiry_date && tokens.expiry_date < Date.now()))) {
+            try {
+              const response = await client.refreshAccessToken();
+              client.setCredentials(response.credentials);
+              Object.assign(tokens, response.credentials);
               tokensUpdated = true;
+            } catch (refreshError) {
+              // Revoked/expired grants need re-auth; other failures (network) may be transient
+              refreshRejected = isInvalidGrantError(refreshError);
             }
-          } catch {
-            // Email retrieval failed
           }
+        } catch {
+          client = null;
         }
+      }
 
-        // Get calendars - use cached if fresh, otherwise fetch
-        let calendars: CachedCalendar[] = tokens.cached_calendars || [];
-        const cacheExpired = !tokens.calendars_cached_at ||
-          (Date.now() - tokens.calendars_cached_at) > CALENDAR_CACHE_TTL;
-
-        if (cacheExpired && client) {
-          try {
-            calendars = await this.fetchCalendarsForClient(client);
-            tokens.cached_calendars = calendars;
-            tokens.calendars_cached_at = Date.now();
+      // Get email address - use cached value if available
+      let email = tokens.cached_email || 'unknown';
+      if (!tokens.cached_email && client) {
+        try {
+          email = await this.getUserEmail(client);
+          if (email !== 'unknown') {
+            tokens.cached_email = email;
             tokensUpdated = true;
-          } catch {
-            // Calendar fetch failed, use cached or empty
           }
+        } catch {
+          // Email retrieval failed
         }
-
-        // Determine status
-        let status = 'active';
-        if (!tokens.refresh_token) {
-          if (!tokens.access_token || (tokens.expiry_date && tokens.expiry_date < Date.now())) {
-            status = 'expired';
-          }
-        }
-
-        accountList.push({ id: accountId, email, status, calendars });
       }
 
-      // Save updated tokens with cached data using atomic read-modify-write
-      // This prevents race conditions when multiple listAccounts() calls run concurrently
-      if (tokensUpdated) {
-        await this.enqueueTokenWrite(async () => {
-          // Re-read current token state to preserve any concurrent auth changes
-          const latestTokens = await this.loadMultiAccountTokensRaw();
+      // Get calendars - use cached if fresh, otherwise fetch
+      let calendars: CachedCalendar[] = tokens.cached_calendars || [];
+      const cacheExpired = !tokens.calendars_cached_at ||
+        (Date.now() - tokens.calendars_cached_at) > CALENDAR_CACHE_TTL;
 
-          // Merge our cached metadata updates into the latest token state
-          for (const accountId of Object.keys(multiAccountTokens)) {
-            const localUpdates = multiAccountTokens[accountId];
-            const latestAccount = latestTokens[accountId];
+      if (cacheExpired && client) {
+        try {
+          calendars = await this.fetchCalendarsForClient(client);
+          tokens.cached_calendars = calendars;
+          tokens.calendars_cached_at = Date.now();
+          tokensUpdated = true;
+        } catch {
+          // Calendar fetch failed, use cached or empty
+        }
+      }
 
-            if (latestAccount && localUpdates) {
-              // Only update cached metadata, not auth tokens
-              if (localUpdates.cached_email) {
-                latestAccount.cached_email = localUpdates.cached_email;
-              }
-              if (localUpdates.cached_calendars) {
-                latestAccount.cached_calendars = localUpdates.cached_calendars;
-                latestAccount.calendars_cached_at = localUpdates.calendars_cached_at;
-              }
+      // Determine status from the refresh outcome, not just the presence of a refresh token
+      let status = 'active';
+      if (refreshRejected) {
+        status = 'needs-reauth';
+      } else if (!tokens.refresh_token) {
+        if (!tokens.access_token || (tokens.expiry_date && tokens.expiry_date < Date.now())) {
+          status = 'expired';
+        }
+      }
+
+      accountList.push({ id: accountId, email, status, calendars });
+    }
+
+    // Save updated tokens with cached data using atomic read-modify-write
+    // This prevents race conditions when multiple listAccounts() calls run concurrently
+    if (tokensUpdated) {
+      // Best-effort: failing to persist cached metadata must not fail the listing
+      await this.enqueueTokenWrite(async () => {
+        // Re-read current token state to preserve any concurrent auth changes
+        const latestTokens = await this.loadMultiAccountTokensRaw();
+
+        // Merge our cached metadata updates into the latest token state
+        for (const accountId of Object.keys(multiAccountTokens)) {
+          const localUpdates = multiAccountTokens[accountId];
+          const latestAccount = latestTokens[accountId];
+
+          if (latestAccount && localUpdates) {
+            // Only update cached metadata, not auth tokens
+            if (localUpdates.cached_email) {
+              latestAccount.cached_email = localUpdates.cached_email;
+            }
+            if (localUpdates.cached_calendars) {
+              latestAccount.cached_calendars = localUpdates.cached_calendars;
+              latestAccount.calendars_cached_at = localUpdates.calendars_cached_at;
             }
           }
+        }
 
-          await this.writeTokenFile(latestTokens);
-        });
-      }
-
-      return accountList;
-    } catch (error) {
-      return [];
+        await this.writeTokenFile(latestTokens);
+      }).catch((error: unknown) => {
+        const msg = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`Failed to cache account metadata in ${this.tokenPath}: ${msg}\n`);
+      });
     }
+
+    return accountList;
   }
 
   /**

@@ -1,4 +1,5 @@
 import { OAuth2Client } from "google-auth-library";
+import { isCalendarNotAccessibleError } from "../../utils/google-api-errors.js";
 import { google, calendar_v3 } from "googleapis";
 import {
   ConflictCheckResult,
@@ -52,6 +53,12 @@ export class ConflictDetectionService {
     };
 
     if (!event.start || !event.end) {
+      return result;
+    }
+
+    // All-day events have date-only bounds, which events.list rejects (timeMin/timeMax must be
+    // RFC3339). These checks never ran before; skip explicitly rather than warn on every call.
+    if (event.start.date || event.end.date) {
       return result;
     }
 
@@ -116,8 +123,15 @@ export class ConflictDetectionService {
           result.conflicts.push(...conflicts);
         }
       } catch (error) {
-        // If we can't access a calendar, skip it silently
-        // Errors are expected for calendars without access permissions
+        // Calendars without access (403/404) are expected and skipped quietly. Anything else
+        // (timeouts, rate limits, 5xx) means this calendar went unchecked, so say so rather
+        // than reporting "no conflicts".
+        if (isCalendarNotAccessibleError(error)) {
+          continue;
+        }
+        const reason = error instanceof Error ? error.message : String(error);
+        process.stderr.write(`Conflict check skipped calendar "${checkCalendarId}": ${reason}\n`);
+        (result.warnings ??= []).push(`Could not check calendar "${checkCalendarId}" for conflicts: ${reason}`);
       }
     }
 

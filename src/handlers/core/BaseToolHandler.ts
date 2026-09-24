@@ -6,6 +6,7 @@ import { getCredentialsProjectId } from "../../auth/utils.js";
 import { CalendarRegistry } from "../../services/CalendarRegistry.js";
 import { validateAccountId } from "../../auth/paths.js";
 import { convertToRFC3339 } from "../../utils/datetime.js";
+import { isCalendarNotAccessibleError } from "../../utils/google-api-errors.js";
 
 
 export abstract class BaseToolHandler<TArgs = any> {
@@ -287,11 +288,16 @@ export abstract class BaseToolHandler<TArgs = any> {
         if (!resolution) {
             const availableAccounts = Array.from(accounts.keys()).join(', ');
             const accessType = operation === 'write' ? 'write' : 'read';
+            const unavailable = this.calendarRegistry.getUnavailableAccounts(accounts);
+            const unavailableNote = unavailable.length > 0
+                ? ` Calendars for account(s) ${unavailable.join(', ')} could not be loaded (Google API error); retry, or specify the 'account' parameter.`
+                : '';
             throw new McpError(
                 ErrorCode.InvalidRequest,
                 `No account has ${accessType} access to calendar "${calendarNameOrId}". ` +
                 `Available accounts: ${availableAccounts}. Please ensure the calendar exists and ` +
-                `you have the necessary permissions, or specify the 'account' parameter explicitly.`
+                `you have the necessary permissions, or specify the 'account' parameter explicitly.` +
+                unavailableNote
             );
         }
 
@@ -339,6 +345,11 @@ export abstract class BaseToolHandler<TArgs = any> {
     }
 
     protected handleGoogleApiError(error: unknown): never {
+        // Already translated (e.g. by getCalendarTimezone); don't wrap it a second time
+        if (error instanceof McpError) {
+            throw error;
+        }
+
         if (error instanceof GaxiosError) {
             const status = error.response?.status;
             const errorData = error.response?.data;
@@ -347,7 +358,9 @@ export abstract class BaseToolHandler<TArgs = any> {
             if (errorData?.error === 'invalid_grant') {
                 throw new McpError(
                     ErrorCode.InvalidRequest,
-                    'Authentication token is invalid or expired. Please re-run the authentication process (e.g., `npm run auth`).'
+                    "Google rejected this account's stored credentials (invalid_grant): access was revoked or the refresh token expired. " +
+                    "Use the manage-accounts tool with action 'list' to find the account marked 'needs-reauth', then run " +
+                    "'npx @cocal/google-calendar-mcp auth <account>' (or, if other accounts are connected, 'remove' and 'add' it again)."
                 );
             }
 
@@ -504,36 +517,32 @@ Original error: ${errorMessage}`
     }
 
     /**
-     * Gets calendar details including default timezone
+     * Gets the default timezone for a calendar, falling back to UTC if not available.
+     *
+     * A calendar with no timeZone field, or one missing from the account's calendar list
+     * (403/404, e.g. a calendar shared by ID), falls back to UTC. Other failures (timeouts,
+     * rate limits, 5xx) also fall back on read paths, with a stderr warning, but throw on
+     * write paths so an event is never written at a silently shifted time.
      * @param client OAuth2Client
-     * @param calendarId Calendar ID to fetch details for
-     * @returns Calendar details with timezone
+     * @param calendarId Calendar ID
+     * @param operation 'write' when the result determines a stored event time
+     * @returns Timezone string (IANA format)
      */
-    protected async getCalendarDetails(client: OAuth2Client, calendarId: string): Promise<calendar_v3.Schema$CalendarListEntry> {
+    protected async getCalendarTimezone(
+        client: OAuth2Client,
+        calendarId: string,
+        operation: 'read' | 'write' = 'read'
+    ): Promise<string> {
         try {
             const calendar = this.getCalendar(client);
             const response = await calendar.calendarList.get({ calendarId });
-            if (!response.data) {
-                throw new Error(`Calendar ${calendarId} not found`);
+            return response.data?.timeZone || 'UTC';
+        } catch (error) {
+            if (operation === 'write' && !isCalendarNotAccessibleError(error)) {
+                this.handleGoogleApiError(error);
             }
-            return response.data;
-        } catch (error) {
-            throw this.handleGoogleApiError(error);
-        }
-    }
-
-    /**
-     * Gets the default timezone for a calendar, falling back to UTC if not available
-     * @param client OAuth2Client
-     * @param calendarId Calendar ID
-     * @returns Timezone string (IANA format)
-     */
-    protected async getCalendarTimezone(client: OAuth2Client, calendarId: string): Promise<string> {
-        try {
-            const calendarDetails = await this.getCalendarDetails(client, calendarId);
-            return calendarDetails.timeZone || 'UTC';
-        } catch (error) {
-            // If we can't get calendar details, fall back to UTC
+            const reason = error instanceof Error ? error.message : String(error);
+            process.stderr.write(`Could not read time zone for calendar "${calendarId}" (${reason}); using UTC\n`);
             return 'UTC';
         }
     }

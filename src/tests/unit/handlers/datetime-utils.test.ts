@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hasTimezoneInDatetime, convertToRFC3339, createTimeObject } from '../../../utils/datetime.js';
+import { hasTimezoneInDatetime, convertToRFC3339, createTimeObject, usesFallbackTimeZone } from '../../../utils/datetime.js';
 
 describe('Datetime Utilities', () => {
   describe('hasTimezoneInDatetime', () => {
@@ -35,12 +35,24 @@ describe('Datetime Utilities', () => {
       expect(result).not.toBe(datetime); // Should be different from input
     });
 
-    it('should fallback to UTC for invalid timezone conversion', () => {
+    it('should report which inputs depend on the fallback timezone', () => {
+      expect(usesFallbackTimeZone('2024-01-01T10:00:00')).toBe(true);
+      expect(usesFallbackTimeZone('{"dateTime": "2024-01-01T10:00:00"}')).toBe(true);
+      expect(usesFallbackTimeZone(undefined)).toBe(false);
+      expect(usesFallbackTimeZone('2024-01-01')).toBe(false);
+      expect(usesFallbackTimeZone('2024-01-01T10:00:00Z')).toBe(false);
+      expect(usesFallbackTimeZone('2024-01-01T10:00:00-05:00')).toBe(false);
+      expect(usesFallbackTimeZone('{"dateTime": "2024-01-01T10:00:00", "timeZone": "Asia/Tokyo"}')).toBe(false);
+      expect(usesFallbackTimeZone('{"date": "2024-01-01"}')).toBe(false);
+    });
+
+    it('should reject an invalid timezone instead of silently using UTC', () => {
       const datetime = '2024-01-01T10:00:00';
-      const result = convertToRFC3339(datetime, 'Invalid/Timezone');
-      
-      // Should fallback to UTC
-      expect(result).toBe('2024-01-01T10:00:00Z');
+      expect(() => convertToRFC3339(datetime, 'Invalid/Timezone')).toThrow(/Invalid time zone "Invalid\/Timezone"/);
+    });
+
+    it('should still use an embedded offset when the fallback timezone is invalid', () => {
+      expect(convertToRFC3339('2024-01-01T10:00:00Z', 'Invalid/Timezone')).toBe('2024-01-01T10:00:00Z');
     });
   });
 

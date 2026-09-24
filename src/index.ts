@@ -1,6 +1,7 @@
 import { fileURLToPath } from "url";
 import { GoogleCalendarMcpServer } from './server.js';
 import { parseArgs } from './config/TransportConfig.js';
+import { formatResolvedConfig } from './config/AppConfig.js';
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 
@@ -20,7 +21,8 @@ async function main() {
   try {
     // Parse command line arguments
     const config = parseArgs(process.argv.slice(2));
-    
+    process.stderr.write(formatResolvedConfig(config));
+
     // Create and initialize the server
     const server = new GoogleCalendarMcpServer(config);
     await server.initialize();
@@ -44,7 +46,6 @@ async function runAuthServer(accountId?: string): Promise<void> {
       process.stderr.write('Invalid account ID. Must be 1-64 characters: lowercase letters, numbers, dashes, underscores only.\n');
       process.exit(1);
     }
-    process.env.GOOGLE_ACCOUNT_MODE = accountId;
     process.stderr.write(`Authenticating account: ${accountId}\n`);
   }
 
@@ -54,7 +55,7 @@ async function runAuthServer(accountId?: string): Promise<void> {
     const oauth2Client = await initializeOAuth2Client();
 
     // Create and start the auth server
-    const authServerInstance = new AuthServer(oauth2Client);
+    const authServerInstance = new AuthServer(oauth2Client, accountId || undefined);
 
     // Start with browser opening (true by default)
     const success = await authServerInstance.start(true);

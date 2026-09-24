@@ -5,7 +5,6 @@ import http from 'http';
 import { URL } from 'url';
 import open from 'open';
 import { loadCredentials } from './client.js';
-import { getAccountMode } from './utils.js';
 import { renderAuthSuccess, renderAuthError, renderAuthLanding, loadWebFile } from '../web/templates.js';
 
 export interface StartForMcpToolResult {
@@ -33,9 +32,12 @@ export class AuthServer {
   private autoShutdownOnSuccess = false; // Whether to auto-shutdown after successful auth
   private pendingAuthFlow: PendingAuthFlow | null = null; // PKCE + state for current OAuth flow
 
-  constructor(oauth2Client: OAuth2Client) {
+  /**
+   * @param accountId Account to authenticate (e.g. from `auth <account-id>`); defaults to GOOGLE_ACCOUNT_MODE
+   */
+  constructor(oauth2Client: OAuth2Client, accountId?: string) {
     this.baseOAuth2Client = oauth2Client;
-    this.tokenManager = new TokenManager(oauth2Client);
+    this.tokenManager = new TokenManager(oauth2Client, accountId);
     this.portRange = { start: 3500, end: 3505 };
   }
 
@@ -108,7 +110,7 @@ export class AuthServer {
         try {
           const clientForUrl = this.flowOAuth2Client || this.baseOAuth2Client;
           const authUrl = this.generateOAuthUrl(clientForUrl);
-          const accountMode = getAccountMode();
+          const accountMode = this.tokenManager.getAccountMode();
 
           const landingHtml = await renderAuthLanding({
             accountId: accountMode,

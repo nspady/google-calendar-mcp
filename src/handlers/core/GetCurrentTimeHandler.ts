@@ -3,6 +3,7 @@ import { OAuth2Client } from "google-auth-library";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { GetCurrentTimeInput } from "../../tools/registry.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
+import { isValidTimeZone } from "../../utils/datetime.js";
 import { GetCurrentTimeResponse } from "../../types/structured-responses.js";
 
 export class GetCurrentTimeHandler extends BaseToolHandler {
@@ -21,7 +22,7 @@ export class GetCurrentTimeHandler extends BaseToolHandler {
         
         let timezone: string;
         if (validArgs.timeZone) {
-            if (!this.isValidTimeZone(validArgs.timeZone)) {
+            if (!isValidTimeZone(validArgs.timeZone)) {
                 throw new McpError(
                     ErrorCode.InvalidRequest,
                     `Invalid timezone: ${validArgs.timeZone}. Use IANA format (e.g. 'America/Los_Angeles').`
@@ -103,15 +104,6 @@ export class GetCurrentTimeHandler extends BaseToolHandler {
         }
     }
     
-    private isValidTimeZone(timeZone: string): boolean {
-        try {
-            Intl.DateTimeFormat(undefined, { timeZone });
-            return true;
-        } catch {
-            return false;
-        }
-    }
-
     private getTimezoneOffset(_date: Date, timeZone: string): string {
         try {
             const offsetMinutes = this.getTimezoneOffsetMinutes(timeZone);

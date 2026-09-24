@@ -15,9 +15,13 @@
  *   json            Output raw JSON analysis data
  *
  * Options:
- *   --baseline-path  Path to baseline file (default: .github/tool-description-baseline.json)
+ *   --baseline-path  Path to baseline file (default: .cache/tool-description-baseline.json, gitignored)
  *   --output         Output format: text, json, markdown (default: text)
  *   --ci             CI mode: exit with error if token count increases significantly
+ *
+ * The baseline is local-only. To compare a branch against main:
+ *   git checkout main && npx tsx scripts/analyze-tool-descriptions.ts baseline
+ *   git checkout <branch> && npm run analyze:tokens:compare
  */
 
 import { getEncoding, Tiktoken } from 'js-tiktoken';
@@ -619,7 +623,7 @@ async function main() {
   const baselinePathIndex = args.indexOf('--baseline-path');
   const baselinePath = baselinePathIndex >= 0
     ? args[baselinePathIndex + 1]
-    : path.join(process.cwd(), '.github', 'tool-description-baseline.json');
+    : path.join(process.cwd(), '.cache', 'tool-description-baseline.json');
 
   const outputIndex = args.indexOf('--output');
   const outputFormat = outputIndex >= 0 ? args[outputIndex + 1] : 'text';
@@ -653,7 +657,7 @@ async function main() {
       case 'compare': {
         if (!fs.existsSync(baselinePath)) {
           console.error(`Baseline file not found: ${baselinePath}`);
-          console.error('Run "npx tsx scripts/analyze-tool-descriptions.ts baseline" first.');
+          console.error('Check out the base branch (e.g. main) and run "npx tsx scripts/analyze-tool-descriptions.ts baseline" first.');
           process.exit(1);
         }
 

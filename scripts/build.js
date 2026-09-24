@@ -12,7 +12,7 @@ const buildOptions = {
   entryPoints: [join(__dirname, '../src/index.ts')],
   bundle: true,
   platform: 'node',
-  target: 'node18',
+  target: 'node20',
   outfile: join(__dirname, '../build/index.js'),
   format: 'esm',
   banner: {
@@ -27,7 +27,7 @@ const authServerBuildOptions = {
   entryPoints: [join(__dirname, '../src/auth-server.ts')],
   bundle: true,
   platform: 'node',
-  target: 'node18',
+  target: 'node20',
   outfile: join(__dirname, '../build/auth-server.js'),
   format: 'esm',
   packages: 'external', // Don't bundle node_modules

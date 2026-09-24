@@ -32,6 +32,9 @@
   "homepage": "https://github.com/nspady/google-calendar-mcp#readme",
   "author": "nspady",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node build/index.js",
     "build": "node scripts/build.js",
@@ -58,7 +61,7 @@
     "analyze:tokens:compare": "npx tsx scripts/analyze-tool-descriptions.ts compare --output markdown"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.0",
+    "@modelcontextprotocol/sdk": "^1.30.1",
     "gaxios": "^7.1.3",
     "google-auth-library": "^10.5.0",
     "googleapis": "^171.4.0",

@@ -151,7 +151,8 @@
             color: var(--accent-success);
         }
 
-        .status-expired {
+        .status-expired,
+        .status-needs-reauth {
             background: var(--accent-warning-light);
             color: var(--accent-warning);
         }
@@ -421,7 +422,7 @@
                             </div>
                         </div>
                         <div class="account-actions" onclick="event.stopPropagation()">
-                            ${account.status === 'expired' ?
+                            ${account.status === 'expired' || account.status === 'needs-reauth' ?
                                 `<button class="btn-warning" onclick="reauthAccount('${escapeHtml(account.id)}')">Re-auth</button>` :
                                 ''}
                             <button class="btn-danger" onclick="removeAccount('${escapeHtml(account.id)}')">Remove</button>

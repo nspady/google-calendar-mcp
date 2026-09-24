@@ -430,7 +430,7 @@ export interface AddAccountResponse {
  */
 export interface AccountInfo {
   account_id: string;
-  status: 'active' | 'expired' | 'invalid' | 'error';
+  status: 'active' | 'expired' | 'needs-reauth' | 'invalid' | 'error';
   email?: string;
   calendar_count?: number;
   primary_calendar?: {

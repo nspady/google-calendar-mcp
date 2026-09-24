@@ -12,8 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     
     strategy:
+      fail-fast: false
       matrix:
-        node-version: ['18']
+        node-version: ['20', '22', '24']
     
     steps:
     - name: Checkout code
@@ -38,6 +39,8 @@ jobs:
       run: npm run build
 
     - name: Run unit tests with coverage
+      # Explicit shell enables pipefail so a failing vitest run isn't masked by tee
+      shell: bash
       run: |
         echo "🧪 Running unit tests with coverage..."
         echo "======================================"
@@ -68,6 +71,7 @@ jobs:
         NODE_ENV: test
         
     - name: Upload coverage reports
+      if: matrix.node-version == '22'
       uses: actions/upload-artifact@v4
       with:
         name: coverage-report
@@ -97,7 +101,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '22'
         cache: 'npm'
 
     - name: Install dependencies (PR branch)
@@ -240,7 +244,9 @@ jobs:
 
         cat /tmp/comparison.md
 
+    # GITHUB_TOKEN is read-only on fork PRs, so commenting would fail; the report is still in the log above
     - name: Find existing comment
+      if: github.event.pull_request.head.repo.full_name == github.repository
       uses: peter-evans/find-comment@v3
       id: find-comment
       with:
@@ -249,6 +255,7 @@ jobs:
         body-includes: 'Tool Description Token Analysis'
 
     - name: Post or update PR comment
+      if: github.event.pull_request.head.repo.full_name == github.repository
       uses: peter-evans/create-or-update-comment@v4
       with:
         comment-id: ${{ steps.find-comment.outputs.comment-id }}
