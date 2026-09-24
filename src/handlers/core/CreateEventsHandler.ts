@@ -3,7 +3,7 @@ import { OAuth2Client } from "google-auth-library";
 import { CreateEventsInput } from "../../tools/registry.js";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import type { calendar_v3 } from 'googleapis';
-import { createTimeObject } from "../../utils/datetime.js";
+import { createTimeObject, usesFallbackTimeZone } from "../../utils/datetime.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
 import { CreateEventsResponse, convertGoogleEventToStructured, StructuredEvent } from "../../types/structured-responses.js";
 
@@ -70,13 +70,16 @@ export class CreateEventsHandler extends BaseToolHandler {
                     calendarCache.set(cacheKey, calendar);
                 }
 
-                // Cache getCalendarTimezone per unique (account, calendarId)
+                // Cache getCalendarTimezone per unique (account, calendarId, strictness): a lenient
+                // lookup may have fallen back to UTC, which a timezone-naive event must not reuse
                 let tz = timeZone;
                 if (!tz) {
-                    const tzCacheKey = `${selectedAccountId}:${resolvedCalendarId}`;
+                    const operation = usesFallbackTimeZone(eventInput.start) || usesFallbackTimeZone(eventInput.end)
+                        ? 'write' : 'read';
+                    const tzCacheKey = `${selectedAccountId}:${resolvedCalendarId}:${operation}`;
                     let cachedTz = timezoneCache.get(tzCacheKey);
                     if (!cachedTz) {
-                        cachedTz = await this.getCalendarTimezone(oauth2Client, resolvedCalendarId, 'write');
+                        cachedTz = await this.getCalendarTimezone(oauth2Client, resolvedCalendarId, operation);
                         timezoneCache.set(tzCacheKey, cachedTz);
                     }
                     tz = cachedTz;

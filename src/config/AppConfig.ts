@@ -70,7 +70,7 @@ export const CONFIG_ENV_VARS: readonly EnvVarDoc[] = [
   { name: 'TRANSPORT', cliFlag: '--transport', defaultValue: '`stdio`', description: 'Transport type: `stdio` or `http`' },
   { name: 'PORT', cliFlag: '--port', defaultValue: '`3000`', description: 'HTTP transport port (1-65535)' },
   { name: 'HOST', cliFlag: '--host', defaultValue: '`127.0.0.1`', description: 'HTTP transport bind address' },
-  { name: 'DEBUG', cliFlag: '--debug', defaultValue: '`false`', description: 'Enable debug logging when set to `true`' },
+  { name: 'DEBUG', cliFlag: '--debug', defaultValue: '`false`', description: 'Reserved: `true` is accepted and shown in the startup log but currently enables no extra logging' },
   { name: 'NODE_ENV', defaultValue: 'unset', description: '`test` skips startup authentication and uses the `test` account namespace (for the test suite)' },
 ];
 
@@ -132,8 +132,38 @@ export function isTestEnvironment(env: Env = process.env): boolean {
 export function loadAppConfig(args: string[], env: Env = process.env): AppConfig {
   const sources: Record<string, ConfigSource> = {};
 
-  const fromEnv = <T>(key: string, name: string, parse: (raw: string, origin: string) => T, fallback: T): T => {
-    const raw = envValue(env, name);
+  // CLI flags are parsed first; an env value is only parsed (and validated) when no flag overrides it
+  const cli: { transport?: TransportType; port?: number; host?: string; debug?: boolean; enabledTools?: string[] } = {};
+  for (let i = 0; i < args.length; i++) {
+    switch (args[i]) {
+      case '--transport':
+        cli.transport = parseTransport(requireFlagValue(args, ++i, '--transport', 'a value (stdio or http)'), '--transport');
+        break;
+      case '--port':
+        cli.port = parsePort(requireFlagValue(args, ++i, '--port', 'a port number'), '--port');
+        break;
+      case '--host':
+        cli.host = requireFlagValue(args, ++i, '--host', 'a host address');
+        break;
+      case '--debug':
+        cli.debug = true;
+        break;
+      case '--enable-tools':
+        cli.enabledTools = parseEnabledTools(
+          requireFlagValue(args, ++i, '--enable-tools', 'a comma-separated list of tool names'),
+          '--enable-tools'
+        );
+        break;
+    }
+  }
+
+  const resolve = <K extends keyof typeof cli, T>(
+    key: K, name: string, parse: (raw: string, origin: string) => T, fallback: T, raw = envValue(env, name)
+  ): T => {
+    if (cli[key] !== undefined) {
+      sources[key] = 'cli';
+      return cli[key] as T;
+    }
     if (raw === undefined) {
       sources[key] = 'default';
       return fallback;
@@ -142,47 +172,14 @@ export function loadAppConfig(args: string[], env: Env = process.env): AppConfig
     return parse(raw, name);
   };
 
-  let transportType = fromEnv('transport', 'TRANSPORT', parseTransport, 'stdio' as TransportType);
-  let port = fromEnv('port', 'PORT', parsePort, 3000);
-  let host = fromEnv('host', 'HOST', (raw) => raw, '127.0.0.1');
-  let debug = fromEnv('debug', 'DEBUG', (raw) => raw === 'true', false);
-
+  const transportType = resolve('transport', 'TRANSPORT', parseTransport, 'stdio');
+  const port = resolve('port', 'PORT', parsePort, 3000);
+  const host = resolve('host', 'HOST', (raw) => raw, '127.0.0.1');
+  const debug = resolve('debug', 'DEBUG', (raw) => raw === 'true', false);
   // ENABLED_TOOLS="" is an error rather than "unset" (documented in README Tool Filtering)
-  let enabledTools: string[] | undefined;
-  if (env.ENABLED_TOOLS !== undefined) {
-    enabledTools = parseEnabledTools(env.ENABLED_TOOLS, 'ENABLED_TOOLS');
-    sources.enabledTools = 'env';
-  } else {
-    sources.enabledTools = 'default';
-  }
-
-  for (let i = 0; i < args.length; i++) {
-    switch (args[i]) {
-      case '--transport':
-        transportType = parseTransport(requireFlagValue(args, ++i, '--transport', 'a value (stdio or http)'), '--transport');
-        sources.transport = 'cli';
-        break;
-      case '--port':
-        port = parsePort(requireFlagValue(args, ++i, '--port', 'a port number'), '--port');
-        sources.port = 'cli';
-        break;
-      case '--host':
-        host = requireFlagValue(args, ++i, '--host', 'a host address');
-        sources.host = 'cli';
-        break;
-      case '--debug':
-        debug = true;
-        sources.debug = 'cli';
-        break;
-      case '--enable-tools':
-        enabledTools = parseEnabledTools(
-          requireFlagValue(args, ++i, '--enable-tools', 'a comma-separated list of tool names'),
-          '--enable-tools'
-        );
-        sources.enabledTools = 'cli';
-        break;
-    }
-  }
+  const enabledTools = resolve<'enabledTools', string[] | undefined>(
+    'enabledTools', 'ENABLED_TOOLS', parseEnabledTools, undefined, env.ENABLED_TOOLS
+  );
 
   const credentialsPath = getCredentialsPathSetting(env);
   sources.credentialsPath = credentialsPath ? 'env' : 'default';

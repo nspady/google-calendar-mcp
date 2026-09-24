@@ -37,8 +37,12 @@ describe('getCredentialsProjectId', () => {
     expect(getCredentialsProjectId()).toBe('proj-a');
   });
 
-  it('returns undefined when the file is missing', () => {
-    process.env.GOOGLE_OAUTH_CREDENTIALS = join(dir, 'missing.json');
+  it('returns undefined when the file is missing, without caching the miss', () => {
+    const file = join(dir, 'late.json');
+    process.env.GOOGLE_OAUTH_CREDENTIALS = file;
     expect(getCredentialsProjectId()).toBeUndefined();
+
+    writeFileSync(file, JSON.stringify({ project_id: 'proj-late' }));
+    expect(getCredentialsProjectId()).toBe('proj-late');
   });
 });

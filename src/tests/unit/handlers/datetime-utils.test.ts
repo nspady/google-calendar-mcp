@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hasTimezoneInDatetime, convertToRFC3339, createTimeObject } from '../../../utils/datetime.js';
+import { hasTimezoneInDatetime, convertToRFC3339, createTimeObject, usesFallbackTimeZone } from '../../../utils/datetime.js';
 
 describe('Datetime Utilities', () => {
   describe('hasTimezoneInDatetime', () => {
@@ -33,6 +33,17 @@ describe('Datetime Utilities', () => {
       // Should result in a timezone-aware string (the exact time depends on system timezone)
       expect(result).toMatch(/2024-06-15T\d{2}:\d{2}:\d{2}Z/);
       expect(result).not.toBe(datetime); // Should be different from input
+    });
+
+    it('should report which inputs depend on the fallback timezone', () => {
+      expect(usesFallbackTimeZone('2024-01-01T10:00:00')).toBe(true);
+      expect(usesFallbackTimeZone('{"dateTime": "2024-01-01T10:00:00"}')).toBe(true);
+      expect(usesFallbackTimeZone(undefined)).toBe(false);
+      expect(usesFallbackTimeZone('2024-01-01')).toBe(false);
+      expect(usesFallbackTimeZone('2024-01-01T10:00:00Z')).toBe(false);
+      expect(usesFallbackTimeZone('2024-01-01T10:00:00-05:00')).toBe(false);
+      expect(usesFallbackTimeZone('{"dateTime": "2024-01-01T10:00:00", "timeZone": "Asia/Tokyo"}')).toBe(false);
+      expect(usesFallbackTimeZone('{"date": "2024-01-01"}')).toBe(false);
     });
 
     it('should reject an invalid timezone instead of silently using UTC', () => {

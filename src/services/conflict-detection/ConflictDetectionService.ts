@@ -56,6 +56,12 @@ export class ConflictDetectionService {
       return result;
     }
 
+    // All-day events have date-only bounds, which events.list rejects (timeMin/timeMax must be
+    // RFC3339). These checks never ran before; skip explicitly rather than warn on every call.
+    if (event.start.date || event.end.date) {
+      return result;
+    }
+
     // Normalize the event we're checking so comparisons use timezone-aware datetimes
     const normalizedEvent = this.normalizeEventForComparison(event);
 

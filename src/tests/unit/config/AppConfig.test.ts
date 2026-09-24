@@ -62,6 +62,16 @@ describe('loadAppConfig', () => {
     expect(config.sources.enabledTools).toBe('cli');
   });
 
+  it('does not validate environment values that a CLI flag overrides', () => {
+    const config = loadAppConfig(
+      ['--transport', 'http', '--port', '3001', '--enable-tools', 'list-events'],
+      baseEnv({ TRANSPORT: 'sse', PORT: 'abc', ENABLED_TOOLS: '' })
+    );
+    expect(config.transport.type).toBe('http');
+    expect(config.transport.port).toBe(3001);
+    expect(config.enabledTools).toEqual(['list-events']);
+  });
+
   it('treats empty environment values as unset', () => {
     const config = loadAppConfig([], baseEnv({ TRANSPORT: '', PORT: '', HOST: '', GOOGLE_OAUTH_CREDENTIALS: '' }));
     expect(config.transport).toEqual({ type: 'stdio', port: 3000, host: '127.0.0.1' });

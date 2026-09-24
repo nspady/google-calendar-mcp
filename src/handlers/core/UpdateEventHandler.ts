@@ -5,7 +5,7 @@ import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
 import { RecurringEventHelpers, RecurringEventError, RECURRING_EVENT_ERRORS } from './RecurringEventHelpers.js';
 import { ConflictDetectionService } from "../../services/conflict-detection/index.js";
-import { createTimeObject } from "../../utils/datetime.js";
+import { createTimeObject, usesFallbackTimeZone } from "../../utils/datetime.js";
 import { 
     createStructuredResponse, 
     convertConflictsToStructured,
@@ -123,8 +123,11 @@ export class UpdateEventHandler extends BaseToolHandler {
             
             // The calendar's default zone only determines stored times when new times are given
             // without an explicit timeZone; otherwise a failed lookup must not block the update
-            const needsDefaultZone = !args.timeZone &&
-                Boolean(args.start || args.end || args.modificationScope === 'thisAndFollowing');
+            const needsDefaultZone = !args.timeZone && (
+                usesFallbackTimeZone(args.start) ||
+                usesFallbackTimeZone(args.end) ||
+                args.modificationScope === 'thisAndFollowing'
+            );
             const defaultTimeZone = await this.getCalendarTimezone(
                 client, args.calendarId, needsDefaultZone ? 'write' : 'read'
             );

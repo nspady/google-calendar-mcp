@@ -246,7 +246,7 @@ CLI flags take precedence over environment variables. Malformed values (for exam
 | `TRANSPORT` | `--transport` | `stdio` | Transport type: `stdio` or `http` |
 | `PORT` | `--port` | `3000` | HTTP transport port (1-65535) |
 | `HOST` | `--host` | `127.0.0.1` | HTTP transport bind address |
-| `DEBUG` | `--debug` | `false` | Enable debug logging when set to `true` |
+| `DEBUG` | `--debug` | `false` | Reserved: `true` is accepted and shown in the startup log but currently enables no extra logging |
 | `NODE_ENV` |  | unset | `test` skips startup authentication and uses the `test` account namespace (for the test suite) |
 
 ### Tool Filtering

@@ -17,6 +17,24 @@ export function isValidTimeZone(timeZone: string): boolean {
 }
 
 /**
+ * True when createTimeObject would apply its fallback zone to this input, i.e. a
+ * timezone-naive datetime. Date-only values and datetimes carrying an offset or a
+ * per-field timeZone don't depend on the calendar's default zone.
+ */
+export function usesFallbackTimeZone(input: string | undefined): boolean {
+    if (!input) {
+        return false;
+    }
+    const sentinel = '\u0000fallback';
+    try {
+        return createTimeObject(input, sentinel).timeZone === sentinel;
+    } catch {
+        // Malformed input fails later with its own error; don't mask it here
+        return true;
+    }
+}
+
+/**
  * Checks if a datetime string includes timezone information
  * @param datetime ISO 8601 datetime string
  * @returns True if timezone is included, false if timezone-naive

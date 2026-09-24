@@ -41,14 +41,17 @@ const PERMISSION_RANK: Record<string, number> = {
 export class CalendarRegistry {
   private static instance: CalendarRegistry | null = null;
 
-  private cache: Map<string, { data: UnifiedCalendar[]; timestamp: number }> = new Map();
+  private cache: Map<string, { data: UnifiedCalendar[]; timestamp: number; ttl: number }> = new Map();
   private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  // Partial builds (an account failed) are cached briefly so a persistently failing account
+  // isn't refetched on every lookup, but a transient failure clears quickly
+  private readonly PARTIAL_CACHE_TTL = 30 * 1000;
 
   // Track in-flight requests to prevent duplicate API calls during concurrent access
   private inFlightRequests: Map<string, Promise<UnifiedCalendar[]>> = new Map();
 
   // Accounts whose calendar list failed in the latest build, keyed like the cache.
-  // Builds with failures are not cached, so the next call retries them.
+  // Builds with failures are cached only for PARTIAL_CACHE_TTL, so they are retried soon.
   private failedAccounts: Map<string, string[]> = new Map();
 
   /**
@@ -103,7 +106,7 @@ export class CalendarRegistry {
 
     // Check cache
     const cached = this.cache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+    if (cached && Date.now() - cached.timestamp < cached.ttl) {
       return cached.data;
     }
 
@@ -199,13 +202,13 @@ export class CalendarRegistry {
       };
     });
 
-    // Only cache complete results: a transient failure on one account must not hide
-    // its calendars for the full TTL
+    // A transient failure on one account must not hide its calendars for the full TTL
+    this.cache.set(cacheKey, {
+      data: unified,
+      timestamp: Date.now(),
+      ttl: failed.length === 0 ? this.CACHE_TTL : this.PARTIAL_CACHE_TTL
+    });
     if (failed.length === 0) {
-      this.cache.set(cacheKey, {
-        data: unified,
-        timestamp: Date.now()
-      });
       this.failedAccounts.delete(cacheKey);
     } else {
       this.failedAccounts.set(cacheKey, failed);

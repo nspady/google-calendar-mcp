@@ -137,7 +137,7 @@ describe('ManageAccountsHandler', () => {
       const response = JSON.parse(result.content[0].text as string);
       expect(response.accounts[0].status).toBe('needs-reauth');
       expect(response.accounts[0].error).toContain('"test"');
-      expect(response.accounts[0].error).toContain("manage-accounts tool with action 'remove' then action 'add'");
+      expect(response.accounts[0].error).toContain("npx @cocal/google-calendar-mcp auth test");
     });
 
     it('should include email, calendar_count, primary_calendar, token_expiry', async () => {

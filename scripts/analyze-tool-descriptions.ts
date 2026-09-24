@@ -16,12 +16,12 @@
  *
  * Options:
  *   --baseline-path  Path to baseline file (default: .cache/tool-description-baseline.json, gitignored)
+ *   --output         Output format: text, json, markdown (default: text)
+ *   --ci             CI mode: exit with error if token count increases significantly
  *
  * The baseline is local-only. To compare a branch against main:
  *   git checkout main && npx tsx scripts/analyze-tool-descriptions.ts baseline
  *   git checkout <branch> && npm run analyze:tokens:compare
- *   --output         Output format: text, json, markdown (default: text)
- *   --ci             CI mode: exit with error if token count increases significantly
  */
 
 import { getEncoding, Tiktoken } from 'js-tiktoken';

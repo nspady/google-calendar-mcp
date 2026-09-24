@@ -39,8 +39,11 @@ export function isInvalidGrantError(error: unknown): boolean {
  * Re-authentication instructions for an account, in-band option first.
  */
 export function reauthInstructions(accountId: string): string {
-  return `Re-authenticate "${accountId}": use the manage-accounts tool with action 'remove' then action 'add' ` +
-    `(account_id '${accountId}'), or run 'npx @cocal/google-calendar-mcp auth ${accountId}'.`;
+  // manage-accounts 'add' refuses an id that is still connected and 'remove' refuses the last
+  // account, so the CLI (which overwrites the stored token) is the path that always works
+  return `Re-authenticate "${accountId}": run 'npx @cocal/google-calendar-mcp auth ${accountId}' ` +
+    `(overwrites the stored token), or, if other accounts are connected, use manage-accounts ` +
+    `action 'remove' then 'add' with account_id '${accountId}'.`;
 }
 
 /**
@@ -142,10 +145,8 @@ export class TokenManager {
     try {
       await fs.rename(this.tokenPath, backupPath);
     } catch (renameError) {
-      // ENOENT: a concurrent load already moved it
-      if (!this.isFileNotFoundError(renameError)) {
-        movedTo = null;
-      }
+      // ENOENT: a concurrent load already moved it aside under its own timestamp
+      movedTo = this.isFileNotFoundError(renameError) ? `${this.tokenPath}.corrupt-*` : null;
     }
     const corruptError = new TokenFileCorruptError(this.tokenPath, movedTo, error.message);
     process.stderr.write(`${corruptError.message}\n`);

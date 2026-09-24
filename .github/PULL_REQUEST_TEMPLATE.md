@@ -9,7 +9,7 @@
 - [ ] README.md / `docs/` updated for user-visible changes (new env vars, changed behavior)
 - [ ] PR title follows [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`...)
 
-### If this adds a tool (see [CONTRIBUTING.md](../CONTRIBUTING.md#adding-a-tool))
+### If this adds a tool (see [CONTRIBUTING.md](https://github.com/nspady/google-calendar-mcp/blob/main/CONTRIBUTING.md#adding-a-tool))
 
 - [ ] Handler in `src/handlers/core/` extending `BaseToolHandler`
 - [ ] Zod schema added to `ToolSchemas` in `src/tools/registry.ts`

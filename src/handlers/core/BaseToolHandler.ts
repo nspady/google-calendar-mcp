@@ -344,6 +344,11 @@ export abstract class BaseToolHandler<TArgs = any> {
     }
 
     protected handleGoogleApiError(error: unknown): never {
+        // Already translated (e.g. by getCalendarTimezone); don't wrap it a second time
+        if (error instanceof McpError) {
+            throw error;
+        }
+
         if (error instanceof GaxiosError) {
             const status = error.response?.status;
             const errorData = error.response?.data;
@@ -353,8 +358,8 @@ export abstract class BaseToolHandler<TArgs = any> {
                 throw new McpError(
                     ErrorCode.InvalidRequest,
                     "Google rejected this account's stored credentials (invalid_grant): access was revoked or the refresh token expired. " +
-                    "Use the manage-accounts tool with action 'list' to find the account marked 'needs-reauth', then 'remove' and 'add' it again " +
-                    "(or run 'npx @cocal/google-calendar-mcp auth <account>')."
+                    "Use the manage-accounts tool with action 'list' to find the account marked 'needs-reauth', then run " +
+                    "'npx @cocal/google-calendar-mcp auth <account>' (or, if other accounts are connected, 'remove' and 'add' it again)."
                 );
             }
 

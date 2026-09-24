@@ -102,6 +102,14 @@ describe('ConflictDetectionService - calendars that cannot be checked', () => {
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   });
 
+  it('skips all-day events, whose date-only bounds events.list rejects', async () => {
+    const result = await new ConflictDetectionService().checkConflicts(new OAuth2Client(), {
+      summary: 'Holiday', start: { date: '2025-01-01' }, end: { date: '2025-01-02' }
+    }, 'primary');
+    expect(listMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ hasConflicts: false, conflicts: [], duplicates: [] });
+  });
+
   it('skips calendars without access quietly', async () => {
     listMock.mockRejectedValue(apiError(404));
     const result = await new ConflictDetectionService().checkConflicts(new OAuth2Client(), newEvent, 'primary', {

@@ -73,17 +73,22 @@ export interface OAuthCredentialsWithProject {
 }
 
 // Cached per credentials path: this is called on every tool call, and the file
-// doesn't change while the server runs
-const projectIdCache = new Map<string, string | undefined>();
+// doesn't change while the server runs. Misses aren't cached so a transient read failure recovers.
+const projectIdCache = new Map<string, string>();
 
 // Get project ID from OAuth credentials file
 // Returns undefined if credentials file doesn't exist, is invalid, or missing project_id
 export function getCredentialsProjectId(): string | undefined {
   const credentialsPath = getKeysFilePath();
-  if (!projectIdCache.has(credentialsPath)) {
-    projectIdCache.set(credentialsPath, readCredentialsProjectId(credentialsPath));
+  const cached = projectIdCache.get(credentialsPath);
+  if (cached !== undefined) {
+    return cached;
   }
-  return projectIdCache.get(credentialsPath);
+  const projectId = readCredentialsProjectId(credentialsPath);
+  if (projectId !== undefined) {
+    projectIdCache.set(credentialsPath, projectId);
+  }
+  return projectId;
 }
 
 function readCredentialsProjectId(credentialsPath: string): string | undefined {
