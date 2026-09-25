@@ -136,6 +136,35 @@ npm run auth
 
 The server will guide you through the authentication flow again.
 
+## Remote / Headless Authentication (`GOOGLE_OAUTH_REDIRECT_BASE`)
+
+By default the auth flow uses a loopback redirect (`http://localhost:<port>/oauth2callback`),
+which requires the browser completing consent to run on the **same host** as the auth server.
+When you authenticate on a remote or headless machine (e.g. a cloud desktop or server you reach
+through an HTTPS tunnel or reverse proxy), the browser is elsewhere and can't reach that
+loopback address.
+
+Set `GOOGLE_OAUTH_REDIRECT_BASE` to the externally reachable base URL of the auth server —
+scheme + host, no trailing slash (e.g. `https://my-tunnel.example.com`). The `/oauth2callback`
+path is appended automatically, so the consent redirect comes back through your tunnel:
+
+```bash
+export GOOGLE_OAUTH_CREDENTIALS="/path/to/your/gcp-oauth.keys.json"
+export GOOGLE_OAUTH_REDIRECT_BASE="https://my-tunnel.example.com"
+npx @cocal/google-calendar-mcp auth
+```
+
+**Requirements:**
+- The redirect base must belong to a **Web application** OAuth client, and
+  `https://my-tunnel.example.com/oauth2callback` must be listed as an **Authorized redirect URI**
+  on that client in the Google Cloud console. A Desktop/"installed" client's loopback flow only
+  accepts `http://localhost`/`http://127.0.0.1` redirects and will return `redirect_uri_mismatch`
+  for a public URL.
+- Your tunnel/proxy must forward the public URL to the auth server's local port (default range
+  3500–3505) so the `/oauth2callback` request reaches it.
+
+Unset, behavior is unchanged (loopback redirect).
+
 ## Managing Multiple Accounts
 
 The server supports connecting multiple Google accounts simultaneously (e.g., "work", "personal", "family").

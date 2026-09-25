@@ -42,6 +42,26 @@ export class AuthServer {
   }
 
   /**
+   * Builds the OAuth redirect URI for the callback server.
+   *
+   * By default this is the loopback `http://localhost:<port>/oauth2callback`, which works when
+   * the browser completing consent runs on the same host as the auth server. When authenticating
+   * from a different machine (e.g. a remote/headless host reached through an HTTPS tunnel or
+   * reverse proxy), set `GOOGLE_OAUTH_REDIRECT_BASE` to the externally reachable base URL
+   * (scheme + host, no trailing slash, e.g. `https://my-tunnel.example.com`); the callback path
+   * is appended automatically. That base must be a registered redirect URI on a **Web
+   * application** OAuth client — the loopback flow of a Desktop/"installed" client only accepts
+   * `http://localhost`/`http://127.0.0.1` redirects.
+   */
+  private getRedirectUri(port: number): string {
+    const base = process.env.GOOGLE_OAUTH_REDIRECT_BASE?.trim();
+    if (base) {
+      return `${base.replace(/\/+$/, '')}/oauth2callback`;
+    }
+    return `http://localhost:${port}/oauth2callback`;
+  }
+
+  /**
    * Creates the flow-specific OAuth2Client with the correct redirect URI.
    */
   private async createFlowOAuth2Client(port: number): Promise<OAuth2Client> {
@@ -49,7 +69,7 @@ export class AuthServer {
     return new OAuth2Client(
       client_id,
       client_secret,
-      `http://localhost:${port}/oauth2callback`
+      this.getRedirectUri(port)
     );
   }
 
@@ -417,7 +437,7 @@ export class AuthServer {
     return {
       success: true,
       authUrl,
-      callbackUrl: `http://localhost:${port}/oauth2callback`
+      callbackUrl: this.getRedirectUri(port)
     };
   }
 } 
