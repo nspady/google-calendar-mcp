@@ -2,7 +2,7 @@ import { CallToolResult, McpError, ErrorCode } from "@modelcontextprotocol/sdk/t
 import { OAuth2Client } from "google-auth-library";
 import { google } from "googleapis";
 import { AuthServer } from "../../auth/server.js";
-import { TokenManager } from "../../auth/tokenManager.js";
+import { TokenManager, isInvalidGrantError, reauthInstructions } from "../../auth/tokenManager.js";
 import { validateAccountId } from "../../auth/paths.js";
 import {
   AddAccountResponse,
@@ -169,6 +169,14 @@ export class ManageAccountsHandler {
         token_expiry: expiryDate ? new Date(expiryDate).toISOString() : undefined
       };
     } catch (error) {
+      // Google rejected the refresh token: report it rather than "active"
+      if (isInvalidGrantError(error)) {
+        return {
+          account_id: accountId,
+          status: 'needs-reauth',
+          error: `Access for "${accountId}" was revoked or its refresh token expired. ${reauthInstructions(accountId)}`
+        };
+      }
       const credentials = client.credentials;
       return {
         account_id: accountId,
@@ -216,7 +224,6 @@ export class ManageAccountsHandler {
     }
 
     // Set the account mode for this authentication
-    process.env.GOOGLE_ACCOUNT_MODE = normalizedId;
     context.tokenManager.setAccountMode(normalizedId);
 
     // Start the authentication server

@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.6.3](https://github.com/nspady/google-calendar-mcp/compare/v2.6.2...v2.6.3) (2026-09-02)
+
+
+### Bug Fixes
+
+* **http:** address review feedback on per-session transport ([c7fcf14](https://github.com/nspady/google-calendar-mcp/commit/c7fcf14336372cd06eaa96416ddc58ee3e04f7b8))
+* **http:** harden session transport handling ([d71467b](https://github.com/nspady/google-calendar-mcp/commit/d71467b394ce3dc5aff9b70ed10e6188831414fc))
+* **http:** harden session transport handling ([c3255b4](https://github.com/nspady/google-calendar-mcp/commit/c3255b40891002c7436935201dcc8343200573b6))
+* **http:** per-session StreamableHTTP transports ([985cffd](https://github.com/nspady/google-calendar-mcp/commit/985cffd092403a5ef30d3c331fd6edc4b36626bb))
+* **http:** use per-session StreamableHTTP transports ([7c393dc](https://github.com/nspady/google-calendar-mcp/commit/7c393dce68c2db76eb1b8714c0bb9d76a8c452af))
+* **review:** close init transport whose handshake never commits a session ([023a8d2](https://github.com/nspady/google-calendar-mcp/commit/023a8d28e31e1e8986ae6aef5b672a9e19b02d91))
+
 ## [2.6.2](https://github.com/nspady/google-calendar-mcp/compare/v2.6.1...v2.6.2) (2026-06-01)
 
 

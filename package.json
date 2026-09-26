@@ -1,6 +1,6 @@
 {
   "name": "@cocal/google-calendar-mcp",
-  "version": "2.6.2",
+  "version": "2.6.3",
   "description": "Google Calendar MCP Server with extensive support for calendar management",
   "type": "module",
   "main": "build/index.js",
@@ -32,6 +32,9 @@
   "homepage": "https://github.com/nspady/google-calendar-mcp#readme",
   "author": "nspady",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node build/index.js",
     "build": "node scripts/build.js",
@@ -49,6 +52,7 @@
     "test:integration:openai": "npm run build && vitest run src/tests/integration/openai-mcp-integration.test.ts",
     "test:integration:llm": "npm run test:integration:claude && npm run test:integration:openai",
     "test:integration:docker": "npm run build && vitest run src/tests/integration/docker-integration.test.ts",
+    "test:integration:http": "npm run build && vitest run src/tests/integration/http-transport.test.ts",
     "test:integration:all": "npm run build && vitest run src/tests/integration",
     "test:all": "npm run test && npm run test:integration:all",
     "test:coverage": "vitest run src/tests/unit --coverage",
@@ -57,7 +61,7 @@
     "analyze:tokens:compare": "npx tsx scripts/analyze-tool-descriptions.ts compare --output markdown"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.0",
+    "@modelcontextprotocol/sdk": "^1.30.1",
     "gaxios": "^7.1.3",
     "google-auth-library": "^10.5.0",
     "googleapis": "^171.4.0",
@@ -65,10 +69,10 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@anthropic-ai/sdk": "^0.78.0",
+    "@anthropic-ai/sdk": "^0.127.0",
     "@types/node": "^22.19.11",
     "@vitest/coverage-v8": "^4.0.18",
-    "esbuild": "^0.27.2",
+    "esbuild": "^0.28.2",
     "js-tiktoken": "^1.0.21",
     "openai": "^6.22.0",
     "typescript": "^5.3.3",

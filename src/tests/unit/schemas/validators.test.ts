@@ -717,4 +717,44 @@ describe('Array parameter JSON string preprocessing', () => {
       expect(result.recurrence).toEqual(['RRULE:FREQ=WEEKLY;COUNT=10', 'EXDATE:20240108T100000']);
     });
   });
-}); 
+});
+describe('timeZone validation', () => {
+  const base = {
+    calendarId: 'primary',
+    summary: 'Meeting',
+    start: '2025-01-01T10:00:00',
+    end: '2025-01-01T11:00:00'
+  };
+
+  it('accepts IANA names and treats empty as not provided', () => {
+    expect(ToolSchemas['create-event'].safeParse({ ...base, timeZone: 'America/Los_Angeles' }).success).toBe(true);
+    expect(ToolSchemas['create-event'].safeParse({ ...base, timeZone: '' }).success).toBe(true);
+    expect(ToolSchemas['list-events'].safeParse({ calendarId: 'primary', timeZone: 'Europe/London' }).success).toBe(true);
+  });
+
+  it.each(['create-event', 'update-event', 'list-events', 'search-events', 'get-freebusy', 'get-current-time'] as const)(
+    'rejects an unresolvable timeZone in %s',
+    (tool) => {
+      const schema = ToolSchemas[tool] as any;
+      const result = schema.safeParse({ ...base, eventId: 'event123', query: 'q', timeMin: '2025-01-01T00:00:00', timeMax: '2025-01-02T00:00:00', calendars: [{ id: 'primary' }], timeZone: 'Pacific Time' });
+      expect(result.success).toBe(false);
+      expect(JSON.stringify(result.error.issues)).toContain('IANA time zone');
+    }
+  );
+
+  it('rejects an unresolvable per-field timeZone in JSON start/end', () => {
+    const result = ToolSchemas['create-event'].safeParse({
+      ...base,
+      start: '{"dateTime": "2025-01-01T10:00:00", "timeZone": "Mars/Olympus"}'
+    });
+    expect(result.success).toBe(false);
+    expect(JSON.stringify(result.error!.issues)).toContain('Invalid timeZone \\"Mars/Olympus\\"');
+  });
+
+  it('rejects an unresolvable timeZone in create-events defaults and per-event overrides', () => {
+    const event = { summary: 'A', start: '2025-01-01T10:00:00', end: '2025-01-01T11:00:00' };
+    expect(ToolSchemas['create-events'].safeParse({ timeZone: 'Nowhere/Zone', events: [event] }).success).toBe(false);
+    expect(ToolSchemas['create-events'].safeParse({ events: [{ ...event, timeZone: 'Nowhere/Zone' }] }).success).toBe(false);
+    expect(ToolSchemas['create-events'].safeParse({ timeZone: 'Asia/Tokyo', events: [event] }).success).toBe(true);
+  });
+});

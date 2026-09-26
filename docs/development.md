@@ -33,5 +33,6 @@ npm test            # Run tests
 2. Define schema in `src/tools/registry.ts` (add to `ToolSchemas` object)
 3. Register in `ToolRegistry.tools` array in the same file
 4. Add tests in `src/tests/`
+5. Document the tool in README.md and `docs/architecture.md`
 
-See existing handlers and CLAUDE.md for patterns.
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full checklist.

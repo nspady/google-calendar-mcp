@@ -2,6 +2,7 @@ import { JWT } from 'google-auth-library';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { getKeysFilePath } from './utils.js';
+import { getCredentialsPathSetting, getServiceAccountConfig } from '../config/AppConfig.js';
 
 /**
  * Service account authentication.
@@ -153,7 +154,8 @@ async function readCandidate(candidate: KeyCandidate): Promise<KeyReadResult> {
  *    its own, so a restart can never silently switch a working OAuth install over.
  */
 export async function detectServiceAccountKey(): Promise<ServiceAccountKey | null> {
-  const explicitPath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+  const config = getServiceAccountConfig();
+  const explicitPath = config.keyPath;
   if (explicitPath) {
     // Strict: anything other than a usable key throws out of readCandidate.
     const explicit = await readCandidate({
@@ -166,13 +168,13 @@ export async function detectServiceAccountKey(): Promise<ServiceAccountKey | nul
 
   const own = await readCandidate({
     path: getKeysFilePath(),
-    source: process.env.GOOGLE_OAUTH_CREDENTIALS ? 'GOOGLE_OAUTH_CREDENTIALS' : 'credentials file',
+    source: getCredentialsPathSetting() ? 'GOOGLE_OAUTH_CREDENTIALS' : 'credentials file',
     strict: false
   });
   if (own.kind === 'service-account') return own.key;
   if (own.kind === 'other-credentials') return null;
 
-  const ambientPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  const ambientPath = config.applicationCredentialsPath;
   if (ambientPath) {
     const ambient = await readCandidate({
       path: path.resolve(ambientPath),
@@ -200,7 +202,7 @@ export async function detectServiceAccountKey(): Promise<ServiceAccountKey | nul
  * Without it the service account acts as itself.
  */
 export function initializeServiceAccountClient(key: ServiceAccountKey): JWT {
-  const subject = process.env.GOOGLE_SERVICE_ACCOUNT_SUBJECT;
+  const subject = getServiceAccountConfig().subject;
 
   return new JWT({
     email: key.email,

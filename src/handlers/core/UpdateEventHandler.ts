@@ -5,7 +5,7 @@ import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
 import { RecurringEventHelpers, RecurringEventError, RECURRING_EVENT_ERRORS } from './RecurringEventHelpers.js';
 import { ConflictDetectionService } from "../../services/conflict-detection/index.js";
-import { createTimeObject } from "../../utils/datetime.js";
+import { createTimeObject, usesFallbackTimeZone } from "../../utils/datetime.js";
 import { 
     createStructuredResponse, 
     convertConflictsToStructured,
@@ -92,19 +92,13 @@ export class UpdateEventHandler extends BaseToolHandler {
         const event = await this.updateEventWithScope(oauth2Client, argsWithMergedAttendees);
 
         // Create structured response
+        // Conflicts and any calendars that could not be checked (both undefined when empty)
         const response: UpdateEventResponse = {
-            event: convertGoogleEventToStructured(event, resolvedCalendarId, selectedAccountId)
+            event: convertGoogleEventToStructured(event, resolvedCalendarId, selectedAccountId),
+            conflicts: conflicts ? convertConflictsToStructured(conflicts).conflicts : undefined,
+            warnings: createWarningsArray(conflicts ?? undefined)
         };
-        
-        // Add conflict information if present
-        if (conflicts && conflicts.hasConflicts) {
-            const structuredConflicts = convertConflictsToStructured(conflicts);
-            if (structuredConflicts.conflicts) {
-                response.conflicts = structuredConflicts.conflicts;
-            }
-            response.warnings = createWarningsArray(conflicts);
-        }
-        
+
         return createStructuredResponse(response);
     }
 
@@ -116,8 +110,16 @@ export class UpdateEventHandler extends BaseToolHandler {
             const calendar = this.getCalendar(client);
             const helpers = new RecurringEventHelpers(calendar);
             
-            // Get calendar's default timezone if not provided
-            const defaultTimeZone = await this.getCalendarTimezone(client, args.calendarId);
+            // The calendar's default zone only determines stored times when new times are given
+            // without an explicit timeZone; otherwise a failed lookup must not block the update
+            const needsDefaultZone = !args.timeZone && (
+                usesFallbackTimeZone(args.start) ||
+                usesFallbackTimeZone(args.end) ||
+                args.modificationScope === 'thisAndFollowing'
+            );
+            const defaultTimeZone = await this.getCalendarTimezone(
+                client, args.calendarId, needsDefaultZone ? 'write' : 'read'
+            );
             
             // Detect event type and validate scope usage
             const eventType = await helpers.detectEventType(args.eventId, args.calendarId);

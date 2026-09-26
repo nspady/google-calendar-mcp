@@ -1,5 +1,6 @@
 import { OAuth2Client } from 'google-auth-library';
 import * as fs from 'fs/promises';
+import { isTestEnvironment } from '../config/AppConfig.js';
 import { getKeysFilePath, generateCredentialsErrorMessage, OAuthCredentials } from './utils.js';
 import {
   detectServiceAccountKey,
@@ -15,9 +16,11 @@ import {
  * stdout: stdout is the stdio transport's MCP channel.
  */
 function reportAuthMode(description: string): void {
-  if (process.env.NODE_ENV === 'test') return;
+  if (isTestEnvironment()) return;
   process.stderr.write(`Authenticating with ${description}\n`);
 }
+
+const DEFAULT_REDIRECT_URIS = ['http://localhost:3000/oauth2callback'];
 
 async function loadCredentialsFromFile(): Promise<OAuthCredentials> {
   const keysContent = await fs.readFile(getKeysFilePath(), "utf-8");
@@ -26,13 +29,20 @@ async function loadCredentialsFromFile(): Promise<OAuthCredentials> {
   if (keys.installed) {
     // Standard OAuth credentials file format
     const { client_id, client_secret, redirect_uris } = keys.installed;
-    return { client_id, client_secret, redirect_uris };
+    if (!client_id || !client_secret) {
+      throw new Error('Invalid credentials file: "installed" object is missing client_id or client_secret.');
+    }
+    return {
+      client_id,
+      client_secret,
+      redirect_uris: Array.isArray(redirect_uris) && redirect_uris.length > 0 ? redirect_uris : DEFAULT_REDIRECT_URIS
+    };
   } else if (keys.client_id && keys.client_secret) {
     // Direct format
     return {
       client_id: keys.client_id,
       client_secret: keys.client_secret,
-      redirect_uris: keys.redirect_uris || ['http://localhost:3000/oauth2callback']
+      redirect_uris: keys.redirect_uris || DEFAULT_REDIRECT_URIS
     };
   } else {
     throw new Error('Invalid credentials file format. Expected either "installed" object or direct client_id/client_secret fields.');
@@ -46,7 +56,7 @@ async function loadCredentialsWithFallback(): Promise<OAuthCredentials> {
   } catch (fileError) {
     // Generate helpful error message
     const errorMessage = generateCredentialsErrorMessage();
-    throw new Error(`${errorMessage}\n\nOriginal error: ${fileError instanceof Error ? fileError.message : fileError}`);
+    throw new Error(`${errorMessage}\n\nCredentials file: ${getKeysFilePath()}\nOriginal error: ${fileError instanceof Error ? fileError.message : fileError}`);
   }
 }
 

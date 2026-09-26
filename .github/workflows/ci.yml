@@ -12,15 +12,16 @@ jobs:
     runs-on: ubuntu-latest
     
     strategy:
+      fail-fast: false
       matrix:
-        node-version: ['18']
+        node-version: ['20', '22', '24']
     
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       
     - name: Setup Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v7
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
@@ -38,6 +39,8 @@ jobs:
       run: npm run build
 
     - name: Run unit tests with coverage
+      # Explicit shell enables pipefail so a failing vitest run isn't masked by tee
+      shell: bash
       run: |
         echo "🧪 Running unit tests with coverage..."
         echo "======================================"
@@ -68,7 +71,8 @@ jobs:
         NODE_ENV: test
         
     - name: Upload coverage reports
-      uses: actions/upload-artifact@v4
+      if: matrix.node-version == '22'
+      uses: actions/upload-artifact@v7
       with:
         name: coverage-report
         path: coverage/
@@ -84,20 +88,20 @@ jobs:
 
     steps:
     - name: Checkout PR branch
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         ref: ${{ github.event.pull_request.head.sha }}
 
     - name: Checkout base branch for baseline
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         ref: ${{ github.event.pull_request.base.sha }}
         path: base-branch
 
     - name: Setup Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v7
       with:
-        node-version: '18'
+        node-version: '22'
         cache: 'npm'
 
     - name: Install dependencies (PR branch)
@@ -240,8 +244,10 @@ jobs:
 
         cat /tmp/comparison.md
 
+    # GITHUB_TOKEN is read-only on fork PRs, so commenting would fail; the report is still in the log above
     - name: Find existing comment
-      uses: peter-evans/find-comment@v3
+      if: github.event.pull_request.head.repo.full_name == github.repository
+      uses: peter-evans/find-comment@v4
       id: find-comment
       with:
         issue-number: ${{ github.event.pull_request.number }}
@@ -249,7 +255,8 @@ jobs:
         body-includes: 'Tool Description Token Analysis'
 
     - name: Post or update PR comment
-      uses: peter-evans/create-or-update-comment@v4
+      if: github.event.pull_request.head.repo.full_name == github.repository
+      uses: peter-evans/create-or-update-comment@v5
       with:
         comment-id: ${{ steps.find-comment.outputs.comment-id }}
         issue-number: ${{ github.event.pull_request.number }}

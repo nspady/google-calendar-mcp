@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
+import { getCredentialsPathSetting } from '../config/AppConfig.js';
 import { getSecureTokenPath as getSharedSecureTokenPath, getLegacyTokenPath as getSharedLegacyTokenPath, getAccountMode as getSharedAccountMode } from './paths.js';
 
 // Helper to get the project root directory reliably
@@ -34,9 +35,9 @@ export function getLegacyTokenPath(): string {
 // 2. Default file path (lowest priority)
 export function getKeysFilePath(): string {
   // Priority 1: Environment variable
-  const envCredentialsPath = process.env.GOOGLE_OAUTH_CREDENTIALS;
+  const envCredentialsPath = getCredentialsPathSetting();
   if (envCredentialsPath) {
-    return path.resolve(envCredentialsPath);
+    return envCredentialsPath;
   }
   
   // Priority 2: Default file path
@@ -71,13 +72,27 @@ export interface OAuthCredentialsWithProject {
   redirect_uris?: string[];
 }
 
+// Cached per credentials path: this is called on every tool call, and the file
+// doesn't change while the server runs. Misses aren't cached so a transient read failure recovers.
+const projectIdCache = new Map<string, string>();
+
 // Get project ID from OAuth credentials file
 // Returns undefined if credentials file doesn't exist, is invalid, or missing project_id
 export function getCredentialsProjectId(): string | undefined {
-  try {
-    // Use existing helper to get credentials file path
-    const credentialsPath = getKeysFilePath();
+  const credentialsPath = getKeysFilePath();
+  const cached = projectIdCache.get(credentialsPath);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const projectId = readCredentialsProjectId(credentialsPath);
+  if (projectId !== undefined) {
+    projectIdCache.set(credentialsPath, projectId);
+  }
+  return projectId;
+}
 
+function readCredentialsProjectId(credentialsPath: string): string | undefined {
+  try {
     if (!fs.existsSync(credentialsPath)) {
       return undefined;
     }

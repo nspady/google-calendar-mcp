@@ -16,6 +16,17 @@ describe('TokenManager - Multi-Account Support', () => {
     tokenManager = new TokenManager(oauth2Client);
   });
 
+  describe('constructor accountMode', () => {
+    it('uses an explicit account instead of GOOGLE_ACCOUNT_MODE', () => {
+      expect(new TokenManager(oauth2Client, 'work').getAccountMode()).toBe('work');
+    });
+
+    it('validates an explicit account', () => {
+      expect(() => new TokenManager(oauth2Client, 'Bad Name')).toThrow(/Invalid account ID/);
+      expect(() => new TokenManager(oauth2Client, 'con')).toThrow(/reserved/);
+    });
+  });
+
   describe('loadAllAccounts', () => {
     it('should load all accounts from token file', async () => {
       const mockTokens = {
@@ -206,6 +217,46 @@ describe('TokenManager - Multi-Account Support', () => {
 
       // Has refresh_token, so can get new access tokens = active
       expect(accounts[0].status).toBe('active');
+    });
+
+    it('should mark account as needs-reauth when the refresh token is rejected', async () => {
+      const mockTokens = {
+        work: {
+          access_token: 'work-access',
+          refresh_token: 'revoked-refresh',
+          expiry_date: Date.now() - 3600000
+        }
+      };
+
+      vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(mockTokens));
+      vi.spyOn(tokenManager as any, 'getUserEmail').mockResolvedValue('user@example.com');
+      const refreshSpy = vi.spyOn(OAuth2Client.prototype, 'refreshAccessToken')
+        .mockRejectedValue(new Error('invalid_grant') as never);
+
+      const accounts = await tokenManager.listAccounts();
+
+      expect(accounts[0].status).toBe('needs-reauth');
+      refreshSpy.mockRestore();
+    });
+
+    it('should keep status active when refresh fails for a transient reason', async () => {
+      const mockTokens = {
+        work: {
+          access_token: 'work-access',
+          refresh_token: 'work-refresh',
+          expiry_date: Date.now() - 3600000
+        }
+      };
+
+      vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(mockTokens));
+      vi.spyOn(tokenManager as any, 'getUserEmail').mockResolvedValue('user@example.com');
+      const refreshSpy = vi.spyOn(OAuth2Client.prototype, 'refreshAccessToken')
+        .mockRejectedValue(new Error('socket hang up') as never);
+
+      const accounts = await tokenManager.listAccounts();
+
+      expect(accounts[0].status).toBe('active');
+      refreshSpy.mockRestore();
     });
   });
 

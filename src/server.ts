@@ -27,13 +27,14 @@ import { HttpTransportHandler, HttpTransportConfig } from './transports/http.js'
 
 // Import config
 import { ServerConfig } from './config/TransportConfig.js';
+import { isTestEnvironment } from './config/AppConfig.js';
 
 // Read version from package.json
 const __server_dirname = dirname(fileURLToPath(import.meta.url));
 const SERVER_VERSION = JSON.parse(readFileSync(join(__server_dirname, '..', 'package.json'), 'utf-8')).version;
 
 export class GoogleCalendarMcpServer {
-  private server: McpServer;
+  private server!: McpServer;
   private oauth2Client!: OAuth2Client;
   private tokenManager!: TokenManager;
   private authServer!: AuthServer;
@@ -47,10 +48,6 @@ export class GoogleCalendarMcpServer {
 
   constructor(config: ServerConfig) {
     this.config = config;
-    this.server = new McpServer({
-      name: "google-calendar",
-      version: SERVER_VERSION
-    });
   }
 
   async initialize(): Promise<void> {
@@ -75,9 +72,7 @@ export class GoogleCalendarMcpServer {
     await this.handleStartupAuthentication();
 
     // 4. Set up Modern Tool Definitions
-    this.registerTools();
-    this.registerPrompts();
-    this.registerResources();
+    this.server = this.buildServer();
 
     // 5. Set up Graceful Shutdown
     this.setupGracefulShutdown();
@@ -104,7 +99,7 @@ export class GoogleCalendarMcpServer {
 
   private async handleStartupAuthentication(): Promise<void> {
     // Skip authentication in test environment
-    if (process.env.NODE_ENV === 'test') {
+    if (isTestEnvironment()) {
       return;
     }
 
@@ -144,7 +139,7 @@ export class GoogleCalendarMcpServer {
       const hasValidTokens = await this.tokenManager.validateTokens(accountMode);
       if (!hasValidTokens) {
         process.stderr.write(`⚠️  No valid ${accountMode} user authentication tokens found.\n`);
-        process.stderr.write('Visit the server URL in your browser to authenticate, or run "npm run auth" separately.\n');
+        process.stderr.write('Visit the server URL in your browser to authenticate, or run "npx @cocal/google-calendar-mcp auth" separately.\n');
       } else {
         process.stderr.write(`Valid ${accountMode} user tokens found.\n`);
         this.accounts = await this.tokenManager.loadAllAccounts();
@@ -152,11 +147,22 @@ export class GoogleCalendarMcpServer {
     }
   }
 
-  private registerTools(): void {
-    ToolRegistry.registerAll(this.server, this.executeWithHandler.bind(this), this.config);
+  private buildServer(): McpServer {
+    const server = new McpServer({
+      name: "google-calendar",
+      version: SERVER_VERSION
+    });
+    this.registerTools(server);
+    this.registerPrompts(server);
+    this.registerResources(server);
+    return server;
+  }
+
+  private registerTools(server: McpServer): void {
+    ToolRegistry.registerAll(server, this.executeWithHandler.bind(this), this.config);
 
     // Register account management tools separately (they need special context)
-    this.registerAccountManagementTools();
+    this.registerAccountManagementTools(server);
   }
 
   /**
@@ -165,7 +171,7 @@ export class GoogleCalendarMcpServer {
    * - Doesn't require existing authentication (for 'add' action)
    * - Needs access to authServer, tokenManager, etc.
    */
-  private registerAccountManagementTools(): void {
+  private registerAccountManagementTools(server: McpServer): void {
     // Use arrow functions to keep `this` reference current after reloadAccounts()
     const self = this;
     const serverContext: ServerContext = {
@@ -184,7 +190,7 @@ export class GoogleCalendarMcpServer {
     };
 
     const manageAccountsHandler = new ManageAccountsHandler();
-    this.server.registerTool(
+    server.registerTool(
       'manage-accounts',
       {
         title: 'Manage Google Accounts',
@@ -210,8 +216,8 @@ export class GoogleCalendarMcpServer {
     );
   }
 
-  private registerPrompts(): void {
-    this.server.registerPrompt(
+  private registerPrompts(server: McpServer): void {
+    server.registerPrompt(
       'daily-agenda-brief',
       {
         title: 'Daily Agenda Brief',
@@ -262,7 +268,7 @@ export class GoogleCalendarMcpServer {
       }
     );
 
-    this.server.registerPrompt(
+    server.registerPrompt(
       'find-and-book-meeting',
       {
         title: 'Find and Book Meeting',
@@ -322,8 +328,8 @@ export class GoogleCalendarMcpServer {
     );
   }
 
-  private registerResources(): void {
-    this.server.registerResource(
+  private registerResources(server: McpServer): void {
+    server.registerResource(
       'calendar-accounts',
       'calendar://accounts',
       {
@@ -406,7 +412,8 @@ export class GoogleCalendarMcpServer {
     if (this.config.transport.type === 'stdio') {
       throw new McpError(
         ErrorCode.InvalidRequest,
-        "Authentication tokens are no longer valid. Please restart the server to re-authenticate."
+        "No valid Google account tokens. Use the manage-accounts tool with action 'add' to connect an account " +
+        "(or run 'npx @cocal/google-calendar-mcp auth'), then retry."
       );
     }
 
@@ -417,7 +424,8 @@ export class GoogleCalendarMcpServer {
       if (!authSuccess) {
         throw new McpError(
           ErrorCode.InvalidRequest,
-          "Authentication required. Please run 'npm run auth' to authenticate, or visit the auth URL shown in the logs for HTTP mode."
+          "Authentication required. Use the manage-accounts tool with action 'add', visit the auth URL shown in the server logs, " +
+          "or run 'npx @cocal/google-calendar-mcp auth'."
         );
       }
     } catch (error) {
@@ -427,7 +435,7 @@ export class GoogleCalendarMcpServer {
       if (error instanceof Error) {
         throw new McpError(ErrorCode.InvalidRequest, error.message);
       }
-      throw new McpError(ErrorCode.InvalidRequest, "Authentication required. Please run 'npm run auth' to authenticate.");
+      throw new McpError(ErrorCode.InvalidRequest, "Authentication required. Use the manage-accounts tool with action 'add', or run 'npx @cocal/google-calendar-mcp auth'.");
     }
   }
 
@@ -451,7 +459,7 @@ export class GoogleCalendarMcpServer {
           host: this.config.transport.host
         };
         const httpHandler = new HttpTransportHandler(
-          this.server,
+          () => this.buildServer(),
           httpConfig,
           this.tokenManager
         );

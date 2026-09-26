@@ -219,6 +219,49 @@ describe('CalendarRegistry', () => {
       expect(unified).toHaveLength(1);
       expect(unified[0].calendarId).toBe('work@gmail.com');
     });
+
+    it('should log, report, and briefly cache a build where an account failed', async () => {
+      const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      let now = 1_000_000;
+      const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
+      const mockWorkCalendar = vi.fn().mockResolvedValue({
+        data: { items: [{ id: 'work@gmail.com', summary: 'Work', accessRole: 'owner', primary: true }] }
+      });
+      const mockPersonalCalendar = vi.fn()
+        .mockRejectedValueOnce(new Error('timeout of 3000ms exceeded'))
+        .mockResolvedValue({
+          data: { items: [{ id: 'personal@gmail.com', summary: 'Personal', accessRole: 'owner', primary: true }] }
+        });
+
+      vi.mocked(google.calendar).mockImplementation((config: any) => {
+        const token = config.auth.credentials.access_token;
+        return {
+          calendarList: {
+            list: token === 'work-token' ? mockWorkCalendar : mockPersonalCalendar
+          }
+        } as any;
+      });
+
+      const first = await registry.getUnifiedCalendars(accounts);
+      expect(first.map(c => c.calendarId)).toEqual(['work@gmail.com']);
+      expect(registry.getUnavailableAccounts(accounts)).toEqual(['personal']);
+      expect(stderrSpy).toHaveBeenCalledWith(expect.stringContaining('failed to list calendars for account "personal": timeout of 3000ms exceeded'));
+
+      // Within the short partial TTL: served from cache, and the gap is reported
+      const { warnings } = await registry.resolveCalendarsToAccounts(['work@gmail.com'], accounts);
+      expect(warnings).toContainEqual(expect.stringContaining('personal'));
+      expect(mockPersonalCalendar).toHaveBeenCalledTimes(1);
+
+      // After it (well before the full 5-minute TTL): retried and recovered
+      now += 31 * 1000;
+      const second = await registry.getUnifiedCalendars(accounts);
+      expect(second.map(c => c.calendarId).sort()).toEqual(['personal@gmail.com', 'work@gmail.com']);
+      expect(registry.getUnavailableAccounts(accounts)).toEqual([]);
+      expect(mockPersonalCalendar).toHaveBeenCalledTimes(2);
+
+      nowSpy.mockRestore();
+      stderrSpy.mockRestore();
+    });
   });
 
   describe('getAccountForCalendar', () => {

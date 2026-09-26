@@ -144,6 +144,17 @@ describe('ManageAccountsHandler', () => {
       expect(response.accounts[0].error).toContain('API Error');
     });
 
+    it('should report needs-reauth with instructions when Google rejects the refresh token', async () => {
+      mockCalendarList.mockRejectedValue(new Error('invalid_grant'));
+
+      const result = await handler.runTool({ action: 'list' }, mockContext);
+
+      const response = JSON.parse(result.content[0].text as string);
+      expect(response.accounts[0].status).toBe('needs-reauth');
+      expect(response.accounts[0].error).toContain('"test"');
+      expect(response.accounts[0].error).toContain("npx @cocal/google-calendar-mcp auth test");
+    });
+
     it('should include email, calendar_count, primary_calendar, token_expiry', async () => {
       const result = await handler.runTool({ action: 'list' }, mockContext);
 

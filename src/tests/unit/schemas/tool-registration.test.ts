@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ToolRegistry, ToolSchemas } from '../../../tools/registry.js';
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { existsSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 
 /**
  * Tool Registration Tests
@@ -63,69 +66,50 @@ describe('Tool Registration', () => {
     }
   });
 
-  it('should register titles and annotations for all tools', async () => {
+  // Invariants are derived from the registry so adding a tool doesn't require editing this test
+  it('should register a title and consistent annotations for every tool', async () => {
     await ToolRegistry.registerAll(mockServer, async () => ({ content: [] }));
 
-    const expectedTitles: Record<string, string> = {
-      'list-calendars': 'List Calendars',
-      'list-events': 'List Calendar Events',
-      'search-events': 'Search Calendar Events',
-      'get-event': 'Get Event Details',
-      'list-colors': 'List Calendar Colors',
-      'create-event': 'Create Calendar Event',
-      'create-events': 'Create Calendar Events (Bulk)',
-      'update-event': 'Update Calendar Event',
-      'delete-event': 'Delete Calendar Event',
-      'get-freebusy': 'Get Free/Busy',
-      'get-current-time': 'Get Current Time',
-      'respond-to-event': 'Respond to Event Invitation'
-    };
-
-    const expectedAnnotations: Record<string, Record<string, boolean>> = {
-      'list-calendars': { readOnlyHint: true, openWorldHint: false },
-      'list-events': { readOnlyHint: true, openWorldHint: false },
-      'search-events': { readOnlyHint: true, openWorldHint: false },
-      'get-event': { readOnlyHint: true, openWorldHint: false },
-      'list-colors': { readOnlyHint: true, openWorldHint: false },
-      'get-freebusy': { readOnlyHint: true, openWorldHint: false },
-      'get-current-time': { readOnlyHint: true, openWorldHint: false },
-      'create-event': {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false
-      },
-      'create-events': {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false
-      },
-      'update-event': {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: true,
-        openWorldHint: false
-      },
-      'delete-event': {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: false,
-        openWorldHint: false
-      },
-      'respond-to-event': {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false
-      }
-    };
-
+    expect(registeredTools.length).toBeGreaterThan(0);
     for (const tool of registeredTools) {
-      expect(tool.title).toBe(expectedTitles[tool.name]);
-      expect(tool.title.trim().length).toBeGreaterThan(0);
-      expect(tool.annotations).toEqual(expectedAnnotations[tool.name]);
-      expect(tool.annotations.openWorldHint).toBe(false);
+      expect(typeof tool.title, `${tool.name} title`).toBe('string');
+      expect(tool.title.trim().length, `${tool.name} title`).toBeGreaterThan(0);
+
+      const annotations = tool.annotations;
+      expect(annotations, `${tool.name} annotations`).toBeDefined();
+      expect(annotations.openWorldHint, `${tool.name} openWorldHint`).toBe(false);
+      expect(typeof annotations.readOnlyHint, `${tool.name} readOnlyHint`).toBe('boolean');
+
+      if (annotations.readOnlyHint) {
+        // Destructive/idempotent hints are meaningless for read-only tools
+        expect(annotations, `${tool.name}`).not.toHaveProperty('destructiveHint');
+        expect(annotations, `${tool.name}`).not.toHaveProperty('idempotentHint');
+      } else {
+        expect(typeof annotations.destructiveHint, `${tool.name} destructiveHint`).toBe('boolean');
+        expect(typeof annotations.idempotentHint, `${tool.name} idempotentHint`).toBe('boolean');
+      }
+    }
+  });
+
+  // Per-file floor for handlers: folder-level coverage thresholds let an untested handler
+  // pass on the strength of the others, so require a dedicated test file for each one
+  it('should have a dedicated unit test file for every registered handler', () => {
+    const handlerTestsDir = resolve(dirname(fileURLToPath(import.meta.url)), '../handlers');
+    const tools = (ToolRegistry as any).tools as Array<{ name: string; handler: { name: string } }>;
+
+    const missing = tools
+      .map(t => t.handler.name)
+      .filter(handlerName => !existsSync(resolve(handlerTestsDir, `${handlerName}.test.ts`)));
+    expect(missing).toEqual([]);
+  });
+
+  it('should mark tools that modify or remove existing events as destructive', async () => {
+    await ToolRegistry.registerAll(mockServer, async () => ({ content: [] }));
+
+    for (const name of ['update-event', 'delete-event']) {
+      const tool = registeredTools.find(t => t.name === name);
+      expect(tool, name).toBeDefined();
+      expect(tool!.annotations.destructiveHint, name).toBe(true);
     }
   });
 

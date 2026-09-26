@@ -19,7 +19,7 @@ vi.mock('../../../auth/utils.js', () => ({
   generateCredentialsErrorMessage: () => 'credentials missing'
 }));
 
-import { initializeOAuth2Client } from '../../../auth/client.js';
+import { initializeOAuth2Client, loadCredentials } from '../../../auth/client.js';
 
 const SERVICE_ACCOUNT = {
   path: '/keys/sa.json',
@@ -52,8 +52,8 @@ describe('initializeOAuth2Client', () => {
     );
 
     stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-    // The mode banner is suppressed under NODE_ENV=test, which is exactly what
-    // vitest sets — so the logging assertions below need a non-test value.
+    // The mode banner is suppressed under NODE_ENV=test, so logging assertions
+    // need a non-test value.
     process.env.NODE_ENV = 'production';
   });
 
@@ -65,6 +65,10 @@ describe('initializeOAuth2Client', () => {
 
   function loggedLines(): string {
     return stderr.mock.calls.map((call: any[]) => String(call[0])).join('');
+  }
+
+  async function writeKeys(keys: unknown): Promise<void> {
+    await fs.writeFile(state.keysFilePath, JSON.stringify(keys));
   }
 
   it('uses a service account passed in by the caller without detecting again', async () => {
@@ -90,6 +94,47 @@ describe('initializeOAuth2Client', () => {
     expect(state.detectServiceAccountKey).not.toHaveBeenCalled();
     expect(state.initializeServiceAccountClient).not.toHaveBeenCalled();
     expect((client as any)._clientId).toBe('client-id.apps.googleusercontent.com');
+  });
+
+  it('loads installed-format credentials and their redirect URI', async () => {
+    await writeKeys({
+      installed: {
+        client_id: 'id',
+        client_secret: 'secret',
+        redirect_uris: ['http://localhost:4000/cb']
+      }
+    });
+
+    const client = await initializeOAuth2Client(null);
+
+    expect((client as any)._clientId).toBe('id');
+    expect((client as any).redirectUri).toBe('http://localhost:4000/cb');
+  });
+
+  it('defaults the redirect URI when installed credentials omit it', async () => {
+    await writeKeys({ installed: { client_id: 'id', client_secret: 'secret' } });
+
+    const client = await initializeOAuth2Client(null);
+
+    expect((client as any).redirectUri).toBe('http://localhost:3000/oauth2callback');
+  });
+
+  it('rejects installed-format credentials without a client ID or secret', async () => {
+    await writeKeys({ installed: { client_id: 'id' } });
+
+    await expect(loadCredentials()).rejects.toThrow(/installed.*missing client_id or client_secret/);
+  });
+
+  it('loads direct-format credentials', async () => {
+    await writeKeys({ client_id: 'id', client_secret: 'secret' });
+
+    await expect(loadCredentials()).resolves.toEqual({ client_id: 'id', client_secret: 'secret' });
+  });
+
+  it('reports the credentials file path when loading fails', async () => {
+    await fs.rm(state.keysFilePath);
+
+    await expect(initializeOAuth2Client(null)).rejects.toThrow(state.keysFilePath);
   });
 
   it('reports the service account and where it came from', async () => {

@@ -2,6 +2,28 @@
 
 A Model Context Protocol (MCP) server that provides Google Calendar integration for AI assistants like Claude.
 
+<table>
+<tr>
+<td>
+<h3><a href="https://cocal.io/?utm_source=google_calendar_mcp&amp;utm_medium=listing&amp;utm_campaign=release"><img src="docs/images/cocal/logo.svg" alt="Cocal" width="144"></a></h3>
+<p>I built <a href="https://cocal.io/?utm_source=google_calendar_mcp&amp;utm_medium=listing&amp;utm_campaign=release">Cocal</a> as a separate hosted calendar assistant, taking this project further with a <strong>full visual calendar inside your chat with Claude.</strong> Connect your Google accounts without creating a Google Cloud project or running a server.</p>
+<ul>
+<li><strong>Plan across accounts.</strong> Check availability and catch conflicts across your work, personal, and shared Google Calendars in one conversation.</li>
+<li><strong>Use it on desktop and mobile.</strong> See and manage your calendars in Claude on web, desktop, iOS, and Android.</li>
+<li><strong>Carry your preferences into new chats.</strong> Save rules like “no meetings before 10” or which calendar to use for personal plans.</li>
+</ul>
+<p>
+<a href="docs/images/cocal/day-view.png"><img src="docs/images/cocal/day-view.png" alt="Cocal visual calendar showing work meetings and a personal gym session together on a timeline" width="300"></a>
+<a href="docs/images/cocal/event-details.png"><img src="docs/images/cocal/event-details.png" alt="Cocal event card showing attendees, timezone context, a description, and no conflicts" width="300"></a>
+</p>
+<p><sub>Real Cocal UI with sample calendar data. Click either screenshot to enlarge.</sub></p>
+<p><strong><a href="https://cocal.io/?utm_source=google_calendar_mcp&amp;utm_medium=listing&amp;utm_campaign=release">Try Cocal →</a></strong></p>
+</td>
+</tr>
+</table>
+
+---
+
 ## Features
 
 - **Multi-Account Support**: Connect multiple Google accounts (e.g., work, personal) and query them simultaneously
@@ -263,6 +285,7 @@ Along with the normal capabilities you would expect for a calendar integration y
 | `get-event` | Get details of a specific event by ID |
 | `search-events` | Search events by text query |
 | `create-event` | Create new calendar events |
+| `create-events` | Create multiple events in one call with shared defaults (skips conflict detection) |
 | `update-event` | Update existing events |
 | `delete-event` | Delete events |
 | `respond-to-event` | Respond to event invitations (Accept, Decline, Maybe, No Response) |
@@ -291,9 +314,24 @@ Thanks! – Nate
 ## Configuration
 
 **Environment Variables:**
-- `GOOGLE_OAUTH_CREDENTIALS` - Path to OAuth credentials file
-- `GOOGLE_CALENDAR_MCP_TOKEN_PATH` - Custom token storage location (optional)
-- `ENABLED_TOOLS` - Comma-separated list of tools to enable (see Tool Filtering below)
+
+CLI flags take precedence over environment variables. Malformed values (for example a non-numeric `PORT` or an unknown `TRANSPORT`) stop the server at startup with an error, and the resolved configuration is logged to stderr on start.
+
+| Variable | CLI flag | Default | Description |
+|----------|----------|---------|-------------|
+| `GOOGLE_OAUTH_CREDENTIALS` |  | `gcp-oauth.keys.json` in the package root | Path to the OAuth credentials file |
+| `GOOGLE_SERVICE_ACCOUNT_KEY` |  | unset | Path to an explicit service account key file |
+| `GOOGLE_APPLICATION_CREDENTIALS` |  | unset | Ambient Google credentials file, used when this server has no OAuth credentials file |
+| `GOOGLE_SERVICE_ACCOUNT_SUBJECT` |  | unset | Workspace user to impersonate with domain-wide delegation |
+| `GOOGLE_CALENDAR_MCP_TOKEN_PATH` |  | `$XDG_CONFIG_HOME/google-calendar-mcp/tokens.json` | Custom token storage location |
+| `XDG_CONFIG_HOME` |  | `~/.config` | Base config directory for token storage (ignored if GOOGLE_CALENDAR_MCP_TOKEN_PATH is set) |
+| `GOOGLE_ACCOUNT_MODE` |  | `normal` | Account nickname used for single-account operations and the `auth` command |
+| `ENABLED_TOOLS` | `--enable-tools` | all tools | Comma-separated list of tools to expose (see Tool Filtering) |
+| `TRANSPORT` | `--transport` | `stdio` | Transport type: `stdio` or `http` |
+| `PORT` | `--port` | `3000` | HTTP transport port (1-65535) |
+| `HOST` | `--host` | `127.0.0.1` | HTTP transport bind address |
+| `DEBUG` | `--debug` | `false` | Reserved: `true` is accepted and shown in the startup log but currently enables no extra logging |
+| `NODE_ENV` |  | unset | `test` skips startup authentication and uses the `test` account namespace (for the test suite) |
 
 ### Tool Filtering
 
@@ -323,7 +361,7 @@ npx @cocal/google-calendar-mcp start --enable-tools list-events,create-event,get
 }
 ```
 
-**Available tool names:** `list-calendars`, `list-events`, `search-events`, `get-event`, `list-colors`, `create-event`, `update-event`, `delete-event`, `get-freebusy`, `get-current-time`, `respond-to-event`, `manage-accounts`
+**Available tool names:** `list-calendars`, `list-events`, `search-events`, `get-event`, `list-colors`, `create-event`, `create-events`, `update-event`, `delete-event`, `get-freebusy`, `get-current-time`, `respond-to-event`, `manage-accounts`
 
 **Note:** The `manage-accounts` tool is always available regardless of filtering, as it's needed for authentication management.
 

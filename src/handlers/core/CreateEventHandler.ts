@@ -3,7 +3,7 @@ import { OAuth2Client } from "google-auth-library";
 import { CreateEventInput } from "../../tools/registry.js";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
-import { createTimeObject } from "../../utils/datetime.js";
+import { createTimeObject, usesFallbackTimeZone } from "../../utils/datetime.js";
 import { validateEventId } from "../../utils/event-id-validator.js";
 import { ConflictDetectionService } from "../../services/conflict-detection/index.js";
 import { CONFLICT_DETECTION_CONFIG } from "../../services/conflict-detection/config.js";
@@ -108,7 +108,10 @@ export class CreateEventHandler extends BaseToolHandler {
             }
             
             // Use provided timezone or calendar's default timezone
-            const timezone = args.timeZone || await this.getCalendarTimezone(client, args.calendarId);
+            // A failed lookup only blocks creation when a timezone-naive time depends on it
+            const needsDefaultZone = usesFallbackTimeZone(args.start) || usesFallbackTimeZone(args.end);
+            const timezone = args.timeZone ||
+                await this.getCalendarTimezone(client, args.calendarId, needsDefaultZone ? 'write' : 'read');
 
             // Determine transparency and visibility based on event type
             const { transparency, visibility } = this.getEventTypeDefaults(args);

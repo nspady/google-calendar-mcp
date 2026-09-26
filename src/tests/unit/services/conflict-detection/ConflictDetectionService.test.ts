@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ConflictDetectionService } from '../../../../services/conflict-detection/ConflictDetectionService.js';
 import { OAuth2Client } from 'google-auth-library';
 import { calendar_v3 } from 'googleapis';
+import { GaxiosError } from 'gaxios';
+import { createWarningsArray } from '../../../../utils/response-builder.js';
 
 // Mock googleapis to intercept calendar.events.list calls
 const listMock = vi.fn();
@@ -79,5 +81,53 @@ describe('ConflictDetectionService - timezone normalization', () => {
     });
 
     expect(result.conflicts).toHaveLength(0);
+  });
+});
+
+describe('ConflictDetectionService - calendars that cannot be checked', () => {
+  const newEvent: calendar_v3.Schema$Event = {
+    summary: 'New',
+    start: { dateTime: '2025-01-01T10:00:00Z' },
+    end: { dateTime: '2025-01-01T11:00:00Z' }
+  };
+
+  function apiError(status: number): GaxiosError {
+    const error = new GaxiosError(`HTTP ${status}`, {} as any, { status, data: {} } as any);
+    error.response = { status, data: {} } as any;
+    return error;
+  }
+
+  beforeEach(() => {
+    listMock.mockReset();
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+  });
+
+  it('skips all-day events, whose date-only bounds events.list rejects', async () => {
+    const result = await new ConflictDetectionService().checkConflicts(new OAuth2Client(), {
+      summary: 'Holiday', start: { date: '2025-01-01' }, end: { date: '2025-01-02' }
+    }, 'primary');
+    expect(listMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ hasConflicts: false, conflicts: [], duplicates: [] });
+  });
+
+  it('skips calendars without access quietly', async () => {
+    listMock.mockRejectedValue(apiError(404));
+    const result = await new ConflictDetectionService().checkConflicts(new OAuth2Client(), newEvent, 'primary', {
+      calendarsToCheck: ['primary', 'shared@example.com']
+    });
+    expect(result.hasConflicts).toBe(false);
+    expect(result.warnings).toBeUndefined();
+  });
+
+  it('warns when a calendar check fails for another reason', async () => {
+    listMock
+      .mockResolvedValueOnce({ data: { items: [] } })
+      .mockRejectedValueOnce(new Error('timeout of 3000ms exceeded'));
+    const result = await new ConflictDetectionService().checkConflicts(new OAuth2Client(), newEvent, 'primary', {
+      calendarsToCheck: ['primary', 'team@example.com']
+    });
+    expect(result.hasConflicts).toBe(false);
+    expect(result.warnings).toEqual(['Could not check calendar "team@example.com" for conflicts: timeout of 3000ms exceeded']);
+    expect(createWarningsArray(result)).toEqual(result.warnings);
   });
 });
