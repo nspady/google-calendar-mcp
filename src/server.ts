@@ -10,6 +10,8 @@ import { fileURLToPath } from "url";
 import { initializeOAuth2Client } from './auth/client.js';
 import { AuthServer } from './auth/server.js';
 import { TokenManager } from './auth/tokenManager.js';
+import { detectServiceAccountKey, ServiceAccountSummary } from './auth/serviceAccount.js';
+import { getAccountMode } from './auth/utils.js';
 
 // Import tool registry
 import { ToolRegistry } from './tools/registry.js';
@@ -38,6 +40,11 @@ export class GoogleCalendarMcpServer {
   private authServer!: AuthServer;
   private config: ServerConfig;
   private accounts!: Map<string, OAuth2Client>;
+  // Set when running on a service account key; null means the normal OAuth flow.
+  // The private key is deliberately not kept here — the JWT client holds it.
+  private serviceAccount: ServiceAccountSummary | null = null;
+  // The id the service account is registered under, fixed at startup. See loadAccounts().
+  private serviceAccountId: string | null = null;
 
   constructor(config: ServerConfig) {
     this.config = config;
@@ -45,12 +52,21 @@ export class GoogleCalendarMcpServer {
 
   async initialize(): Promise<void> {
     // 1. Initialize Authentication (but don't block on it)
-    this.oauth2Client = await initializeOAuth2Client();
+    const detected = await detectServiceAccountKey();
+    // Hand the detected key over rather than letting the client detect it again:
+    // one detection, one read of the key file.
+    this.oauth2Client = await initializeOAuth2Client(detected);
+    if (detected) {
+      this.serviceAccount = { path: detected.path, email: detected.email, source: detected.source };
+      // Fix the id now. Re-reading GOOGLE_ACCOUNT_MODE on a later reload could
+      // re-register this service account under a different id.
+      this.serviceAccountId = getAccountMode();
+    }
     this.tokenManager = new TokenManager(this.oauth2Client);
     this.authServer = new AuthServer(this.oauth2Client);
 
-    // 2. Load all authenticated accounts
-    this.accounts = await this.tokenManager.loadAllAccounts();
+    // 2. Load all authenticated accounts.
+    this.accounts = await this.loadAccounts();
 
     // 3. Handle startup authentication based on transport type
     await this.handleStartupAuthentication();
@@ -62,9 +78,36 @@ export class GoogleCalendarMcpServer {
     this.setupGracefulShutdown();
   }
 
+  /**
+   * The account map as it should look right now.
+   *
+   * A service account is authenticated by its key, not by a stored token, so it
+   * never appears in the token store. Rebuilding the map from that store alone
+   * would therefore drop it — leaving the server with no usable client until
+   * restart — so it is re-seeded here instead.
+   *
+   * The other `loadAllAccounts()` calls in this file are reached only after an
+   * early return on `this.serviceAccount`, so they never run in this mode; any
+   * new refresh path belongs here rather than beside them.
+   */
+  private async loadAccounts(): Promise<Map<string, OAuth2Client>> {
+    if (this.serviceAccountId) {
+      return new Map([[this.serviceAccountId, this.oauth2Client]]);
+    }
+    return await this.tokenManager.loadAllAccounts();
+  }
+
   private async handleStartupAuthentication(): Promise<void> {
     // Skip authentication in test environment
     if (isTestEnvironment()) {
+      return;
+    }
+
+    // Service account keys carry their own credentials: there is no consent flow
+    // to run and no refresh token to validate.
+    if (this.serviceAccount) {
+      process.stderr.write(`Using service account ${this.serviceAccount.email}\n`);
+      process.stderr.write(`Share a calendar with that address to grant access.\n`);
       return;
     }
 
@@ -132,12 +175,16 @@ export class GoogleCalendarMcpServer {
     // Use arrow functions to keep `this` reference current after reloadAccounts()
     const self = this;
     const serverContext: ServerContext = {
+      isServiceAccount: this.serviceAccount !== null,
       oauth2Client: this.oauth2Client,
       tokenManager: this.tokenManager,
       authServer: this.authServer,
       get accounts() { return self.accounts; },
       reloadAccounts: async () => {
-        this.accounts = await this.tokenManager.loadAllAccounts();
+        // `manage-accounts list` lands here. Reloading the token store alone
+        // would wipe the service account entry, and `ensureAuthenticated()`
+        // returns early in that mode, so calendar tools would fail until restart.
+        this.accounts = await this.loadAccounts();
         return this.accounts;
       }
     };
@@ -342,6 +389,10 @@ export class GoogleCalendarMcpServer {
   }
 
   private async ensureAuthenticated(): Promise<void> {
+    if (this.serviceAccount) {
+      return;
+    }
+
     const availableAccounts = await this.tokenManager.loadAllAccounts();
     if (availableAccounts.size > 0) {
       this.accounts = availableAccounts;

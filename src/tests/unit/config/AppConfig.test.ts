@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as path from 'path';
 import { readdirSync, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
-import { ConfigError, formatResolvedConfig, loadAppConfig } from '../../../config/AppConfig.js';
+import { ConfigError, formatResolvedConfig, getServiceAccountConfig, loadAppConfig } from '../../../config/AppConfig.js';
 
 // Minimal env so tests don't depend on the developer's shell
 const baseEnv = (overrides: Record<string, string> = {}): NodeJS.ProcessEnv => ({
@@ -110,6 +110,28 @@ describe('loadAppConfig', () => {
       expect(() => loadAppConfig(args, baseEnv(env))).toThrow(ConfigError);
       expect(() => loadAppConfig(args, baseEnv(env))).toThrow(message);
     });
+  });
+});
+
+describe('getServiceAccountConfig', () => {
+  it('returns the configured key paths and impersonated subject', () => {
+    expect(getServiceAccountConfig({
+      GOOGLE_SERVICE_ACCOUNT_KEY: '/keys/explicit.json',
+      GOOGLE_APPLICATION_CREDENTIALS: '/keys/ambient.json',
+      GOOGLE_SERVICE_ACCOUNT_SUBJECT: 'user@example.com'
+    })).toEqual({
+      keyPath: '/keys/explicit.json',
+      applicationCredentialsPath: '/keys/ambient.json',
+      subject: 'user@example.com'
+    });
+  });
+
+  it('treats empty settings as unset', () => {
+    expect(getServiceAccountConfig({
+      GOOGLE_SERVICE_ACCOUNT_KEY: '',
+      GOOGLE_APPLICATION_CREDENTIALS: '',
+      GOOGLE_SERVICE_ACCOUNT_SUBJECT: ''
+    })).toEqual({});
   });
 });
 

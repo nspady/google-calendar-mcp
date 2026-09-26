@@ -717,7 +717,7 @@ describe('Array parameter JSON string preprocessing', () => {
       expect(result.recurrence).toEqual(['RRULE:FREQ=WEEKLY;COUNT=10', 'EXDATE:20240108T100000']);
     });
   });
-}); 
+});
 describe('timeZone validation', () => {
   const base = {
     calendarId: 'primary',

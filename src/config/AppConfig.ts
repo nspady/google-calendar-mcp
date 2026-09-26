@@ -42,9 +42,16 @@ export interface AppConfig extends ServerConfig {
   credentialsPath?: string;
   tokenPath: string;
   accountMode: string;
+  serviceAccount: ServiceAccountConfig;
   /** NODE_ENV=test: skips startup auth, uses the 'test' token namespace, quiets token logging */
   isTest: boolean;
   sources: Record<string, ConfigSource>;
+}
+
+export interface ServiceAccountConfig {
+  keyPath?: string;
+  applicationCredentialsPath?: string;
+  subject?: string;
 }
 
 export class ConfigError extends Error {
@@ -63,6 +70,9 @@ export interface EnvVarDoc {
 
 export const CONFIG_ENV_VARS: readonly EnvVarDoc[] = [
   { name: 'GOOGLE_OAUTH_CREDENTIALS', defaultValue: '`gcp-oauth.keys.json` in the package root', description: 'Path to the OAuth credentials file' },
+  { name: 'GOOGLE_SERVICE_ACCOUNT_KEY', defaultValue: 'unset', description: 'Path to an explicit service account key file' },
+  { name: 'GOOGLE_APPLICATION_CREDENTIALS', defaultValue: 'unset', description: 'Ambient Google credentials file, used when this server has no OAuth credentials file' },
+  { name: 'GOOGLE_SERVICE_ACCOUNT_SUBJECT', defaultValue: 'unset', description: 'Workspace user to impersonate with domain-wide delegation' },
   { name: 'GOOGLE_CALENDAR_MCP_TOKEN_PATH', defaultValue: '`$XDG_CONFIG_HOME/google-calendar-mcp/tokens.json`', description: 'Custom token storage location' },
   { name: 'XDG_CONFIG_HOME', defaultValue: '`~/.config`', description: 'Base config directory for token storage (ignored if GOOGLE_CALENDAR_MCP_TOKEN_PATH is set)' },
   { name: 'GOOGLE_ACCOUNT_MODE', defaultValue: '`normal`', description: 'Account nickname used for single-account operations and the `auth` command' },
@@ -118,6 +128,15 @@ function requireFlagValue(args: string[], index: number, flag: string, hint: str
 export function getCredentialsPathSetting(env: Env = process.env): string | undefined {
   const raw = envValue(env, 'GOOGLE_OAUTH_CREDENTIALS');
   return raw ? path.resolve(raw) : undefined;
+}
+
+/** Service account settings read by the authentication flow. */
+export function getServiceAccountConfig(env: Env = process.env): ServiceAccountConfig {
+  return {
+    keyPath: envValue(env, 'GOOGLE_SERVICE_ACCOUNT_KEY'),
+    applicationCredentialsPath: envValue(env, 'GOOGLE_APPLICATION_CREDENTIALS'),
+    subject: envValue(env, 'GOOGLE_SERVICE_ACCOUNT_SUBJECT')
+  };
 }
 
 /** True when NODE_ENV=test (set automatically by vitest). */
@@ -183,6 +202,7 @@ export function loadAppConfig(args: string[], env: Env = process.env): AppConfig
   );
 
   const credentialsPath = getCredentialsPathSetting(env);
+  const serviceAccount = getServiceAccountConfig(env);
   sources.credentialsPath = credentialsPath ? 'env' : 'default';
   sources.tokenPath = envValue(env, 'GOOGLE_CALENDAR_MCP_TOKEN_PATH') || envValue(env, 'XDG_CONFIG_HOME') ? 'env' : 'default';
   sources.accountMode = env.GOOGLE_ACCOUNT_MODE !== undefined ? 'env' : 'default';
@@ -201,6 +221,7 @@ export function loadAppConfig(args: string[], env: Env = process.env): AppConfig
     credentialsPath,
     tokenPath: getSecureTokenPath(env),
     accountMode,
+    serviceAccount: Object.freeze(serviceAccount),
     isTest: isTestEnvironment(env),
     sources: Object.freeze(sources)
   });
