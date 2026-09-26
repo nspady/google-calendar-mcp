@@ -61,10 +61,8 @@ export class GoogleCalendarMcpServer {
     this.oauth2Client = await initializeOAuth2Client(detected);
     if (detected) {
       this.serviceAccount = { path: detected.path, email: detected.email, source: detected.source };
-      // Fix the id now. getAccountMode() reads GOOGLE_ACCOUNT_MODE, which
-      // `manage-accounts add` overwrites, so re-reading it on a later reload would
-      // re-register the same service account under a different id and leave every
-      // tool call looking for an account that is no longer there.
+      // Fix the id now. Re-reading GOOGLE_ACCOUNT_MODE on a later reload could
+      // re-register this service account under a different id.
       this.serviceAccountId = getAccountMode();
     }
     this.tokenManager = new TokenManager(this.oauth2Client);
@@ -171,6 +169,7 @@ export class GoogleCalendarMcpServer {
     // Use arrow functions to keep `this` reference current after reloadAccounts()
     const self = this;
     const serverContext: ServerContext = {
+      isServiceAccount: this.serviceAccount !== null,
       oauth2Client: this.oauth2Client,
       tokenManager: this.tokenManager,
       authServer: this.authServer,

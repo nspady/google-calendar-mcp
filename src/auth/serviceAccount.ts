@@ -43,7 +43,7 @@ export type ServiceAccountSummary = Omit<ServiceAccountKey, 'privateKey'>;
 /** What a candidate file turned out to be. */
 type KeyReadResult =
   | { kind: 'service-account'; key: ServiceAccountKey }
-  /** Readable JSON that is not a service account key — i.e. OAuth client credentials. */
+  /** OAuth-like client credentials that take precedence over ambient credentials. */
   | { kind: 'other-credentials' }
   /** Absent, unreadable, not JSON, or a malformed service account key. */
   | { kind: 'unusable' };
@@ -88,7 +88,9 @@ async function readCandidate(candidate: KeyCandidate): Promise<KeyReadResult> {
     return { kind: 'unusable' };
   }
 
-  const key = parsed as Record<string, unknown> | null;
+  const key = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+    ? parsed as Record<string, unknown>
+    : null;
 
   if (!key || key.type !== 'service_account') {
     if (candidate.strict) {
@@ -97,7 +99,11 @@ async function readCandidate(candidate: KeyCandidate): Promise<KeyReadResult> {
           `(expected "type": "service_account").`
       );
     }
-    return { kind: 'other-credentials' };
+    if (key && ((key.installed && typeof key.installed === 'object' && !Array.isArray(key.installed))
+      || typeof key.client_id === 'string')) {
+      return { kind: 'other-credentials' };
+    }
+    return { kind: 'unusable' };
   }
 
   if (typeof key.client_email !== 'string' || typeof key.private_key !== 'string') {

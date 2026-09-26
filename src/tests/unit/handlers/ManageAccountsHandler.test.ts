@@ -55,6 +55,7 @@ describe('ManageAccountsHandler', () => {
 
     // Create mock context
     mockContext = {
+      isServiceAccount: false,
       oauth2Client: mockOAuth2Client,
       tokenManager: mockTokenManager as TokenManager,
       authServer: mockAuthServer as AuthServer,
@@ -80,6 +81,20 @@ describe('ManageAccountsHandler', () => {
         ]
       }
     });
+  });
+
+  it.each(['add', 'remove'] as const)('rejects %s before any side effects in service account mode', async (action) => {
+    mockContext.isServiceAccount = true;
+    const originalMode = process.env.GOOGLE_ACCOUNT_MODE;
+
+    await expect(handler.runTool({ action, account_id: 'test' }, mockContext))
+      .rejects.toThrow(`Cannot ${action} accounts in service account mode`);
+
+    expect(process.env.GOOGLE_ACCOUNT_MODE).toBe(originalMode);
+    expect(mockTokenManager.setAccountMode).not.toHaveBeenCalled();
+    expect(mockTokenManager.removeAccount).not.toHaveBeenCalled();
+    expect(mockAuthServer.startForMcpTool).not.toHaveBeenCalled();
+    expect(mockContext.reloadAccounts).not.toHaveBeenCalled();
   });
 
   // ==================== LIST ACTION ====================

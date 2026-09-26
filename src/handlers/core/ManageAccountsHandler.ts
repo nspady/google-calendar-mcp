@@ -19,6 +19,7 @@ export interface ManageAccountsArgs {
 }
 
 export interface ServerContext {
+  isServiceAccount: boolean;
   oauth2Client: OAuth2Client;
   tokenManager: TokenManager;
   authServer: AuthServer;
@@ -36,6 +37,13 @@ export interface ServerContext {
  */
 export class ManageAccountsHandler {
   async runTool(args: ManageAccountsArgs, context: ServerContext): Promise<CallToolResult> {
+    if (context.isServiceAccount && (args.action === 'add' || args.action === 'remove')) {
+      throw new McpError(
+        ErrorCode.InvalidRequest,
+        `Cannot ${args.action} accounts in service account mode. Configure the service account key or its calendar sharing instead.`
+      );
+    }
+
     switch (args.action) {
       case 'list':
         return this.listAccounts(args.account_id, context);

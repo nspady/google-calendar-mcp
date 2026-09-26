@@ -120,6 +120,27 @@ describe('service account authentication', () => {
       await expect(detectServiceAccountKey()).resolves.toBeNull();
     });
 
+    it.each([null, [], {}, { unrelated: true }])(
+      'falls back to ambient credentials for non-OAuth JSON %j', async (contents) => {
+        process.env.GOOGLE_OAUTH_CREDENTIALS = await writeKey('not-oauth.json', contents);
+        process.env.GOOGLE_APPLICATION_CREDENTIALS = await writeKey('adc.json', SERVICE_ACCOUNT_KEY);
+
+        const detected = await detectOrFail();
+
+        expect(detected.source).toBe('GOOGLE_APPLICATION_CREDENTIALS');
+      }
+    );
+
+    it('recognizes direct OAuth credentials and keeps them ahead of ambient credentials', async () => {
+      process.env.GOOGLE_OAUTH_CREDENTIALS = await writeKey('oauth.json', {
+        client_id: 'client-id.apps.googleusercontent.com',
+        client_secret: 'client-secret'
+      });
+      process.env.GOOGLE_APPLICATION_CREDENTIALS = await writeKey('adc.json', SERVICE_ACCOUNT_KEY);
+
+      await expect(detectServiceAccountKey()).resolves.toBeNull();
+    });
+
     it('still reads GOOGLE_APPLICATION_CREDENTIALS when no OAuth credentials path is set', async () => {
       process.env.GOOGLE_APPLICATION_CREDENTIALS = await writeKey('adc.json', SERVICE_ACCOUNT_KEY);
 

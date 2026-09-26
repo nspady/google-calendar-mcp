@@ -304,6 +304,7 @@ describe('GoogleCalendarMcpServer', () => {
 
       const reloaded = await serverContext.reloadAccounts();
 
+      expect(serverContext.isServiceAccount).toBe(true);
       expect(reloaded.size).toBe(1);
       expect([...reloaded.values()][0]).toEqual({ id: 'oauth-client' });
       expect(serverContext.accounts.size).toBe(1);
@@ -332,11 +333,9 @@ describe('GoogleCalendarMcpServer', () => {
       expect(payload.calendarCount).toBe(1);
     });
 
-    it('keeps the same account id when manage-accounts changes the account mode', async () => {
-      // `manage-accounts add` writes GOOGLE_ACCOUNT_MODE unconditionally, before it
-      // knows whether the add succeeded. Re-reading that on reload would move the
-      // service account to a new id, and every tool call naming the old one would
-      // fail with "Account not found".
+    it('keeps the same account id if the account mode changes', async () => {
+      // A later external change to GOOGLE_ACCOUNT_MODE must not move the service
+      // account to a new id on reload.
       const savedMode = process.env.GOOGLE_ACCOUNT_MODE;
       try {
         await initServiceAccountServer();
@@ -369,6 +368,7 @@ describe('GoogleCalendarMcpServer', () => {
 
       const reloaded = await serverContext.reloadAccounts();
 
+      expect(serverContext.isServiceAccount).toBe(false);
       expect([...reloaded.keys()]).toEqual(['work']);
       expect(state.initializeOAuth2Client).toHaveBeenCalledWith(null);
     });
