@@ -100,7 +100,9 @@ async function readCandidate(candidate: KeyCandidate): Promise<KeyReadResult> {
           `(expected "type": "service_account").`
       );
     }
-    if (key && ((key.installed && typeof key.installed === 'object' && !Array.isArray(key.installed))
+    const isClientObject = (value: unknown) =>
+      Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+    if (key && (isClientObject(key.installed) || isClientObject(key.web)
       || typeof key.client_id === 'string')) {
       return { kind: 'other-credentials' };
     }

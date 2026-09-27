@@ -141,6 +141,15 @@ describe('service account authentication', () => {
       await expect(detectServiceAccountKey()).resolves.toBeNull();
     });
 
+    it('keeps web-format OAuth credentials ahead of ambient credentials', async () => {
+      process.env.GOOGLE_OAUTH_CREDENTIALS = await writeKey('web.json', {
+        web: { client_id: 'client-id.apps.googleusercontent.com', client_secret: 'client-secret' }
+      });
+      process.env.GOOGLE_APPLICATION_CREDENTIALS = await writeKey('adc.json', SERVICE_ACCOUNT_KEY);
+
+      await expect(detectServiceAccountKey()).resolves.toBeNull();
+    });
+
     it('still reads GOOGLE_APPLICATION_CREDENTIALS when no OAuth credentials path is set', async () => {
       process.env.GOOGLE_APPLICATION_CREDENTIALS = await writeKey('adc.json', SERVICE_ACCOUNT_KEY);
 
