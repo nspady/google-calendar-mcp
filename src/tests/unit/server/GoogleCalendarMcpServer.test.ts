@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   tokenManagerInstance: undefined as any,
   authServerInstance: undefined as any,
   initializeOAuth2Client: vi.fn(async () => ({ id: 'oauth-client' })),
+  detectServiceAccountKey: vi.fn(async () => null as any),
   tokenManagerLoadAllAccounts: vi.fn(async () => new Map()),
   tokenManagerGetAccountMode: vi.fn(() => 'normal'),
   tokenManagerValidateTokens: vi.fn(async () => false),
@@ -42,6 +43,10 @@ vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
 
 vi.mock('../../../auth/client.js', () => ({
   initializeOAuth2Client: state.initializeOAuth2Client
+}));
+
+vi.mock('../../../auth/serviceAccount.js', () => ({
+  detectServiceAccountKey: state.detectServiceAccountKey
 }));
 
 vi.mock('../../../auth/tokenManager.js', () => ({
@@ -110,6 +115,7 @@ describe('GoogleCalendarMcpServer', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    state.detectServiceAccountKey.mockResolvedValue(null);
     state.tokenManagerLoadAllAccounts.mockResolvedValue(new Map());
     state.tokenManagerValidateTokens.mockResolvedValue(false);
     state.tokenManagerGetAccountMode.mockReturnValue('normal');
@@ -246,6 +252,129 @@ describe('GoogleCalendarMcpServer', () => {
     await server.initialize();
 
     expect(state.tokenManagerValidateTokens).not.toHaveBeenCalled();
+  });
+
+  describe('service account mode', () => {
+    const SERVICE_ACCOUNT = {
+      path: '/keys/sa.json',
+      email: 'calendar-mcp@test-project.iam.gserviceaccount.com',
+      source: 'GOOGLE_SERVICE_ACCOUNT_KEY',
+      privateKey: 'private-key'
+    };
+
+    async function initServiceAccountServer() {
+      state.detectServiceAccountKey.mockResolvedValue(SERVICE_ACCOUNT);
+      // A service account is authenticated by its key and never appears in the
+      // OAuth token store, so the store stays empty in this mode.
+      state.tokenManagerLoadAllAccounts.mockResolvedValue(new Map());
+
+      const server = new GoogleCalendarMcpServer({
+        transport: { type: 'stdio' },
+        debug: false
+      } as any);
+      await server.initialize();
+      return server;
+    }
+
+    /** The context `manage-accounts` operates on, captured from the tool call. */
+    async function captureServerContext() {
+      const call = state.registerTool.mock.calls.find(
+        (c: any[]) => c[0] === 'manage-accounts'
+      )!;
+      await call[2]({ action: 'list' });
+      return state.manageAccountsRunTool.mock.calls[0][1];
+    }
+
+    it('registers the service account without consulting the token store', async () => {
+      await initServiceAccountServer();
+
+      expect(state.tokenManagerLoadAllAccounts).not.toHaveBeenCalled();
+    });
+
+    it('passes the detected key to the client so it is not detected twice', async () => {
+      await initServiceAccountServer();
+
+      expect(state.detectServiceAccountKey).toHaveBeenCalledTimes(1);
+      expect(state.initializeOAuth2Client).toHaveBeenCalledWith(SERVICE_ACCOUNT);
+    });
+
+    it('keeps the service account registered across manage-accounts reloads', async () => {
+      // Reloading the token store alone wiped the service account entry, and
+      // ensureAuthenticated() returns early in this mode, so every calendar tool
+      // failed until the server was restarted.
+      await initServiceAccountServer();
+      const serverContext = await captureServerContext();
+
+      const reloaded = await serverContext.reloadAccounts();
+
+      expect(serverContext.isServiceAccount).toBe(true);
+      expect(reloaded.size).toBe(1);
+      expect([...reloaded.values()][0]).toEqual({ id: 'oauth-client' });
+      expect(serverContext.accounts.size).toBe(1);
+    });
+
+    it('still serves calendar accounts after a reload', async () => {
+      state.calendarRegistryGetUnifiedCalendars.mockResolvedValue([
+        {
+          calendarId: 'shared-cal',
+          displayName: 'Shared Calendar',
+          preferredAccount: 'normal',
+          accounts: [{ accountId: 'normal', accessRole: 'writer', primary: false }]
+        }
+      ]);
+
+      await initServiceAccountServer();
+      const serverContext = await captureServerContext();
+      await serverContext.reloadAccounts();
+
+      const resourceCall = state.registerResource.mock.calls.find(
+        (c: any[]) => c[0] === 'calendar-accounts'
+      )!;
+      const payload = JSON.parse((await resourceCall[3]()).contents[0].text);
+
+      expect(payload.accountCount).toBe(1);
+      expect(payload.calendarCount).toBe(1);
+    });
+
+    it('keeps the same account id if the account mode changes', async () => {
+      // A later external change to GOOGLE_ACCOUNT_MODE must not move the service
+      // account to a new id on reload.
+      const savedMode = process.env.GOOGLE_ACCOUNT_MODE;
+      try {
+        await initServiceAccountServer();
+        const serverContext = await captureServerContext();
+        const idAtStartup = [...serverContext.accounts.keys()][0];
+
+        process.env.GOOGLE_ACCOUNT_MODE = 'work';
+        const reloaded = await serverContext.reloadAccounts();
+
+        expect([...reloaded.keys()]).toEqual([idAtStartup]);
+      } finally {
+        if (savedMode === undefined) {
+          delete process.env.GOOGLE_ACCOUNT_MODE;
+        } else {
+          process.env.GOOGLE_ACCOUNT_MODE = savedMode;
+        }
+      }
+    });
+
+    it('reloads from the token store when no service account is present', async () => {
+      state.detectServiceAccountKey.mockResolvedValue(null);
+      state.tokenManagerLoadAllAccounts.mockResolvedValue(new Map([['work', {} as any]]));
+
+      const server = new GoogleCalendarMcpServer({
+        transport: { type: 'stdio' },
+        debug: false
+      } as any);
+      await server.initialize();
+      const serverContext = await captureServerContext();
+
+      const reloaded = await serverContext.reloadAccounts();
+
+      expect(serverContext.isServiceAccount).toBe(false);
+      expect([...reloaded.keys()]).toEqual(['work']);
+      expect(state.initializeOAuth2Client).toHaveBeenCalledWith(null);
+    });
   });
 
   describe('prompt callbacks', () => {
