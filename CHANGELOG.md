@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.7.0](https://github.com/nspady/google-calendar-mcp/compare/v2.6.3...v2.7.0) (2026-09-28)
+
+
+### Features
+
+* **auth:** service account authentication (works with personal [@gmail](https://github.com/gmail).com calendars) ([#192](https://github.com/nspady/google-calendar-mcp/issues/192)) ([84583fc](https://github.com/nspady/google-calendar-mcp/commit/84583fc355407497a5bf8bb63b8a6add2b808df6))
+* **auth:** support OAuth credentials in `web` (Web application) format ([830b5df](https://github.com/nspady/google-calendar-mcp/commit/830b5df1579591549ef81abece7f594bb2fcce1e))
+
+
+### Bug Fixes
+
+* **auth:** recognize web-format credentials in service account detection; document web client redirect URIs ([0215a42](https://github.com/nspady/google-calendar-mcp/commit/0215a42ed24812cd1f6bc477e51d517420ffda60))
+* keep explicit OAuth credentials from falling back to a service account; ignore PORT in stdio mode ([#211](https://github.com/nspady/google-calendar-mcp/issues/211)) ([e0d05b7](https://github.com/nspady/google-calendar-mcp/commit/e0d05b77f4947913faec96fc647a7218c2423a42))
+* repo hardening (CI test gate, central config, silent-failure and token fixes) ([#200](https://github.com/nspady/google-calendar-mcp/issues/200)) ([72afe99](https://github.com/nspady/google-calendar-mcp/commit/72afe99462b77cf6a53148bbbab15a7e8ff39363))
+
 ## [2.6.3](https://github.com/nspady/google-calendar-mcp/compare/v2.6.2...v2.6.3) (2026-09-02)
 
 
