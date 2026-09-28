@@ -1,7 +1,7 @@
 import { OAuth2Client } from 'google-auth-library';
 import { applyApiBaseUrl } from '../utils/api-base-url.js';
 import * as fs from 'fs/promises';
-import { isTestEnvironment } from '../config/AppConfig.js';
+import { API_BASE_URL_ENV, DEFAULT_API_ORIGIN, getApiBaseUrl, isTestEnvironment } from '../config/AppConfig.js';
 import { getKeysFilePath, generateCredentialsErrorMessage, OAuthCredentials } from './utils.js';
 import {
   detectServiceAccountKey,
@@ -19,6 +19,16 @@ import {
 function reportAuthMode(description: string): void {
   if (isTestEnvironment()) return;
   process.stderr.write(`Authenticating with ${description}\n`);
+}
+
+/**
+ * Announce a GOOGLE_CALENDAR_API_BASE_URL override, since access tokens and
+ * request data go to that host. Origin only: the path adds nothing to "where is
+ * my data going?".
+ */
+function reportApiBaseUrl(base: string): void {
+  if (isTestEnvironment() || base === DEFAULT_API_ORIGIN) return;
+  process.stderr.write(`Calendar API calls routed to ${new URL(base).origin} (${API_BASE_URL_ENV})\n`);
 }
 
 const DEFAULT_REDIRECT_URIS = ['http://localhost:3000/oauth2callback'];
@@ -82,13 +92,17 @@ async function loadCredentialsWithFallback(): Promise<OAuthCredentials> {
 export async function initializeOAuth2Client(
   serviceAccount?: ServiceAccountKey | null
 ): Promise<OAuth2Client> {
+  // Validated here, outside the credentials try below, so a bad value is not
+  // reported as a problem with the OAuth keys.
+  reportApiBaseUrl(getApiBaseUrl());
+
   // A service account key short-circuits the OAuth flow entirely. JWT extends
   // OAuth2Client, so callers are unaffected.
   const detected =
     serviceAccount === undefined ? await detectServiceAccountKey() : serviceAccount;
   if (detected) {
     reportAuthMode(`service account ${detected.email} from ${detected.source}`);
-    return initializeServiceAccountClient(detected);
+    return applyApiBaseUrl(initializeServiceAccountClient(detected));
   }
 
   reportAuthMode(`OAuth client credentials from ${getKeysFilePath()}`);

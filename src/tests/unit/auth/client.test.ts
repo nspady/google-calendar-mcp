@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
+import { OAuth2Client } from 'google-auth-library';
+import { google } from 'googleapis';
 
 const state = vi.hoisted(() => ({
   detectServiceAccountKey: vi.fn(async () => null as any),
@@ -193,5 +195,55 @@ describe('initializeOAuth2Client', () => {
     await initializeOAuth2Client(SERVICE_ACCOUNT as any);
 
     expect(loggedLines()).toBe('');
+  });
+
+  describe('with GOOGLE_CALENDAR_API_BASE_URL set', () => {
+    const savedBaseUrl = process.env.GOOGLE_CALENDAR_API_BASE_URL;
+
+    afterEach(() => {
+      if (savedBaseUrl === undefined) delete process.env.GOOGLE_CALENDAR_API_BASE_URL;
+      else process.env.GOOGLE_CALENDAR_API_BASE_URL = savedBaseUrl;
+    });
+
+    it('names the origin it routes Calendar calls to, once, without the path', async () => {
+      process.env.GOOGLE_CALENDAR_API_BASE_URL = 'http://127.0.0.1:10255/tenant-a/calendar';
+
+      await initializeOAuth2Client(null);
+
+      const routed = loggedLines().split('\n').filter((line) => line.includes('routed'));
+      expect(routed).toEqual(['Calendar API calls routed to http://127.0.0.1:10255 (GOOGLE_CALENDAR_API_BASE_URL)']);
+    });
+
+    it('says nothing about routing when unset', async () => {
+      delete process.env.GOOGLE_CALENDAR_API_BASE_URL;
+
+      await initializeOAuth2Client(null);
+
+      expect(loggedLines()).not.toContain('routed');
+    });
+
+    it('reports a bad value as itself, not as a credentials problem', async () => {
+      process.env.GOOGLE_CALENDAR_API_BASE_URL = 'proxy.internal/calendar';
+
+      // Anchored: an "Error loading OAuth keys: " prefix would fail it.
+      await expect(initializeOAuth2Client(null)).rejects.toThrow(/^GOOGLE_CALENDAR_API_BASE_URL must be/);
+    });
+
+    it('routes a service account client too', async () => {
+      process.env.GOOGLE_CALENDAR_API_BASE_URL = 'http://127.0.0.1:10255/tenant-a/calendar';
+      const fetchImplementation = vi.fn().mockResolvedValue(
+        new Response('{"items":[]}', { status: 200, headers: { 'content-type': 'application/json' } })
+      );
+      const jwt = new OAuth2Client({ transporterOptions: { fetchImplementation } });
+      jwt.setCredentials({ access_token: 'stub', expiry_date: Date.now() + 3_600_000 });
+      state.initializeServiceAccountClient.mockReturnValue(jwt);
+
+      const client = await initializeOAuth2Client(SERVICE_ACCOUNT as any);
+      await google.calendar({ version: 'v3', auth: client }).calendarList.list();
+
+      expect(String(fetchImplementation.mock.calls[0][0])).toBe(
+        'http://127.0.0.1:10255/tenant-a/calendar/calendar/v3/users/me/calendarList'
+      );
+    });
   });
 });

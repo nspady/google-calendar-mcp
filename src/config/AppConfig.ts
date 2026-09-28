@@ -43,6 +43,8 @@ export interface AppConfig extends ServerConfig {
   tokenPath: string;
   accountMode: string;
   serviceAccount: ServiceAccountConfig;
+  /** Where Calendar API calls go: GOOGLE_CALENDAR_API_BASE_URL, or the public Google origin */
+  apiBaseUrl: string;
   /** NODE_ENV=test: skips startup auth, uses the 'test' token namespace, quiets token logging */
   isTest: boolean;
   sources: Record<string, ConfigSource>;
@@ -81,6 +83,7 @@ export const CONFIG_ENV_VARS: readonly EnvVarDoc[] = [
   { name: 'PORT', cliFlag: '--port', defaultValue: '`3000`', description: 'HTTP transport port (1-65535)' },
   { name: 'HOST', cliFlag: '--host', defaultValue: '`127.0.0.1`', description: 'HTTP transport bind address' },
   { name: 'DEBUG', cliFlag: '--debug', defaultValue: '`false`', description: 'Reserved: `true` is accepted and shown in the startup log but currently enables no extra logging' },
+  { name: 'GOOGLE_CALENDAR_API_BASE_URL', defaultValue: '`https://www.googleapis.com`', description: 'Send Calendar API calls to this base URL instead (see below)' },
   { name: 'NODE_ENV', defaultValue: 'unset', description: '`test` skips startup authentication and uses the `test` account namespace (for the test suite)' },
 ];
 
@@ -137,6 +140,41 @@ export function getServiceAccountConfig(env: Env = process.env): ServiceAccountC
     applicationCredentialsPath: envValue(env, 'GOOGLE_APPLICATION_CREDENTIALS'),
     subject: envValue(env, 'GOOGLE_SERVICE_ACCOUNT_SUBJECT')
   };
+}
+
+export const API_BASE_URL_ENV = 'GOOGLE_CALENDAR_API_BASE_URL';
+export const DEFAULT_API_ORIGIN = 'https://www.googleapis.com';
+
+/**
+ * The base URL every Calendar API call goes to: GOOGLE_CALENDAR_API_BASE_URL's
+ * origin and path without a trailing slash, or the public Google origin when
+ * unset or blank.
+ * @throws ConfigError if the override is not an absolute http(s) URL, or carries
+ *   credentials, a query or a fragment. The message leaves the value out, so a
+ *   password in it never reaches the logs.
+ */
+export function getApiBaseUrl(env: Env = process.env): string {
+  const raw = envValue(env, API_BASE_URL_ENV)?.trim();
+  if (!raw) return DEFAULT_API_ORIGIN;
+  let parsed: URL | undefined;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    parsed = undefined;
+  }
+  if (!parsed || (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')) {
+    throw new ConfigError(`${API_BASE_URL_ENV} must be an absolute http(s) URL`);
+  }
+  if (parsed.username || parsed.password) {
+    throw new ConfigError(`${API_BASE_URL_ENV} must not contain credentials`);
+  }
+  if (parsed.search) {
+    throw new ConfigError(`${API_BASE_URL_ENV} must not contain a query string`);
+  }
+  if (parsed.hash) {
+    throw new ConfigError(`${API_BASE_URL_ENV} must not contain a fragment`);
+  }
+  return `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, '');
 }
 
 /** True when NODE_ENV=test (set automatically by vitest). */
@@ -208,6 +246,8 @@ export function loadAppConfig(args: string[], env: Env = process.env): AppConfig
   const serviceAccount = getServiceAccountConfig(env);
   sources.credentialsPath = credentialsPath ? 'env' : 'default';
   sources.tokenPath = envValue(env, 'GOOGLE_CALENDAR_MCP_TOKEN_PATH') || envValue(env, 'XDG_CONFIG_HOME') ? 'env' : 'default';
+  const apiBaseUrl = getApiBaseUrl(env);
+  sources.apiBaseUrl = apiBaseUrl === DEFAULT_API_ORIGIN ? 'default' : 'env';
   sources.accountMode = env.GOOGLE_ACCOUNT_MODE !== undefined ? 'env' : 'default';
 
   let accountMode: string;
@@ -225,6 +265,7 @@ export function loadAppConfig(args: string[], env: Env = process.env): AppConfig
     tokenPath: getSecureTokenPath(env),
     accountMode,
     serviceAccount: Object.freeze(serviceAccount),
+    apiBaseUrl,
     isTest: isTestEnvironment(env),
     sources: Object.freeze(sources)
   });

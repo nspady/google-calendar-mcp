@@ -335,7 +335,7 @@ CLI flags take precedence over environment variables. Malformed values (for exam
 | `GOOGLE_CALENDAR_API_BASE_URL` |  | `https://www.googleapis.com` | Send Calendar API calls to this base URL instead (see below) |
 | `NODE_ENV` |  | unset | `test` skips startup authentication and uses the `test` account namespace (for the test suite) |
 
-`GOOGLE_CALENDAR_API_BASE_URL` is for an egress proxy that originates TLS itself, e.g. `http://127.0.0.1:10255/tenant-a/calendar`. A path prefix is kept, so requests go to `<url>/calendar/v3/...`. Token refresh and the login flow are unchanged.
+`GOOGLE_CALENDAR_API_BASE_URL` is for an egress proxy that originates TLS itself, e.g. `http://127.0.0.1:10255/tenant-a/calendar`. A path prefix is kept, so requests go to `<url>/calendar/v3/...`. Calendar access tokens and request data are sent to this URL, unencrypted with `http://`, so point it only at a proxy you control. Token refresh and the login flow are unchanged: refresh still has to reach `oauth2.googleapis.com` directly or through `HTTPS_PROXY`, whatever this is set to. With `HTTPS_PROXY` set, list this URL's host in `NO_PROXY` to reach it directly; batch requests go to it directly either way.
 
 ### Tool Filtering
 

@@ -1,5 +1,5 @@
 import { OAuth2Client } from "google-auth-library";
-import { getApiBaseUrl } from "../../utils/api-base-url.js";
+import { getApiBaseUrl } from "../../config/AppConfig.js";
 
 export interface BatchRequest {
   method: string;

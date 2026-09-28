@@ -1,7 +1,5 @@
-import type { OAuth2Client } from 'google-auth-library';
-
 /**
- * Environment variable that sends every Google Calendar API call to a base URL
+ * GOOGLE_CALENDAR_API_BASE_URL sends every Google Calendar API call to a base URL
  * of your own instead of https://www.googleapis.com.
  *
  * Meant for deployments with an egress proxy in front of Google: the server
@@ -11,58 +9,43 @@ import type { OAuth2Client } from 'google-auth-library';
  * `/tenant-a/calendar/calendar/v3/...`. Token refresh (oauth2.googleapis.com)
  * and the OAuth login flow are not affected.
  *
- * Implemented as a request interceptor on the OAuth2Client's transporter rather
- * than googleapis' `rootUrl` option: `rootUrl` resolves the API path against the
+ * Implemented by wrapping the OAuth2Client transporter's `request` rather than
+ * googleapis' `rootUrl` option: `rootUrl` resolves the API path against the
  * override's origin only and drops any path prefix.
  */
-export const API_BASE_URL_ENV = 'GOOGLE_CALENDAR_API_BASE_URL';
+import type { OAuth2Client } from 'google-auth-library';
+import { DEFAULT_API_ORIGIN, getApiBaseUrl } from '../config/AppConfig.js';
 
-export const DEFAULT_API_ORIGIN = 'https://www.googleapis.com';
+// Taken from the client rather than imported from gaxios, which would resolve to
+// gaxios' ESM typings while google-auth-library is typed against its CJS build.
+type RequestOptions = NonNullable<Parameters<OAuth2Client['transporter']['request']>[0]>;
 
 /**
- * The base URL every Calendar API call goes to: the override without a
- * trailing slash, or the public Google origin when unset or blank.
- * @throws Error if the override is set but is not an absolute http(s) URL
+ * Rewrites a URL on the public Google API origin onto `base`, path and query
+ * preserved. Any other URL comes back unchanged.
  */
-export function getApiBaseUrl(): string {
-  const raw = process.env[API_BASE_URL_ENV]?.trim();
-  if (!raw) return DEFAULT_API_ORIGIN;
-  let parsed: URL | undefined;
-  try {
-    parsed = new URL(raw);
-  } catch {
-    parsed = undefined;
-  }
-  if (!parsed || (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')) {
-    throw new Error(`${API_BASE_URL_ENV} must be an absolute http(s) URL, got: ${raw}`);
-  }
-  return raw.replace(/\/+$/, '');
+export function rewriteApiUrl(url: URL, base: string): URL {
+  if (url.origin !== DEFAULT_API_ORIGIN) return url;
+  return new URL(`${base}${url.pathname}${url.search}`);
 }
 
 /**
- * Rewrites a URL on the public Google API origin onto the configured base URL,
- * path and query preserved. Any other URL comes back unchanged.
- */
-export function rewriteApiUrl(url: string | URL): URL {
-  const original = new URL(url);
-  const base = getApiBaseUrl();
-  if (base === DEFAULT_API_ORIGIN || original.origin !== DEFAULT_API_ORIGIN) {
-    return original;
-  }
-  return new URL(`${base}${original.pathname}${original.search}`);
-}
-
-/**
- * Makes every request the client sends honour GOOGLE_CALENDAR_API_BASE_URL.
- * A no-op when the variable is unset. Returns the client for chaining.
+ * Makes every request the client sends honour GOOGLE_CALENDAR_API_BASE_URL,
+ * resolved once, here. A no-op when the variable is unset. Returns the client
+ * for chaining.
+ *
+ * The URL is rewritten before gaxios prepares the request, not in a request
+ * interceptor: gaxios picks its proxy agent from HTTPS_PROXY/NO_PROXY while
+ * preparing, so an interceptor would leave NO_PROXY matched against
+ * www.googleapis.com instead of the override host.
  */
 export function applyApiBaseUrl<T extends OAuth2Client>(client: T): T {
-  if (getApiBaseUrl() === DEFAULT_API_ORIGIN) return client;
-  client.transporter.interceptors.request.add({
-    resolved: async (config) => {
-      config.url = rewriteApiUrl(config.url);
-      return config;
-    },
-  });
+  const base = getApiBaseUrl();
+  if (base === DEFAULT_API_ORIGIN) return client;
+  const transporter = client.transporter;
+  const request = transporter.request.bind(transporter);
+  transporter.request = ((opts: RequestOptions = {}) =>
+    request(opts.url ? { ...opts, url: rewriteApiUrl(new URL(opts.url, opts.baseURL), base) } : opts)
+  ) as typeof transporter.request;
   return client;
 }
