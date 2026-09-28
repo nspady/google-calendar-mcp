@@ -4,6 +4,21 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 
+// Lets a test point the *default* credentials path (used when GOOGLE_OAUTH_CREDENTIALS
+// is unset) at a temp file instead of the package root.
+const defaultKeysPath = vi.hoisted(() => ({ override: undefined as string | undefined }));
+
+vi.mock('../../../auth/utils.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../auth/utils.js')>();
+  return {
+    ...actual,
+    getKeysFilePath: () =>
+      process.env.GOOGLE_OAUTH_CREDENTIALS
+        ? actual.getKeysFilePath()
+        : defaultKeysPath.override ?? actual.getKeysFilePath()
+  };
+});
+
 import {
   detectServiceAccountKey,
   initializeServiceAccountClient,
@@ -50,6 +65,7 @@ describe('service account authentication', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
+    defaultKeysPath.override = undefined;
     process.env = { ...savedEnv };
     await fs.rm(tempDir, { recursive: true, force: true });
   });
@@ -121,13 +137,22 @@ describe('service account authentication', () => {
     });
 
     it.each([null, [], {}, { unrelated: true }])(
-      'falls back to ambient credentials for non-OAuth JSON %j', async (contents) => {
-        process.env.GOOGLE_OAUTH_CREDENTIALS = await writeKey('not-oauth.json', contents);
+      'falls back to ambient credentials when the default credentials file holds non-OAuth JSON %j', async (contents) => {
+        defaultKeysPath.override = await writeKey('gcp-oauth.keys.json', contents);
         process.env.GOOGLE_APPLICATION_CREDENTIALS = await writeKey('adc.json', SERVICE_ACCOUNT_KEY);
 
         const detected = await detectOrFail();
 
         expect(detected.source).toBe('GOOGLE_APPLICATION_CREDENTIALS');
+      }
+    );
+
+    it.each([null, [], {}, { unrelated: true }])(
+      'does not fall back to ambient credentials when GOOGLE_OAUTH_CREDENTIALS holds non-OAuth JSON %j', async (contents) => {
+        process.env.GOOGLE_OAUTH_CREDENTIALS = await writeKey('not-oauth.json', contents);
+        process.env.GOOGLE_APPLICATION_CREDENTIALS = await writeKey('adc.json', SERVICE_ACCOUNT_KEY);
+
+        await expect(detectServiceAccountKey()).resolves.toBeNull();
       }
     );
 
@@ -198,15 +223,14 @@ describe('service account authentication', () => {
       await expect(detectServiceAccountKey()).resolves.toBeNull();
     });
 
-    it('falls back to GOOGLE_APPLICATION_CREDENTIALS when the OAuth credentials file is unusable', async () => {
-      // Precedence is about a *working* OAuth setup. A path that resolves to
-      // nothing is not one, so the ambient variable still gets its turn.
+    it('does not fall back to GOOGLE_APPLICATION_CREDENTIALS when GOOGLE_OAUTH_CREDENTIALS is unusable', async () => {
+      // An explicit OAuth path means an OAuth setup. A typo there must surface as the
+      // OAuth credentials error, not silently switch the server to a service account
+      // and hide every OAuth account in tokens.json.
       process.env.GOOGLE_OAUTH_CREDENTIALS = path.join(tempDir, 'gone.json');
       process.env.GOOGLE_APPLICATION_CREDENTIALS = await writeKey('adc.json', SERVICE_ACCOUNT_KEY);
 
-      const detected = await detectOrFail();
-
-      expect(detected.source).toBe('GOOGLE_APPLICATION_CREDENTIALS');
+      await expect(detectServiceAccountKey()).resolves.toBeNull();
     });
 
     it('returns null when no candidate file exists', async () => {

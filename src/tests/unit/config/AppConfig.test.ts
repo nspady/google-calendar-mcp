@@ -89,12 +89,19 @@ describe('loadAppConfig', () => {
     expect(Object.isFrozen(config.transport)).toBe(true);
   });
 
+  it('ignores PORT from the environment in stdio mode', () => {
+    const config = loadAppConfig([], baseEnv({ PORT: 'abc' }));
+
+    expect(config.transport.port).toBe(3000);
+    expect(config.sources.port).toBe('default');
+  });
+
   describe('fails loudly on malformed values', () => {
     it.each([
-      [[], { PORT: 'abc' }, /PORT must be an integer/],
-      [[], { PORT: '3000abc' }, /PORT must be an integer/],
-      [[], { PORT: '70000' }, /PORT must be an integer/],
-      [[], { PORT: '0' }, /PORT must be an integer/],
+      [[], { TRANSPORT: 'http', PORT: 'abc' }, /PORT must be an integer/],
+      [[], { TRANSPORT: 'http', PORT: '3000abc' }, /PORT must be an integer/],
+      [[], { TRANSPORT: 'http', PORT: '70000' }, /PORT must be an integer/],
+      [[], { TRANSPORT: 'http', PORT: '0' }, /PORT must be an integer/],
       [[], { TRANSPORT: 'htp' }, /TRANSPORT must be "stdio" or "http"/],
       [[], { ENABLED_TOOLS: '' }, /ENABLED_TOOLS requires at least one tool name/],
       [[], { ENABLED_TOOLS: ' , ,' }, /ENABLED_TOOLS requires at least one tool name/],

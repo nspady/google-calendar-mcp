@@ -154,6 +154,8 @@ async function readCandidate(candidate: KeyCandidate): Promise<KeyReadResult> {
  * 3. `GOOGLE_APPLICATION_CREDENTIALS` — the shared Google variable, often set for
  *    unrelated tooling. Consulted only when this server has no credentials file of
  *    its own, so a restart can never silently switch a working OAuth install over.
+ *    An explicit `GOOGLE_OAUTH_CREDENTIALS` that can't be read also blocks it, so a
+ *    typo surfaces as the OAuth credentials error instead of a mode switch.
  */
 export async function detectServiceAccountKey(): Promise<ServiceAccountKey | null> {
   const config = getServiceAccountConfig();
@@ -168,13 +170,14 @@ export async function detectServiceAccountKey(): Promise<ServiceAccountKey | nul
     if (explicit.kind === 'service-account') return explicit.key;
   }
 
+  const ownPathIsExplicit = Boolean(getCredentialsPathSetting());
   const own = await readCandidate({
     path: getKeysFilePath(),
-    source: getCredentialsPathSetting() ? 'GOOGLE_OAUTH_CREDENTIALS' : 'credentials file',
+    source: ownPathIsExplicit ? 'GOOGLE_OAUTH_CREDENTIALS' : 'credentials file',
     strict: false
   });
   if (own.kind === 'service-account') return own.key;
-  if (own.kind === 'other-credentials') return null;
+  if (own.kind === 'other-credentials' || ownPathIsExplicit) return null;
 
   const ambientPath = config.applicationCredentialsPath;
   if (ambientPath) {

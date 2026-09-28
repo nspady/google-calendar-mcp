@@ -193,7 +193,10 @@ export function loadAppConfig(args: string[], env: Env = process.env): AppConfig
   };
 
   const transportType = resolve('transport', 'TRANSPORT', parseTransport, 'stdio');
-  const port = resolve('port', 'PORT', parsePort, 3000);
+  // stdio never binds a port, so a stray PORT in the environment must not block startup
+  const skipEnvPort = transportType !== 'http' && cli.port === undefined;
+  const port = skipEnvPort ? 3000 : resolve('port', 'PORT', parsePort, 3000);
+  if (skipEnvPort) sources.port = 'default';
   const host = resolve('host', 'HOST', (raw) => raw, '127.0.0.1');
   const debug = resolve('debug', 'DEBUG', (raw) => raw === 'true', false);
   // ENABLED_TOOLS="" is an error rather than "unset" (documented in README Tool Filtering)

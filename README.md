@@ -209,8 +209,10 @@ and the first one that yields an answer wins:
    it: you have an OAuth setup, and step 3 is skipped.
 3. **`GOOGLE_APPLICATION_CREDENTIALS`** — the shared Google variable, often already set
    for unrelated tooling. It is consulted only when this server has no credentials file
-   of its own, so it can never silently switch a working OAuth install to a service
-   account on the next restart. A problem with it is warned about, never fatal.
+   of its own (`GOOGLE_OAUTH_CREDENTIALS` unset and no usable `gcp-oauth.keys.json`), so
+   it can never silently switch an OAuth install to a service account on the next
+   restart, even if the OAuth file goes missing. A problem with it is warned about,
+   never fatal.
 
 The server logs which credentials it chose, and where they came from, on every startup.
 Set `GOOGLE_SERVICE_ACCOUNT_SUBJECT` only if you are using domain-wide delegation.
