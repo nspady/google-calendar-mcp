@@ -6,12 +6,7 @@ A Model Context Protocol (MCP) server that provides Google Calendar integration 
 <tr>
 <td>
 <h3><a href="https://cocal.io/?utm_source=google_calendar_mcp&amp;utm_medium=listing&amp;utm_campaign=release"><img src="docs/images/cocal/logo.svg" alt="Cocal" width="144"></a></h3>
-<p>I built <a href="https://cocal.io/?utm_source=google_calendar_mcp&amp;utm_medium=listing&amp;utm_campaign=release">Cocal</a> as a separate hosted calendar assistant, taking this project further with a <strong>full visual calendar inside your chat with Claude.</strong> Connect your Google accounts without creating a Google Cloud project or running a server.</p>
-<ul>
-<li><strong>Plan across accounts.</strong> Check availability and catch conflicts across your work, personal, and shared Google Calendars in one conversation.</li>
-<li><strong>Use it on desktop and mobile.</strong> See and manage your calendars in Claude on web, desktop, iOS, and Android.</li>
-<li><strong>Carry your preferences into new chats.</strong> Save rules like “no meetings before 10” or which calendar to use for personal plans.</li>
-</ul>
+<p>I also built <a href="https://cocal.io/?utm_source=google_calendar_mcp&amp;utm_medium=listing&amp;utm_campaign=release">Cocal</a>, the calendar integration I wanted for chat: a visual calendar inside Claude that shows your whole day around a proposed time, plus booking links and invites you manage from the conversation. It's hosted, so it works on desktop and mobile with no Google Cloud setup.</p>
 <p>
 <a href="docs/images/cocal/day-view.png"><img src="docs/images/cocal/day-view.png" alt="Cocal visual calendar showing work meetings and a personal gym session together on a timeline" width="300"></a>
 <a href="docs/images/cocal/event-details.png"><img src="docs/images/cocal/event-details.png" alt="Cocal event card showing attendees, timezone context, a description, and no conflicts" width="300"></a>
@@ -36,6 +31,8 @@ A Model Context Protocol (MCP) server that provides Google Calendar integration 
 - **Intelligent Import**: Add calendar events from images, PDFs, or web links
 
 ## Quick Start
+
+> Don't want to set up a Google Cloud project? [Cocal](https://cocal.io/?utm_source=google_calendar_mcp&utm_medium=listing&utm_campaign=release&utm_content=quick_start) is a hosted option that works in Claude on desktop and mobile.
 
 ### Prerequisites
 
