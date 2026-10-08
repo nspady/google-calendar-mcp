@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   loadWebFile: vi.fn(async (name: string) => `file:${name}`),
   validateAccountId: vi.fn(),
   loadCredentials: vi.fn(async () => ({ client_id: 'client-id', client_secret: 'client-secret' })),
+  oauthClients: [] as any[],
 }));
 
 vi.mock('@modelcontextprotocol/sdk/server/streamableHttp.js', () => ({
@@ -76,11 +77,18 @@ vi.mock('../../../auth/client.js', () => ({
 }));
 
 vi.mock('google-auth-library', () => ({
+  CodeChallengeMethod: { S256: 'S256', Plain: 'plain' },
   OAuth2Client: class MockOAuth2Client {
-    generateAuthUrl = vi.fn(() => 'https://auth.example.com');
-    getToken = vi.fn(async () => ({ tokens: { access_token: 'token', refresh_token: 'refresh' } }));
+    redirectUri: string;
+    generateAuthUrl = vi.fn((_opts?: any) => 'https://auth.example.com');
+    generateCodeVerifierAsync = vi.fn(async () => ({ codeVerifier: `verifier-${state.oauthClients.length}`, codeChallenge: 'challenge' }));
+    getToken = vi.fn(async (_opts?: any) => ({ tokens: { access_token: 'token', refresh_token: 'refresh' } }));
     setCredentials = vi.fn();
     getTokenInfo = vi.fn(async () => ({ email: 'person@example.com' }));
+    constructor(_clientId: string, _clientSecret: string, redirectUri: string) {
+      this.redirectUri = redirectUri;
+      state.oauthClients.push(this);
+    }
   }
 }));
 
@@ -173,6 +181,7 @@ describe('Transport Handlers', () => {
     state.transport = undefined;
     state.transports = [];
     state.suppressSessionInit = false;
+    state.oauthClients = [];
     state.listen.mockImplementation((_port: number, _host: string, callback?: () => void) => {
       if (callback) {
         callback();
@@ -298,6 +307,169 @@ describe('Transport Handlers', () => {
     const payload = JSON.parse(res.body);
     expect(payload.accountId).toBe('work');
     expect(payload.authUrl).toBe('https://auth.example.com');
+  });
+
+  describe('OAuth account flow (state + PKCE)', () => {
+    async function startHandler(tokenManager = makeTokenManager()) {
+      const server = { connect: vi.fn(async () => undefined) } as any;
+      const handler = new HttpTransportHandler(() => server, { port: 4000, host: 'localhost' }, tokenManager);
+      await handler.connect();
+      return tokenManager;
+    }
+
+    // Starts a flow via the given endpoint and returns the state sent to Google.
+    async function beginFlow(url: string, body?: unknown): Promise<string> {
+      const req = createMockRequest({ method: 'POST', url, headers: { accept: 'application/json' } });
+      const res = createMockResponse();
+      const pending = invokeHandler(req, res);
+      if (body !== undefined) {
+        req.emit('data', Buffer.from(JSON.stringify(body)));
+      }
+      req.emit('end');
+      await pending;
+      expect(res.statusCode).toBe(200);
+      const client = state.oauthClients[state.oauthClients.length - 1];
+      return client.generateAuthUrl.mock.calls[0][0].state;
+    }
+
+    async function callback(query: string) {
+      const req = createMockRequest({ method: 'GET', url: `/oauth2callback${query}` });
+      const res = createMockResponse();
+      await invokeHandler(req, res);
+      return res;
+    }
+
+    it('uses one fixed redirect URI with no query string and sends PKCE + state', async () => {
+      await startHandler();
+      await beginFlow('/api/accounts', { accountId: 'work' });
+
+      const client = state.oauthClients[0];
+      expect(client.redirectUri).toBe('http://localhost:4000/oauth2callback');
+      const opts = client.generateAuthUrl.mock.calls[0][0];
+      expect(opts).toMatchObject({
+        access_type: 'offline',
+        prompt: 'consent',
+        code_challenge_method: 'S256',
+        code_challenge: 'challenge'
+      });
+      expect(opts.state).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it('uses the same fixed redirect URI for re-authentication', async () => {
+      await startHandler();
+      const stateParam = await beginFlow('/api/accounts/work/reauth');
+      expect(state.oauthClients[0].redirectUri).toBe('http://localhost:4000/oauth2callback');
+      expect(stateParam).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it('resolves the account from state and exchanges the code with the PKCE verifier', async () => {
+      const tokenManager = await startHandler();
+      tokenManager.getAccountMode.mockReturnValue('normal');
+      const stateParam = await beginFlow('/api/accounts', { accountId: 'work' });
+
+      const res = await callback(`?code=auth-code&state=${stateParam}`);
+
+      expect(res.statusCode).toBe(200);
+      const exchangeClient = state.oauthClients[1];
+      expect(exchangeClient.redirectUri).toBe('http://localhost:4000/oauth2callback');
+      expect(exchangeClient.getToken).toHaveBeenCalledWith({ code: 'auth-code', codeVerifier: 'verifier-1' });
+      expect(tokenManager.setAccountMode).toHaveBeenNthCalledWith(1, 'work');
+      expect(tokenManager.setAccountMode).toHaveBeenLastCalledWith('normal');
+      expect(tokenManager.saveTokens).toHaveBeenCalledTimes(1);
+      expect(state.renderAuthSuccess).toHaveBeenCalledWith(expect.objectContaining({ accountId: 'work' }));
+    });
+
+    it('ignores a legacy ?account= parameter and uses the state-bound account', async () => {
+      const tokenManager = await startHandler();
+      const stateParam = await beginFlow('/api/accounts', { accountId: 'work' });
+
+      await callback(`?code=auth-code&state=${stateParam}&account=attacker`);
+
+      expect(tokenManager.setAccountMode).toHaveBeenNthCalledWith(1, 'work');
+      expect(tokenManager.setAccountMode).not.toHaveBeenCalledWith('attacker');
+    });
+
+    it('rejects a callback with a missing state before exchanging the code', async () => {
+      const tokenManager = await startHandler();
+      await beginFlow('/api/accounts', { accountId: 'work' });
+
+      const res = await callback('?code=auth-code&account=work');
+
+      expect(res.statusCode).toBe(403);
+      expect(state.renderAuthError).toHaveBeenCalledWith(expect.objectContaining({
+        errorMessage: expect.stringMatching(/state parameter missing/)
+      }));
+      expect(state.oauthClients).toHaveLength(1);
+      expect(tokenManager.saveTokens).not.toHaveBeenCalled();
+    });
+
+    it('rejects a callback with an unknown state', async () => {
+      const tokenManager = await startHandler();
+      await beginFlow('/api/accounts', { accountId: 'work' });
+
+      const res = await callback(`?code=auth-code&state=${'a'.repeat(64)}`);
+
+      expect(res.statusCode).toBe(403);
+      expect(state.renderAuthError).toHaveBeenCalledWith(expect.objectContaining({
+        errorMessage: expect.stringMatching(/Unknown or already-used/)
+      }));
+      expect(tokenManager.saveTokens).not.toHaveBeenCalled();
+    });
+
+    it('rejects a replayed state after a successful callback', async () => {
+      const tokenManager = await startHandler();
+      const stateParam = await beginFlow('/api/accounts', { accountId: 'work' });
+
+      expect((await callback(`?code=auth-code&state=${stateParam}`)).statusCode).toBe(200);
+      const replay = await callback(`?code=auth-code&state=${stateParam}`);
+
+      expect(replay.statusCode).toBe(403);
+      expect(tokenManager.saveTokens).toHaveBeenCalledTimes(1);
+    });
+
+    it('rejects an expired state', async () => {
+      vi.useFakeTimers();
+      try {
+        const tokenManager = await startHandler();
+        const stateParam = await beginFlow('/api/accounts', { accountId: 'work' });
+        vi.advanceTimersByTime(5 * 60 * 1000);
+
+        const res = await callback(`?code=auth-code&state=${stateParam}`);
+
+        expect(res.statusCode).toBe(403);
+        expect(state.renderAuthError).toHaveBeenCalledWith(expect.objectContaining({
+          errorMessage: expect.stringMatching(/expired/)
+        }));
+        expect(tokenManager.saveTokens).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('consumes the state when Google returns an authorization error', async () => {
+      const tokenManager = await startHandler();
+      const stateParam = await beginFlow('/api/accounts', { accountId: 'work' });
+
+      const denied = await callback(`?error=access_denied&state=${stateParam}`);
+      expect(denied.statusCode).toBe(400);
+      expect(state.renderAuthError).toHaveBeenCalledWith(expect.objectContaining({
+        errorMessage: expect.stringMatching(/access_denied/)
+      }));
+
+      const retry = await callback(`?code=auth-code&state=${stateParam}`);
+      expect(retry.statusCode).toBe(403);
+      expect(tokenManager.saveTokens).not.toHaveBeenCalled();
+    });
+
+    it('returns 400 when a valid state arrives without a code', async () => {
+      const tokenManager = await startHandler();
+      const stateParam = await beginFlow('/api/accounts', { accountId: 'work' });
+
+      const res = await callback(`?state=${stateParam}`);
+
+      expect(res.statusCode).toBe(400);
+      expect(tokenManager.saveTokens).not.toHaveBeenCalled();
+    });
   });
 
   it('creates a session on initialize and reuses it for follow-up requests', async () => {
