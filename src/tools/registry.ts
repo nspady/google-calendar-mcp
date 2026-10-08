@@ -344,6 +344,9 @@ export const ToolSchemas = {
 
   'list-colors': z.object({
     account: singleAccountSchema,
+    calendarId: z.string().optional().describe(
+      "Calendar ID or name. When provided, also returns that calendar's event labels (custom colors) for use as eventLabelId."
+    ),
   }),
 
   'create-event': z.object({
@@ -382,6 +385,9 @@ export const ToolSchemas = {
     })).optional().describe("List of event attendees with their details"),
     colorId: z.string().optional().describe(
       "Color ID for the event (use list-colors to see available IDs)"
+    ),
+    eventLabelId: z.string().min(1).optional().describe(
+      "Event label (custom color) ID from list-colors with calendarId. When set, colorId is ignored."
     ),
     reminders: remindersSchema,
     recurrence: recurrenceSchema,
@@ -598,7 +604,10 @@ export const ToolSchemas = {
     attendees: z.array(z.object({
       email: z.string().regex(emailRegex, "Invalid email address").describe("Email address of the attendee")
     })).optional().describe("Updated attendee list"),
-    colorId: z.string().optional().describe("Updated color ID"),
+    colorId: z.string().optional().describe("Updated color ID. An event's label takes precedence; to switch a labeled event to a colorId, first remove the label in a separate update."),
+    eventLabelId: z.string().optional().describe(
+      "Updated event label (custom color) ID from list-colors with calendarId; empty string removes the label. When set, colorId is ignored."
+    ),
     reminders: remindersSchema,
     recurrence: recurrenceSchema,
     sendUpdates: z.enum(SEND_UPDATES_VALUES).default("all").describe(
@@ -936,7 +945,7 @@ export class ToolRegistry {
     {
       name: "list-colors",
       title: "List Calendar Colors",
-      description: "List available color IDs and their meanings for calendar events",
+      description: "List available legacy color IDs for calendar events. Pass calendarId to also get that calendar's event labels (custom event colors), which supersede colorId.",
       annotations: READ_ONLY_ANNOTATIONS,
       schema: ToolSchemas['list-colors'],
       handler: ListColorsHandler
@@ -944,7 +953,7 @@ export class ToolRegistry {
     {
       name: "create-event",
       title: "Create Calendar Event",
-      description: "Create a new calendar event.",
+      description: "Create a new calendar event. eventLabelId (custom color) takes precedence over the legacy colorId.",
       annotations: WRITE_NON_DESTRUCTIVE_ANNOTATIONS,
       schema: ToolSchemas['create-event'],
       handler: CreateEventHandler
@@ -960,7 +969,7 @@ export class ToolRegistry {
     {
       name: "update-event",
       title: "Update Calendar Event",
-      description: "Update an existing calendar event with recurring event modification scope support.",
+      description: "Update an existing calendar event with recurring event modification scope support. eventLabelId (custom color) takes precedence over the legacy colorId.",
       annotations: WRITE_DESTRUCTIVE_IDEMPOTENT_ANNOTATIONS,
       schema: ToolSchemas['update-event'],
       handler: UpdateEventHandler

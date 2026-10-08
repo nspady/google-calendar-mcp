@@ -249,7 +249,8 @@
             color: var(--text-muted);
         }
 
-        .access-writer {
+        .access-writer,
+        .access-writerWithoutPrivateAccess {
             background: transparent;
             color: var(--accent-success);
         }
@@ -477,6 +478,7 @@
             const labels = {
                 'owner': 'Owner',
                 'writer': 'Editor',
+                'writerWithoutPrivateAccess': 'Editor (no private details)',
                 'reader': 'Viewer',
                 'freeBusyReader': 'Free/Busy'
             };

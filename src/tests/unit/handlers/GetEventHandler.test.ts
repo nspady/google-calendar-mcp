@@ -216,4 +216,29 @@ describe('GetEventHandler', () => {
       });
     });
   });
+
+
+  describe('Event Labels', () => {
+    it('should return eventLabelId without sending eventLabelVersion', async () => {
+      mockCalendar.events.get.mockResolvedValue({
+        data: {
+          id: 'event123',
+          summary: 'Labeled Event',
+          start: { dateTime: '2025-01-15T10:00:00Z' },
+          end: { dateTime: '2025-01-15T11:00:00Z' },
+          eventLabelId: '22222222-3333-4444-5555-666666666666'
+        }
+      });
+
+      const result = await handler.runTool({ calendarId: 'primary', eventId: 'event123' }, mockAccounts);
+
+      // events.get does not accept eventLabelVersion; labels come back regardless
+      expect(mockCalendar.events.get).toHaveBeenCalledWith({
+        calendarId: 'primary',
+        eventId: 'event123'
+      });
+      const response = JSON.parse(result.content[0].text);
+      expect(response.event.eventLabelId).toBe('22222222-3333-4444-5555-666666666666');
+    });
+  });
 });

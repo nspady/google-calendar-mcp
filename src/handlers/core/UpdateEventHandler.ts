@@ -6,6 +6,7 @@ import { calendar_v3 } from 'googleapis';
 import { RecurringEventHelpers, RecurringEventError, RECURRING_EVENT_ERRORS } from './RecurringEventHelpers.js';
 import { ConflictDetectionService } from "../../services/conflict-detection/index.js";
 import { createTimeObject, usesFallbackTimeZone } from "../../utils/datetime.js";
+import { EventWithLabel, eventLabelParams } from "../../utils/event-labels.js";
 import { 
     createStructuredResponse, 
     convertConflictsToStructured,
@@ -177,7 +178,8 @@ export class UpdateEventHandler extends BaseToolHandler {
             eventId: instanceId,
             requestBody,
             ...(conferenceDataVersion && { conferenceDataVersion }),
-            ...(supportsAttachments && { supportsAttachments })
+            ...(supportsAttachments && { supportsAttachments }),
+            ...eventLabelParams(requestBody.eventLabelId)
         });
 
         if (!response.data) throw new Error('Failed to update event instance');
@@ -200,7 +202,8 @@ export class UpdateEventHandler extends BaseToolHandler {
             eventId: args.eventId,
             requestBody,
             ...(conferenceDataVersion && { conferenceDataVersion }),
-            ...(supportsAttachments && { supportsAttachments })
+            ...(supportsAttachments && { supportsAttachments }),
+            ...eventLabelParams(requestBody.eventLabelId)
         });
 
         if (!response.data) throw new Error('Failed to update event');
@@ -253,7 +256,7 @@ export class UpdateEventHandler extends BaseToolHandler {
             endTime = endTime || helpers.calculateEndTime(newStartTime, originalEvent);
         }
 
-        const newEvent = {
+        const newEvent: EventWithLabel = {
             ...helpers.cleanEventForDuplication(originalEvent),
             ...requestBody,
             start: { 
@@ -266,6 +269,13 @@ export class UpdateEventHandler extends BaseToolHandler {
             }
         };
 
+        // The new series inherits the original's label, which adds eventLabelVersion=1 and
+        // makes Google ignore colorId; a new event has no label to clear, so drop an empty
+        // one, and drop the inherited one when only colorId was passed
+        if (!newEvent.eventLabelId || (args.colorId !== undefined && args.eventLabelId === undefined)) {
+            delete newEvent.eventLabelId;
+        }
+
         const conferenceDataVersion = newEvent.conferenceData !== undefined ? 1 : undefined;
         const supportsAttachments = newEvent.attachments !== undefined ? true : undefined;
 
@@ -273,7 +283,8 @@ export class UpdateEventHandler extends BaseToolHandler {
             calendarId: args.calendarId,
             requestBody: newEvent,
             ...(conferenceDataVersion && { conferenceDataVersion }),
-            ...(supportsAttachments && { supportsAttachments })
+            ...(supportsAttachments && { supportsAttachments }),
+            ...eventLabelParams(newEvent.eventLabelId)
         });
 
         if (!response.data) throw new Error('Failed to create new recurring event');

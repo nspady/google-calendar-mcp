@@ -285,14 +285,14 @@ Along with the normal capabilities you would expect for a calendar integration y
 | `list-events` | List events with date filtering |
 | `get-event` | Get details of a specific event by ID |
 | `search-events` | Search events by text query |
-| `create-event` | Create new calendar events |
+| `create-event` | Create new calendar events, optionally colored with an event label (`eventLabelId`) |
 | `create-events` | Create multiple events in one call with shared defaults (skips conflict detection) |
-| `update-event` | Update existing events |
+| `update-event` | Update existing events, including setting or removing an event label |
 | `delete-event` | Delete events |
 | `respond-to-event` | Respond to event invitations (Accept, Decline, Maybe, No Response) |
 | `get-freebusy` | Check availability across calendars, including external calendars |
 | `get-current-time` | Get current date and time in calendar's timezone |
-| `list-colors` | List available event colors |
+| `list-colors` | List legacy event colors, plus a calendar's event labels (custom colors) when given `calendarId` |
 | `manage-accounts` | Add, list, or remove connected Google accounts |
 
 ## Documentation

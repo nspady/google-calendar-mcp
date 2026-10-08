@@ -1178,4 +1178,62 @@ describe('CreateEventHandler', () => {
       );
     });
   });
+
+
+  describe('Event Labels', () => {
+    const baseArgs = {
+      calendarId: 'primary',
+      summary: 'Design Sync',
+      start: '2026-07-02T14:00:00',
+      end: '2026-07-02T15:00:00'
+    };
+
+    beforeEach(() => {
+      mockCalendar.events.insert.mockResolvedValue({
+        data: {
+          id: 'labeled-event',
+          summary: 'Design Sync',
+          start: { dateTime: '2026-07-02T14:00:00Z' },
+          end: { dateTime: '2026-07-02T15:00:00Z' },
+          eventLabelId: '22222222-3333-4444-5555-666666666666'
+        }
+      });
+    });
+
+    it('should send eventLabelId with eventLabelVersion=1', async () => {
+      const result = await handler.runTool({
+        ...baseArgs,
+        eventLabelId: '22222222-3333-4444-5555-666666666666'
+      }, mockAccounts);
+
+      const insertCall = mockCalendar.events.insert.mock.calls[0][0];
+      expect(insertCall.eventLabelVersion).toBe(1);
+      expect(insertCall.requestBody.eventLabelId).toBe('22222222-3333-4444-5555-666666666666');
+
+      const response = JSON.parse(result.content[0].text);
+      expect(response.event.eventLabelId).toBe('22222222-3333-4444-5555-666666666666');
+    });
+
+    it('should not send eventLabelVersion for legacy colorId only', async () => {
+      await handler.runTool({ ...baseArgs, colorId: '5' }, mockAccounts);
+
+      const insertCall = mockCalendar.events.insert.mock.calls[0][0];
+      expect(insertCall).not.toHaveProperty('eventLabelVersion');
+      expect(insertCall.requestBody.colorId).toBe('5');
+      expect(insertCall.requestBody.eventLabelId).toBeUndefined();
+    });
+
+    it('should pass both through when colorId and eventLabelId are set, leaving precedence to Google', async () => {
+      await handler.runTool({
+        ...baseArgs,
+        colorId: '5',
+        eventLabelId: '22222222-3333-4444-5555-666666666666'
+      }, mockAccounts);
+
+      const insertCall = mockCalendar.events.insert.mock.calls[0][0];
+      expect(insertCall.eventLabelVersion).toBe(1);
+      expect(insertCall.requestBody.colorId).toBe('5');
+      expect(insertCall.requestBody.eventLabelId).toBe('22222222-3333-4444-5555-666666666666');
+    });
+  });
 });

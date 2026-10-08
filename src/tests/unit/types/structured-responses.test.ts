@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { convertGoogleEventToStructured, StructuredEvent } from '../../../types/structured-responses.js';
 import { calendar_v3 } from 'googleapis';
+import { EventWithLabel } from '../../../utils/event-labels.js';
 
 describe('structured-responses', () => {
   describe('convertGoogleEventToStructured', () => {
@@ -387,6 +388,33 @@ describe('structured-responses', () => {
         expect(result.startDayOfWeek).toBe('Monday');
         expect(result.endDayOfWeek).toBe('Tuesday');
       });
+    });
+  });
+
+
+  describe('eventLabelId', () => {
+    it('should map eventLabelId alongside colorId', () => {
+      const result = convertGoogleEventToStructured({
+        id: 'labeled',
+        start: { dateTime: '2026-07-02T14:00:00Z' },
+        end: { dateTime: '2026-07-02T15:00:00Z' },
+        colorId: '5',
+        eventLabelId: '22222222-3333-4444-5555-666666666666'
+      } as EventWithLabel);
+
+      expect(result.colorId).toBe('5');
+      expect(result.eventLabelId).toBe('22222222-3333-4444-5555-666666666666');
+    });
+
+    it('should omit eventLabelId when absent or empty', () => {
+      const base = {
+        id: 'plain',
+        start: { dateTime: '2026-07-02T14:00:00Z' },
+        end: { dateTime: '2026-07-02T15:00:00Z' }
+      };
+
+      expect(convertGoogleEventToStructured(base).eventLabelId).toBeUndefined();
+      expect(convertGoogleEventToStructured({ ...base, eventLabelId: '' } as EventWithLabel).eventLabelId).toBeUndefined();
     });
   });
 });

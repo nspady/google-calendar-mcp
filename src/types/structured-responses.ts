@@ -1,4 +1,5 @@
 import { calendar_v3 } from 'googleapis';
+import { EventWithLabel } from '../utils/event-labels.js';
 
 /**
  * Extended event type to include calendar ID and account ID for tracking source.
@@ -135,6 +136,8 @@ export interface StructuredEvent {
   created?: string;
   updated?: string;
   colorId?: string;
+  /** ID of the calendar event label (custom color); supersedes colorId */
+  eventLabelId?: string;
   creator?: {
     email?: string;
     displayName?: string;
@@ -373,6 +376,18 @@ export interface ColorDefinition {
 export interface ListColorsResponse {
   event: Record<string, ColorDefinition>;
   calendar: Record<string, ColorDefinition>;
+  /** Calendar whose event labels are listed; present only when one was requested */
+  calendarId?: string;
+  eventLabels?: EventLabelInfo[];
+}
+
+/**
+ * Event label (custom event color) defined on a calendar
+ */
+export interface EventLabelInfo {
+  id: string;
+  name?: string;
+  backgroundColor?: string;
 }
 
 /**
@@ -516,7 +531,7 @@ function getDayOfWeek(dateTimeOrDate: string | undefined | null, timeZone?: stri
  * @returns Structured event representation
  */
 export function convertGoogleEventToStructured(
-  event: calendar_v3.Schema$Event,
+  event: EventWithLabel,
   calendarId?: string,
   accountId?: string
 ): StructuredEvent {
@@ -548,6 +563,7 @@ export function convertGoogleEventToStructured(
     created: event.created ?? undefined,
     updated: event.updated ?? undefined,
     colorId: event.colorId ?? undefined,
+    eventLabelId: event.eventLabelId || undefined,
     creator: event.creator ? {
       email: event.creator.email ?? '',
       displayName: event.creator.displayName ?? undefined,

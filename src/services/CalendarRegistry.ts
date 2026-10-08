@@ -7,7 +7,7 @@ import { getCredentialsProjectId } from '../auth/utils.js';
  */
 export interface CalendarAccess {
   accountId: string;
-  accessRole: 'owner' | 'writer' | 'reader' | 'freeBusyReader';
+  accessRole: 'owner' | 'writer' | 'writerWithoutPrivateAccess' | 'reader' | 'freeBusyReader';
   primary: boolean;
   summary: string;
   summaryOverride?: string;
@@ -27,11 +27,20 @@ export interface UnifiedCalendar {
  * Permission ranking for calendar access
  */
 const PERMISSION_RANK: Record<string, number> = {
-  'owner': 4,
-  'writer': 3,
+  'owner': 5,
+  'writer': 4,
+  'writerWithoutPrivateAccess': 3,
   'reader': 2,
   'freeBusyReader': 1,
 };
+
+/**
+ * Roles that can create and modify events. writerWithoutPrivateAccess can write
+ * but sees private events' details hidden.
+ */
+function hasWriteAccess(accessRole: string): boolean {
+  return accessRole === 'owner' || accessRole === 'writer' || accessRole === 'writerWithoutPrivateAccess';
+}
 
 /**
  * A service account's calendarList is empty unless calendars were explicitly added
@@ -261,7 +270,7 @@ export class CalendarRegistry {
       if (!preferredAccess) return null;
 
       // Check if account has write permission
-      if (preferredAccess.accessRole === 'owner' || preferredAccess.accessRole === 'writer') {
+      if (hasWriteAccess(preferredAccess.accessRole)) {
         return {
           accountId: preferredAccess.accountId,
           accessRole: preferredAccess.accessRole
@@ -408,7 +417,7 @@ export class CalendarRegistry {
     // Check write access if needed
     if (operationType === 'write') {
       const preferredAccess = match.accounts.find(a => a.accountId === match!.preferredAccount);
-      if (!preferredAccess || (preferredAccess.accessRole !== 'owner' && preferredAccess.accessRole !== 'writer')) {
+      if (!preferredAccess || !hasWriteAccess(preferredAccess.accessRole)) {
         return null; // No write access available
       }
       return {

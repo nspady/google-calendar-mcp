@@ -30,13 +30,13 @@ The server provides calendar management tools that LLMs can use for calendar ope
 - `list-events` - List events with date filtering
 - `search-events` - Search events by text query
 - `get-event` - Get details of a specific event by ID
-- `create-event` - Create new calendar events
+- `create-event` - Create new calendar events (accepts `eventLabelId`)
 - `create-events` - Create multiple events in one call with shared defaults
-- `update-event` - Update existing events
+- `update-event` - Update existing events (accepts `eventLabelId`; empty string removes the label)
 - `delete-event` - Delete events
 - `respond-to-event` - Accept, decline, or tentatively accept event invitations
 - `get-freebusy` - Check availability across calendars
-- `list-colors` - List available event colors
+- `list-colors` - List legacy event colors; with `calendarId`, also that calendar's event labels
 - `get-current-time` - Get current system time and timezone information
 - `manage-accounts` - Manage Google account authentication (list, add, remove)
 
@@ -47,4 +47,5 @@ The server provides calendar management tools that LLMs can use for calendar ope
 - **Rate limiting**: Respects Google Calendar quotas
 - **Batch operations**: Efficient multi-calendar queries
 - **Recurring events**: Advanced modification scopes
+- **Event labels**: Custom event colors (`eventLabelId`, from `Calendars.labelProperties.eventLabels`). Writes send `eventLabelVersion=1` only when `eventLabelId` is set, and Google then ignores the legacy `colorId`. Reads need no parameter. See `src/utils/event-labels.ts`
 - **Contextual resources**: Real-time date/time information

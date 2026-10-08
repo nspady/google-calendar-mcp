@@ -120,4 +120,12 @@ describe('Field Mask Builder', () => {
       expect(result).toContain('colorId');
     });
   });
+
+
+  describe('event labels', () => {
+    it('should allow eventLabelId as a requested field', () => {
+      expect(validateFields(['eventLabelId'])).toEqual(['eventLabelId']);
+      expect(buildSingleEventFieldMask(['eventLabelId'])).toContain('eventLabelId');
+    });
+  });
 });

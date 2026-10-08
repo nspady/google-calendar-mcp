@@ -800,4 +800,52 @@ describe('CalendarRegistry', () => {
       expect(mockCalendar).toHaveBeenCalledTimes(4);
     });
   });
+
+  describe('writerWithoutPrivateAccess', () => {
+    const mockRoles = (workRole: string, personalRole: string) => {
+      const listFor = (role: string) => vi.fn().mockResolvedValue({
+        data: {
+          items: [{ id: 'limited@group.calendar.google.com', summary: 'Limited Calendar', accessRole: role }]
+        }
+      });
+      const work = listFor(workRole);
+      const personal = listFor(personalRole);
+      vi.mocked(google.calendar).mockImplementation((config: any) => ({
+        calendarList: { list: config.auth.credentials.access_token === 'work-token' ? work : personal }
+      } as any));
+    };
+
+    it('should rank it above reader and below writer', async () => {
+      mockRoles('reader', 'writerWithoutPrivateAccess');
+      let cal = (await registry.getUnifiedCalendars(accounts))
+        .find(c => c.calendarId === 'limited@group.calendar.google.com');
+      expect(cal!.preferredAccount).toBe('personal');
+
+      registry.clearCache();
+      mockRoles('writer', 'writerWithoutPrivateAccess');
+      cal = (await registry.getUnifiedCalendars(accounts))
+        .find(c => c.calendarId === 'limited@group.calendar.google.com');
+      expect(cal!.preferredAccount).toBe('work');
+    });
+
+    it('should count as write access when routing by calendar ID', async () => {
+      mockRoles('reader', 'writerWithoutPrivateAccess');
+
+      const result = await registry.getAccountForCalendar('limited@group.calendar.google.com', accounts, 'write');
+
+      expect(result).toEqual({ accountId: 'personal', accessRole: 'writerWithoutPrivateAccess' });
+    });
+
+    it('should count as write access when resolving a calendar name', async () => {
+      mockRoles('reader', 'writerWithoutPrivateAccess');
+
+      const result = await registry.resolveCalendarNameToId('Limited Calendar', accounts, 'write');
+
+      expect(result).toEqual({
+        calendarId: 'limited@group.calendar.google.com',
+        accountId: 'personal',
+        accessRole: 'writerWithoutPrivateAccess'
+      });
+    });
+  });
 });
