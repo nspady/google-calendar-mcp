@@ -101,6 +101,22 @@ describe('AuthServer', () => {
       expect(result.callbackUrl).toContain('3500');
     });
 
+    it('should use GOOGLE_OAUTH_REDIRECT_BASE for the callback URL when set (and strip a trailing slash)', async () => {
+      const prev = process.env.GOOGLE_OAUTH_REDIRECT_BASE;
+      process.env.GOOGLE_OAUTH_REDIRECT_BASE = 'https://tunnel.example.com/';
+      try {
+        const result = await authServer.startForMcpTool('work');
+
+        expect(result.success).toBe(true);
+        expect(result.callbackUrl).toBe('https://tunnel.example.com/oauth2callback');
+        // the generated Google auth URL must carry the same (encoded) redirect_uri
+        expect(result.authUrl).toContain(encodeURIComponent('https://tunnel.example.com/oauth2callback'));
+      } finally {
+        if (prev === undefined) delete process.env.GOOGLE_OAUTH_REDIRECT_BASE;
+        else process.env.GOOGLE_OAUTH_REDIRECT_BASE = prev;
+      }
+    });
+
     it('should stop existing server before starting new one', async () => {
       // Start first server
       await authServer.startForMcpTool('work');
