@@ -5,6 +5,7 @@ import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
 import { createTimeObject, usesFallbackTimeZone } from "../../utils/datetime.js";
 import { validateEventId } from "../../utils/event-id-validator.js";
+import { EventWithLabel, eventLabelParams } from "../../utils/event-labels.js";
 import { ConflictDetectionService } from "../../services/conflict-detection/index.js";
 import { CONFLICT_DETECTION_CONFIG } from "../../services/conflict-detection/config.js";
 import { createStructuredResponse, convertConflictsToStructured, createWarningsArray } from "../../utils/response-builder.js";
@@ -121,7 +122,7 @@ export class CreateEventHandler extends BaseToolHandler {
                 ? this.generateWorkingLocationSummary(args)
                 : args.summary;
 
-            const requestBody: calendar_v3.Schema$Event = {
+            const requestBody: EventWithLabel = {
                 summary: summary,
                 description: args.description,
                 start: createTimeObject(args.start, timezone),
@@ -129,6 +130,7 @@ export class CreateEventHandler extends BaseToolHandler {
                 attendees: args.attendees,
                 location: args.location,
                 colorId: args.colorId,
+                eventLabelId: args.eventLabelId,
                 reminders: args.reminders,
                 recurrence: args.recurrence,
                 transparency: transparency,
@@ -157,7 +159,8 @@ export class CreateEventHandler extends BaseToolHandler {
                 requestBody: requestBody,
                 sendUpdates: args.sendUpdates,
                 ...(conferenceDataVersion && { conferenceDataVersion }),
-                ...(supportsAttachments && { supportsAttachments })
+                ...(supportsAttachments && { supportsAttachments }),
+                ...eventLabelParams(args.eventLabelId)
             });
             
             if (!response.data) throw new Error('Failed to create event, no data returned');

@@ -389,4 +389,31 @@ describe('structured-responses', () => {
       });
     });
   });
+
+
+  describe('eventLabelId', () => {
+    it('should map eventLabelId alongside colorId', () => {
+      const result = convertGoogleEventToStructured({
+        id: 'labeled',
+        start: { dateTime: '2026-07-02T14:00:00Z' },
+        end: { dateTime: '2026-07-02T15:00:00Z' },
+        colorId: '5',
+        eventLabelId: '22222222-3333-4444-5555-666666666666'
+      } as calendar_v3.Schema$Event);
+
+      expect(result.colorId).toBe('5');
+      expect(result.eventLabelId).toBe('22222222-3333-4444-5555-666666666666');
+    });
+
+    it('should omit eventLabelId when absent or empty', () => {
+      const base = {
+        id: 'plain',
+        start: { dateTime: '2026-07-02T14:00:00Z' },
+        end: { dateTime: '2026-07-02T15:00:00Z' }
+      };
+
+      expect(convertGoogleEventToStructured(base).eventLabelId).toBeUndefined();
+      expect(convertGoogleEventToStructured({ ...base, eventLabelId: '' } as calendar_v3.Schema$Event).eventLabelId).toBeUndefined();
+    });
+  });
 });

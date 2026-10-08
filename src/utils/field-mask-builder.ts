@@ -12,6 +12,7 @@ export const ALLOWED_EVENT_FIELDS = [
   'location',
   'attendees',
   'colorId',
+  'eventLabelId',
   'transparency',
   'extendedProperties',
   'reminders',

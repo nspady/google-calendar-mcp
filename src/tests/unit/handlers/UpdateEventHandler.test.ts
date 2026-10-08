@@ -58,6 +58,7 @@ vi.mock('../../../handlers/core/RecurringEventHelpers.js', () => ({
 
       if (args.attendees !== undefined && args.attendees !== null) body.attendees = args.attendees;
       if (args.colorId !== undefined && args.colorId !== null) body.colorId = args.colorId;
+      if (args.eventLabelId !== undefined && args.eventLabelId !== null) body.eventLabelId = args.eventLabelId;
       if (args.reminders !== undefined && args.reminders !== null) body.reminders = args.reminders;
       if (args.conferenceData !== undefined && args.conferenceData !== null) body.conferenceData = args.conferenceData;
       if (args.transparency !== undefined && args.transparency !== null) body.transparency = args.transparency;
@@ -1165,6 +1166,116 @@ describe('UpdateEventHandler', () => {
       expect(response.event).toBeDefined();
       expect(response.event.start.dateTime).toBeDefined();
       expect(response.event.end.dateTime).toBeDefined();
+    });
+  });
+
+
+  describe('Event Labels', () => {
+    const labelId = '22222222-3333-4444-5555-666666666666';
+
+    beforeEach(() => {
+      mockCalendar.events.get.mockResolvedValue({ data: { recurrence: null } });
+      mockCalendar.events.patch.mockResolvedValue({
+        data: { id: 'event123', summary: 'Meeting', eventLabelId: labelId }
+      });
+    });
+
+    it('should patch eventLabelId with eventLabelVersion=1', async () => {
+      const result = await handler.runTool({
+        calendarId: 'primary',
+        eventId: 'event123',
+        eventLabelId: labelId
+      }, mockAccounts);
+
+      expect(mockCalendar.events.patch).toHaveBeenCalledWith({
+        calendarId: 'primary',
+        eventId: 'event123',
+        requestBody: expect.objectContaining({ eventLabelId: labelId }),
+        eventLabelVersion: 1
+      });
+
+      const response = JSON.parse((result.content[0] as any).text);
+      expect(response.event.eventLabelId).toBe(labelId);
+    });
+
+    it('should send an empty eventLabelId with eventLabelVersion=1 to remove the label', async () => {
+      await handler.runTool({
+        calendarId: 'primary',
+        eventId: 'event123',
+        eventLabelId: ''
+      }, mockAccounts);
+
+      const patchCall = mockCalendar.events.patch.mock.calls[0][0];
+      expect(patchCall.requestBody.eventLabelId).toBe('');
+      expect(patchCall.eventLabelVersion).toBe(1);
+    });
+
+    it('should not send eventLabelVersion when eventLabelId is omitted', async () => {
+      await handler.runTool({
+        calendarId: 'primary',
+        eventId: 'event123',
+        summary: 'Renamed'
+      }, mockAccounts);
+
+      const patchCall = mockCalendar.events.patch.mock.calls[0][0];
+      expect(patchCall).not.toHaveProperty('eventLabelVersion');
+      expect(patchCall.requestBody).not.toHaveProperty('eventLabelId');
+    });
+
+    describe('future instances', () => {
+      const originalEvent = {
+        id: 'recurring123',
+        recurrence: ['RRULE:FREQ=WEEKLY'],
+        start: { dateTime: '2025-01-01T10:00:00Z' },
+        end: { dateTime: '2025-01-01T11:00:00Z' },
+        eventLabelId: labelId
+      };
+
+      const makeHelpers = (requestBody: Record<string, unknown>) => ({
+        getCalendar: () => mockCalendar,
+        buildUpdateRequestBody: vi.fn().mockReturnValue(requestBody),
+        cleanEventForDuplication: vi.fn().mockReturnValue({
+          recurrence: originalEvent.recurrence,
+          eventLabelId: originalEvent.eventLabelId
+        }),
+        calculateEndTime: vi.fn().mockReturnValue('2025-02-01T11:00:00Z'),
+        calculateUntilDate: vi.fn().mockReturnValue('20250131T100000Z'),
+        updateRecurrenceWithUntil: vi.fn().mockReturnValue(['RRULE:FREQ=WEEKLY;UNTIL=20250131T100000Z'])
+      } as unknown as RecurringEventHelpers);
+
+      const args = {
+        calendarId: 'primary',
+        eventId: 'recurring123',
+        futureStartDate: '2025-02-01T10:00:00-08:00',
+        timeZone: 'America/Los_Angeles'
+      } as UpdateEventInput;
+
+      beforeEach(() => {
+        mockCalendar.events.get.mockResolvedValue({ data: originalEvent });
+        mockCalendar.events.patch.mockResolvedValue({ data: {} });
+        mockCalendar.events.insert.mockResolvedValue({ data: { id: 'newEvent' } });
+      });
+
+      it('should keep the inherited label on the new series', async () => {
+        await (handler as any).updateFutureInstances(makeHelpers({}), args, 'America/Los_Angeles');
+
+        const insertCall = mockCalendar.events.insert.mock.calls[0][0];
+        expect(insertCall.requestBody.eventLabelId).toBe(labelId);
+        expect(insertCall.eventLabelVersion).toBe(1);
+      });
+
+      it('should drop the inherited label when only a legacy colorId is requested', async () => {
+        await (handler as any).updateFutureInstances(
+          makeHelpers({ colorId: '7' }),
+          { ...args, colorId: '7' },
+          'America/Los_Angeles'
+        );
+
+        const insertCall = mockCalendar.events.insert.mock.calls[0][0];
+        expect(insertCall.requestBody.colorId).toBe('7');
+        expect(insertCall.requestBody).not.toHaveProperty('eventLabelId');
+        expect(insertCall).not.toHaveProperty('eventLabelVersion');
+      });
     });
   });
 });

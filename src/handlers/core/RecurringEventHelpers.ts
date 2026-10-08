@@ -1,5 +1,6 @@
 import { calendar_v3 } from 'googleapis';
 import { createTimeObject } from '../../utils/datetime.js';
+import { EventWithLabel } from '../../utils/event-labels.js';
 
 export class RecurringEventHelpers {
   private calendar: calendar_v3.Calendar;
@@ -116,13 +117,14 @@ export class RecurringEventHelpers {
   /**
    * Builds request body for event updates
    */
-  buildUpdateRequestBody(args: any, defaultTimeZone?: string): calendar_v3.Schema$Event {
-    const requestBody: calendar_v3.Schema$Event = {};
+  buildUpdateRequestBody(args: any, defaultTimeZone?: string): EventWithLabel {
+    const requestBody: EventWithLabel = {};
 
     if (args.summary !== undefined && args.summary !== null) requestBody.summary = args.summary;
     if (args.description !== undefined && args.description !== null) requestBody.description = args.description;
     if (args.location !== undefined && args.location !== null) requestBody.location = args.location;
     if (args.colorId !== undefined && args.colorId !== null) requestBody.colorId = args.colorId;
+    if (args.eventLabelId !== undefined && args.eventLabelId !== null) requestBody.eventLabelId = args.eventLabelId;
     if (args.attendees !== undefined && args.attendees !== null) requestBody.attendees = args.attendees;
     if (args.reminders !== undefined && args.reminders !== null) requestBody.reminders = args.reminders;
     if (args.recurrence !== undefined && args.recurrence !== null) requestBody.recurrence = args.recurrence;

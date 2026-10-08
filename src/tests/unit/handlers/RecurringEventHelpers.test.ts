@@ -375,6 +375,13 @@ describe('RecurringEventHelpers', () => {
       });
     });
 
+    it('should include eventLabelId, including an empty string that removes the label', () => {
+      expect(helpers.buildUpdateRequestBody({ eventLabelId: '22222222-3333-4444-5555-666666666666' }))
+        .toEqual({ eventLabelId: '22222222-3333-4444-5555-666666666666' });
+      expect(helpers.buildUpdateRequestBody({ eventLabelId: '' })).toEqual({ eventLabelId: '' });
+      expect(helpers.buildUpdateRequestBody({ summary: 'No label change' })).not.toHaveProperty('eventLabelId');
+    });
+
     it('should handle time changes correctly', () => {
       const args = {
         start: '2024-06-15T10:00:00-07:00',

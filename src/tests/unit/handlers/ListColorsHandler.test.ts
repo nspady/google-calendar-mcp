@@ -330,4 +330,98 @@ describe('ListColorsHandler', () => {
       expect(typeof response.calendar).toBe('object');
     });
   });
+
+
+  describe('Event Labels', () => {
+    const mockColors = {
+      event: { '1': { background: '#a4bdfc', foreground: '#1d1d1d' } },
+      calendar: { '1': { background: '#ac725e', foreground: '#f7f7f7' } }
+    };
+
+    beforeEach(() => {
+      mockCalendar.calendars = { get: vi.fn() };
+      mockCalendar.colors.get.mockResolvedValue({ data: mockColors });
+      vi.spyOn(handler as any, 'getClientWithAutoSelection').mockResolvedValue({
+        client: mockOAuth2Client,
+        accountId: 'test1',
+        calendarId: 'primary',
+        wasAutoSelected: true
+      });
+    });
+
+    it('should not fetch labels when calendarId is omitted', async () => {
+      const result = await handler.runTool({}, mockSingleAccount);
+
+      expect(mockCalendar.calendars.get).not.toHaveBeenCalled();
+      const response = JSON.parse(result.content[0].text);
+      expect(response).not.toHaveProperty('eventLabels');
+      expect(response).not.toHaveProperty('calendarId');
+    });
+
+    it('should return the calendar labels when calendarId is provided', async () => {
+      mockCalendar.calendars.get.mockResolvedValue({
+        data: {
+          labelProperties: {
+            eventLabels: [
+              { id: '22222222-3333-4444-5555-666666666666', name: 'Design Work', backgroundColor: '#8e24aa' },
+              { id: '42617328-8756-4291-8273-192837465647', backgroundColor: '#039be5' }
+            ]
+          }
+        }
+      });
+
+      const result = await handler.runTool({ calendarId: 'primary' }, mockSingleAccount);
+
+      expect(mockCalendar.calendars.get).toHaveBeenCalledWith({
+        calendarId: 'primary',
+        fields: 'labelProperties'
+      });
+      const response = JSON.parse(result.content[0].text);
+      expect(response.calendarId).toBe('primary');
+      expect(response.eventLabels).toEqual([
+        { id: '22222222-3333-4444-5555-666666666666', name: 'Design Work', backgroundColor: '#8e24aa' },
+        { id: '42617328-8756-4291-8273-192837465647', backgroundColor: '#039be5' }
+      ]);
+      // Legacy colors are still returned alongside labels
+      expect(response.event['1']).toBeDefined();
+      expect(response.calendar['1']).toBeDefined();
+    });
+
+    it('should return an empty list for a calendar without labels', async () => {
+      mockCalendar.calendars.get.mockResolvedValue({ data: {} });
+
+      const result = await handler.runTool({ calendarId: 'primary' }, mockSingleAccount);
+
+      const response = JSON.parse(result.content[0].text);
+      expect(response.eventLabels).toEqual([]);
+    });
+
+    it('should resolve the calendar and account for label reads', async () => {
+      const spy = vi.spyOn(handler as any, 'getClientWithAutoSelection').mockResolvedValue({
+        client: mockOAuth2Client2,
+        accountId: 'test2',
+        calendarId: 'team@example.com',
+        wasAutoSelected: true
+      });
+      mockCalendar.calendars.get.mockResolvedValue({ data: { labelProperties: { eventLabels: [] } } });
+
+      const result = await handler.runTool({ calendarId: 'Team' }, mockMultipleAccounts);
+
+      expect(spy).toHaveBeenCalledWith(undefined, 'Team', mockMultipleAccounts, 'read');
+      expect(mockCalendar.calendars.get).toHaveBeenCalledWith({
+        calendarId: 'team@example.com',
+        fields: 'labelProperties'
+      });
+      expect(JSON.parse(result.content[0].text).calendarId).toBe('team@example.com');
+    });
+
+    it('should surface label read errors', async () => {
+      mockCalendar.calendars.get.mockRejectedValue(Object.assign(new Error('Forbidden'), { code: 403 }));
+      vi.spyOn(handler as any, 'handleGoogleApiError').mockImplementation(() => {
+        throw new Error('Permission denied');
+      });
+
+      await expect(handler.runTool({ calendarId: 'primary' }, mockSingleAccount)).rejects.toThrow('Permission denied');
+    });
+  });
 });
