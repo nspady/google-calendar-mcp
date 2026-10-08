@@ -68,7 +68,7 @@ Your credentials file should look like this:
 
 A **Web application** OAuth client (a `"web"` object instead of `"installed"`) is also accepted, which is useful when an OAuth proxy or bridge needs a public HTTPS callback. For the local browser sign-in flow to work with a web client, register these exact redirect URIs on the client: `http://localhost:3500/oauth2callback` through `http://localhost:3505/oauth2callback`. Otherwise Google rejects the sign-in with `redirect_uri_mismatch`. Setups that only refresh existing tokens need no extra configuration.
 
-This applies to the `auth` command and the `manage-accounts` tool. The HTTP transport's account page (`/accounts`) uses a per-account callback URL, so it does not work with web clients yet; use a Desktop app client there.
+This applies to the `auth` command and the `manage-accounts` tool. The HTTP transport's account page (`/accounts`) uses a single fixed callback, `http://<host>:<port>/oauth2callback` (for example `http://127.0.0.1:3000/oauth2callback` with the defaults), so register that exact URI too if you add accounts from that page. The account being added is carried in a single-use OAuth `state` value (valid for 5 minutes) rather than in the callback URL, and the flow uses PKCE.
 
 ## Credential Storage Options
 

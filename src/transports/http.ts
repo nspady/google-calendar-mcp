@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { TokenManager } from "../auth/tokenManager.js";
 import { CalendarRegistry } from "../services/CalendarRegistry.js";
+import { OAuthStateStore } from "../auth/oauthStateStore.js";
 import { renderAuthSuccess, renderAuthError, loadWebFile } from "../web/templates.js";
 
 /**
@@ -56,6 +57,7 @@ export class HttpTransportHandler {
   private serverFactory: () => McpServer;
   private config: HttpTransportConfig;
   private tokenManager: TokenManager;
+  private oauthStates = new OAuthStateStore();
 
   constructor(
     serverFactory: () => McpServer,
@@ -68,29 +70,50 @@ export class HttpTransportHandler {
   }
 
   /**
-   * Creates an OAuth2Client configured for the given account.
-   * Consolidates credential loading and redirect URI construction.
+   * Creates an OAuth2Client with the server's single fixed redirect URI.
+   * The redirect has no query string so it can be registered exactly on
+   * web application clients; the account travels in the `state` parameter.
    */
-  private async createOAuth2Client(accountId: string, host: string, port: number): Promise<import('google-auth-library').OAuth2Client> {
+  private async createOAuth2Client(host: string, port: number): Promise<import('google-auth-library').OAuth2Client> {
     const { OAuth2Client } = await import('google-auth-library');
     const { loadCredentials } = await import('../auth/client.js');
     const { client_id, client_secret } = await loadCredentials();
     return new OAuth2Client(
       client_id,
       client_secret,
-      `http://${host}:${port}/oauth2callback?account=${accountId}`
+      `http://${host}:${port}/oauth2callback`
     );
   }
 
   /**
-   * Generates an OAuth authorization URL with standard settings.
+   * Starts an OAuth flow for the account: generates a PKCE pair, issues a
+   * single-use state mapped to the account, and returns the authorization URL.
    */
-  private generateOAuthUrl(client: import('google-auth-library').OAuth2Client): string {
+  private async startOAuthFlow(accountId: string, host: string, port: number): Promise<string> {
+    const { CodeChallengeMethod } = await import('google-auth-library');
+    const client = await this.createOAuth2Client(host, port);
+    const { codeVerifier, codeChallenge } = await client.generateCodeVerifierAsync();
+    if (!codeChallenge) {
+      throw new Error('Failed to generate PKCE code challenge');
+    }
+    const state = this.oauthStates.issue(accountId, codeVerifier);
     return client.generateAuthUrl({
       access_type: 'offline',
       scope: ['https://www.googleapis.com/auth/calendar'],
-      prompt: 'consent'
+      prompt: 'consent',
+      code_challenge_method: CodeChallengeMethod.S256,
+      code_challenge: codeChallenge,
+      state
     });
+  }
+
+  private async sendAuthErrorPage(res: http.ServerResponse, statusCode: number, errorMessage: string): Promise<void> {
+    const errorHtml = await renderAuthError({ errorMessage, showCloseButton: true });
+    res.writeHead(statusCode, {
+      'Content-Type': 'text/html; charset=utf-8',
+      ...SECURITY_HEADERS
+    });
+    res.end(errorHtml);
   }
 
   /**
@@ -284,8 +307,7 @@ export class HttpTransportHandler {
           }
 
           // Generate OAuth URL for this account
-          const oauth2Client = await this.createOAuth2Client(accountId, host, port);
-          const authUrl = this.generateOAuthUrl(oauth2Client);
+          const authUrl = await this.startOAuthFlow(accountId, host, port);
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
@@ -303,28 +325,36 @@ export class HttpTransportHandler {
       }
 
       // GET /oauth2callback - OAuth callback handler
-      if (req.method === 'GET' && req.url?.startsWith('/oauth2callback')) {
+      if (req.method === 'GET' && (req.url === '/oauth2callback' || req.url?.startsWith('/oauth2callback?'))) {
         try {
           // Use configured host/port instead of req.headers.host for security
           const url = new URL(req.url, `http://${host}:${port}`);
-          const code = url.searchParams.get('code');
-          const accountId = url.searchParams.get('account');
 
-          if (!code) {
-            res.writeHead(400, { 'Content-Type': 'text/html' });
-            res.end('<h1>Error</h1><p>Authorization code missing</p>');
+          // The account comes only from server-side state; a missing, unknown,
+          // expired, or replayed state is rejected before any token exchange.
+          const flow = this.oauthStates.consume(url.searchParams.get('state'));
+          if (!flow.ok) {
+            process.stderr.write(`✗ OAuth callback rejected: ${flow.reason} state parameter\n`);
+            await this.sendAuthErrorPage(res, 403, flow.message);
+            return;
+          }
+          const { accountId, codeVerifier } = flow;
+
+          const oauthError = url.searchParams.get('error');
+          if (oauthError) {
+            await this.sendAuthErrorPage(res, 400, `Google returned an authorization error: ${oauthError}`);
             return;
           }
 
-          if (!accountId) {
-            res.writeHead(400, { 'Content-Type': 'text/html' });
-            res.end('<h1>Error</h1><p>Account ID missing</p>');
+          const code = url.searchParams.get('code');
+          if (!code) {
+            await this.sendAuthErrorPage(res, 400, 'Authorization code missing');
             return;
           }
 
           // Exchange code for tokens
-          const oauth2Client = await this.createOAuth2Client(accountId, host, port);
-          const { tokens } = await oauth2Client.getToken(code);
+          const oauth2Client = await this.createOAuth2Client(host, port);
+          const { tokens } = await oauth2Client.getToken({ code, codeVerifier });
 
           // Get user email before saving tokens
           oauth2Client.setCredentials(tokens);
@@ -421,8 +451,7 @@ export class HttpTransportHandler {
           await this.validateAccountId(accountId);
 
           // Generate OAuth URL for re-authentication
-          const oauth2Client = await this.createOAuth2Client(accountId, host, port);
-          const authUrl = this.generateOAuthUrl(oauth2Client);
+          const authUrl = await this.startOAuthFlow(accountId, host, port);
 
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
