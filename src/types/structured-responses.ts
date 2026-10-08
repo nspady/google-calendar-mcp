@@ -387,7 +387,7 @@ export interface ListColorsResponse {
 export interface EventLabelInfo {
   id: string;
   name?: string;
-  backgroundColor: string;
+  backgroundColor?: string;
 }
 
 /**

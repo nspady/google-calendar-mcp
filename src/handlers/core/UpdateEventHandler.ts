@@ -269,9 +269,10 @@ export class UpdateEventHandler extends BaseToolHandler {
             }
         };
 
-        // The new series inherits the original's label; an explicit colorId without a
-        // label drops it, since the label would otherwise make Google ignore colorId
-        if (args.colorId && args.eventLabelId === undefined) {
+        // The new series inherits the original's label, which adds eventLabelVersion=1 and
+        // makes Google ignore colorId; a new event has no label to clear, so drop an empty
+        // one, and drop the inherited one when only colorId was passed
+        if (!newEvent.eventLabelId || (args.colorId !== undefined && args.eventLabelId === undefined)) {
             delete newEvent.eventLabelId;
         }
 

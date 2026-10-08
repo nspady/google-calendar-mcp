@@ -1222,6 +1222,26 @@ describe('UpdateEventHandler', () => {
       expect(patchCall.requestBody).not.toHaveProperty('eventLabelId');
     });
 
+    it('should send eventLabelVersion=1 when patching a single instance label', async () => {
+      const helpersStub = {
+        getCalendar: () => mockCalendar,
+        formatInstanceId: vi.fn().mockReturnValue('recurring123_20250101T100000Z'),
+        buildUpdateRequestBody: vi.fn().mockReturnValue({ eventLabelId: labelId })
+      } as unknown as RecurringEventHelpers;
+
+      await (handler as any).updateSingleInstance(helpersStub, {
+        calendarId: 'primary',
+        eventId: 'recurring123',
+        originalStartTime: '2025-01-01T10:00:00',
+        eventLabelId: labelId
+      } as UpdateEventInput, 'America/Los_Angeles');
+
+      const patchCall = mockCalendar.events.patch.mock.calls[0][0];
+      expect(patchCall.eventId).toBe('recurring123_20250101T100000Z');
+      expect(patchCall.requestBody.eventLabelId).toBe(labelId);
+      expect(patchCall.eventLabelVersion).toBe(1);
+    });
+
     describe('future instances', () => {
       const originalEvent = {
         id: 'recurring123',
@@ -1262,6 +1282,22 @@ describe('UpdateEventHandler', () => {
         const insertCall = mockCalendar.events.insert.mock.calls[0][0];
         expect(insertCall.requestBody.eventLabelId).toBe(labelId);
         expect(insertCall.eventLabelVersion).toBe(1);
+      });
+
+      it('should not enable label processing for an empty inherited label', async () => {
+        const helpers = makeHelpers({});
+        (helpers.cleanEventForDuplication as any).mockReturnValue({
+          recurrence: originalEvent.recurrence,
+          colorId: '3',
+          eventLabelId: ''
+        });
+
+        await (handler as any).updateFutureInstances(helpers, args, 'America/Los_Angeles');
+
+        const insertCall = mockCalendar.events.insert.mock.calls[0][0];
+        expect(insertCall.requestBody.colorId).toBe('3');
+        expect(insertCall.requestBody).not.toHaveProperty('eventLabelId');
+        expect(insertCall).not.toHaveProperty('eventLabelVersion');
       });
 
       it('should drop the inherited label when only a legacy colorId is requested', async () => {

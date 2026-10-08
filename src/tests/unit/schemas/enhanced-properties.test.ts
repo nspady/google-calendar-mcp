@@ -358,4 +358,26 @@ describe('Enhanced Create-Event Properties', () => {
       expect(() => createEventSchema.parse(minimalEvent)).not.toThrow();
     });
   });
+
+
+  describe('Event Labels', () => {
+    it('should accept an eventLabelId', () => {
+      expect(() => createEventSchema.parse({
+        ...baseEvent,
+        eventLabelId: '22222222-3333-4444-5555-666666666666'
+      })).not.toThrow();
+    });
+
+    it('should reject an empty eventLabelId, which would only suppress colorId on create', () => {
+      expect(() => createEventSchema.parse({ ...baseEvent, eventLabelId: '' })).toThrow();
+    });
+
+    it('should accept an empty eventLabelId on update to remove the label', () => {
+      expect(() => ToolSchemas['update-event'].parse({
+        calendarId: 'primary',
+        eventId: 'event123',
+        eventLabelId: ''
+      })).not.toThrow();
+    });
+  });
 });

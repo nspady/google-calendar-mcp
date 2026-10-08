@@ -65,7 +65,7 @@ export class ListColorsHandler extends BaseToolHandler {
                 .map(label => ({
                     id: label.id!,
                     name: label.name ?? undefined,
-                    backgroundColor: label.backgroundColor ?? ''
+                    backgroundColor: label.backgroundColor ?? undefined
                 }));
         } catch (error) {
             throw this.handleGoogleApiError(error);

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { convertGoogleEventToStructured, StructuredEvent } from '../../../types/structured-responses.js';
 import { calendar_v3 } from 'googleapis';
+import { EventWithLabel } from '../../../utils/event-labels.js';
 
 describe('structured-responses', () => {
   describe('convertGoogleEventToStructured', () => {
@@ -399,7 +400,7 @@ describe('structured-responses', () => {
         end: { dateTime: '2026-07-02T15:00:00Z' },
         colorId: '5',
         eventLabelId: '22222222-3333-4444-5555-666666666666'
-      } as calendar_v3.Schema$Event);
+      } as EventWithLabel);
 
       expect(result.colorId).toBe('5');
       expect(result.eventLabelId).toBe('22222222-3333-4444-5555-666666666666');
@@ -413,7 +414,7 @@ describe('structured-responses', () => {
       };
 
       expect(convertGoogleEventToStructured(base).eventLabelId).toBeUndefined();
-      expect(convertGoogleEventToStructured({ ...base, eventLabelId: '' } as calendar_v3.Schema$Event).eventLabelId).toBeUndefined();
+      expect(convertGoogleEventToStructured({ ...base, eventLabelId: '' } as EventWithLabel).eventLabelId).toBeUndefined();
     });
   });
 });
