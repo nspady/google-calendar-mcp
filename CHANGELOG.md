@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.8.0](https://github.com/nspady/google-calendar-mcp/compare/v2.7.0...v2.8.0) (2026-10-09)
+
+
+### Features
+
+* GOOGLE_CALENDAR_API_BASE_URL sends Calendar API calls to a base URL of your own ([22dc618](https://github.com/nspady/google-calendar-mcp/commit/22dc618cba7bf67f55a9229051101e6efa2b750a))
+* GOOGLE_CALENDAR_API_BASE_URL sends Calendar API calls to a base URL of your own ([743f1a2](https://github.com/nspady/google-calendar-mcp/commit/743f1a22f318cdbdd1e413c3bdc722e05597abdd))
+* support Google Calendar event labels (eventLabelId) ([#217](https://github.com/nspady/google-calendar-mcp/issues/217)) ([174990a](https://github.com/nspady/google-calendar-mcp/commit/174990a30fb0d1f28cf0396cf3450c2e056ba588))
+
+
+### Bug Fixes
+
+* address review on GOOGLE_CALENDAR_API_BASE_URL ([1243709](https://github.com/nspady/google-calendar-mcp/commit/1243709bf656f8fdc38ba91ca4cebf12f3c0b7a1))
+* **http:** use fixed OAuth callback with single-use state and PKCE ([#215](https://github.com/nspady/google-calendar-mcp/issues/215)) ([24c79a6](https://github.com/nspady/google-calendar-mcp/commit/24c79a69963bd09bee618415f82f296b2291f383))
+
 ## [2.7.0](https://github.com/nspady/google-calendar-mcp/compare/v2.6.3...v2.7.0) (2026-09-28)
 
 
