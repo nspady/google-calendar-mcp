@@ -20,6 +20,7 @@ describe('loadAppConfig', () => {
     expect(config.credentialsPath).toBeUndefined();
     expect(config.tokenPath).toBe(path.join('/tmp/xdg', 'google-calendar-mcp', 'tokens.json'));
     expect(config.accountMode).toBe('normal');
+    expect(config.apiBaseUrl).toBe('https://www.googleapis.com');
     expect(config.isTest).toBe(false);
     expect(config.sources.transport).toBe('default');
     expect(config.sources.port).toBe('default');
@@ -106,6 +107,8 @@ describe('loadAppConfig', () => {
       [[], { ENABLED_TOOLS: '' }, /ENABLED_TOOLS requires at least one tool name/],
       [[], { ENABLED_TOOLS: ' , ,' }, /ENABLED_TOOLS requires at least one tool name/],
       [[], { GOOGLE_ACCOUNT_MODE: 'Work' }, /GOOGLE_ACCOUNT_MODE: Invalid account ID/],
+      [[], { GOOGLE_CALENDAR_API_BASE_URL: 'proxy.internal/calendar' }, /GOOGLE_CALENDAR_API_BASE_URL must be an absolute http\(s\) URL/],
+      [[], { GOOGLE_CALENDAR_API_BASE_URL: 'http://proxy/calendar?k=v' }, /GOOGLE_CALENDAR_API_BASE_URL must not contain a query string/],
       [['--port', 'abc'], {}, /--port must be an integer/],
       [['--port'], {}, /--port requires a port number/],
       [['--transport', 'bogus'], {}, /--transport must be "stdio" or "http"/],

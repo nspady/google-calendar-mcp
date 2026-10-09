@@ -47,6 +47,15 @@ HOST=localhost              # Bind address
 TRANSPORT=http              # Transport mode
 ```
 
+### Egress Proxy
+
+To send Calendar API calls through an egress proxy that originates TLS itself, set `GOOGLE_CALENDAR_API_BASE_URL` to the proxy, e.g. `http://127.0.0.1:10255/tenant-a/calendar`. Requests go to `<url>/calendar/v3/...`, path prefix kept, and startup logs the origin they are routed to.
+
+- Calendar access tokens and request data are sent to this URL, unencrypted with `http://`. Point it only at a proxy you control.
+- Token refresh and the login flow do not use it: refresh still has to reach `oauth2.googleapis.com`, directly or through `HTTPS_PROXY`.
+- With `HTTPS_PROXY` set, list the proxy's host in `NO_PROXY` so Calendar calls reach it directly. Batch requests always go to it directly.
+- The value must be an absolute `http(s)` URL with no credentials, query string or fragment.
+
 ## Docker Deployment
 
 ### Using Docker Compose (Recommended)
