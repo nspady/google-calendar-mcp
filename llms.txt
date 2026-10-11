@@ -1,0 +1,25 @@
+# Google Calendar MCP Server
+
+> A Model Context Protocol server that gives AI assistants like Claude Google Calendar integration for managing events, checking availability, and scheduling across multiple accounts and calendars.
+
+Runs via npx, local installation, or Docker, and requires a Google Cloud project with the Calendar API and OAuth 2.0 credentials configured in Claude Desktop. Supports multi-account and multi-calendar queries, recurring events, free/busy checks, natural language scheduling, and optional service account authentication. Authentication must be requested from Claude before using any calendar tool, and test-mode tokens expire after 7 days unless the app is published or a service account is used.
+
+## Docs
+
+- [Google Calendar MCP Server](https://raw.githubusercontent.com/nspady/google-calendar-mcp/main/README.md): MCP server integrating Google Calendar with AI assistants, with multi-account support, event management, and Cocal hosted alternative.
+- [Documentation Index](https://raw.githubusercontent.com/nspady/google-calendar-mcp/main/docs/README.md): Index of getting started, user, deployment, development, and reference docs with quick links for users and developers.
+- [Authentication Setup Guide](https://raw.githubusercontent.com/nspady/google-calendar-mcp/main/docs/authentication.md): Step-by-step Google Cloud setup: creating a project, enabling the Calendar API, and configuring OAuth 2.0 credentials.
+- [Advanced Usage Guide](https://raw.githubusercontent.com/nspady/google-calendar-mcp/main/docs/advanced-usage.md): Multi-account usage, account parameter behavior per tool, calendar deduplication, batch operations, and smart scheduling.
+- [Deployment Guide](https://raw.githubusercontent.com/nspady/google-calendar-mcp/main/docs/deployment.md): Deploying via stdio or HTTP transport, server features, environment variables, and egress proxy configuration.
+- [Development Guide](https://raw.githubusercontent.com/nspady/google-calendar-mcp/main/docs/development.md): Development setup, contributing guidelines, and steps for adding new tools with handlers, schemas, and tests.
+- [Architecture Overview](https://raw.githubusercontent.com/nspady/google-calendar-mcp/main/docs/architecture.md): Transport modes, OAuth 2.0 authentication, handler architecture, and the full list of MCP calendar tools.
+- [Testing Guide](https://raw.githubusercontent.com/nspady/google-calendar-mcp/main/docs/testing.md): Running unit and integration tests, their requirements, and what each test category covers.
+- [Multi-Account Concurrent Access Implementation](https://raw.githubusercontent.com/nspady/google-calendar-mcp/main/MULTI_ACCOUNT_IMPLEMENTATION.md): Implementation plan for concurrent multi-account access, token management, and calendar deduplication with permission ranking.
+- [Agent Guidelines](https://raw.githubusercontent.com/nspady/google-calendar-mcp/main/docs/agent-tool-usage.md): How AI agents should use the account parameter, detect accounts, and handle shared calendar deduplication.
+- [Docker Deployment Guide](https://raw.githubusercontent.com/nspady/google-calendar-mcp/main/docs/docker.md): Docker setup with stdio mode for Claude Desktop and localhost-only HTTP mode for development.
+- [Multi-Account Updates](https://raw.githubusercontent.com/nspady/google-calendar-mcp/main/docs/multi-account-updates.md): Recent multi-account improvements: account discovery, safe token persistence, read/write awareness, and integration tests.
+
+## Optional
+
+- [Changelog](https://raw.githubusercontent.com/nspady/google-calendar-mcp/main/CHANGELOG.md): Version history with features and bug fixes per release, including service account auth, PKCE, and HTTP transport changes.
+- [Contributing](https://raw.githubusercontent.com/nspady/google-calendar-mcp/main/CONTRIBUTING.md): PR checks, setup requirements, and the full step-by-step checklist for manually registering a new tool.
