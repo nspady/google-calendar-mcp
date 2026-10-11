@@ -2,7 +2,7 @@
 
 > A Model Context Protocol server that gives AI assistants like Claude Google Calendar integration for managing events, checking availability, and scheduling across multiple accounts and calendars.
 
-Runs via npx, local installation, or Docker, and requires a Google Cloud project with the Calendar API and OAuth 2.0 credentials configured in Claude Desktop. Supports multi-account and multi-calendar queries, recurring events, free/busy checks, natural language scheduling, and optional service account authentication. Authentication must be requested from Claude before using any calendar tool, and test-mode tokens expire after 7 days unless the app is published or a service account is used.
+Runs via npx, local installation, or Docker, and needs a Google Cloud project with the Calendar API enabled. With OAuth credentials you sign in once: through the `manage-accounts` tool or `npx @cocal/google-calendar-mcp auth` in stdio mode, or at the server URL in HTTP mode; a service account skips the sign-in entirely. Supports multi-account and multi-calendar queries, recurring events, free/busy checks, and natural language scheduling. OAuth tokens for an app in Google's test mode expire after 7 days unless the app is published or a service account is used.
 
 ## Docs
 
