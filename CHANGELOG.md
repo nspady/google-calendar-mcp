@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.8.0](https://github.com/nspady/google-calendar-mcp/compare/v2.7.0...v2.8.0) (2026-10-13)
+
+
+### Features
+
+* **auth:** support GOOGLE_OAUTH_REDIRECT_BASE for remote/tunneled auth ([f7f379a](https://github.com/nspady/google-calendar-mcp/commit/f7f379a5971fafbc79432abdc4b62412a04e3ffa))
+* **auth:** support GOOGLE_OAUTH_REDIRECT_BASE for remote/tunneled auth ([4d37c2b](https://github.com/nspady/google-calendar-mcp/commit/4d37c2b229fe067d081c9d84906e006fee956d2a))
+* GOOGLE_CALENDAR_API_BASE_URL sends Calendar API calls to a base URL of your own ([22dc618](https://github.com/nspady/google-calendar-mcp/commit/22dc618cba7bf67f55a9229051101e6efa2b750a))
+* GOOGLE_CALENDAR_API_BASE_URL sends Calendar API calls to a base URL of your own ([743f1a2](https://github.com/nspady/google-calendar-mcp/commit/743f1a22f318cdbdd1e413c3bdc722e05597abdd))
+* support Google Calendar event labels (eventLabelId) ([#217](https://github.com/nspady/google-calendar-mcp/issues/217)) ([174990a](https://github.com/nspady/google-calendar-mcp/commit/174990a30fb0d1f28cf0396cf3450c2e056ba588))
+
+
+### Bug Fixes
+
+* address review on GOOGLE_CALENDAR_API_BASE_URL ([1243709](https://github.com/nspady/google-calendar-mcp/commit/1243709bf656f8fdc38ba91ca4cebf12f3c0b7a1))
+* **auth:** validate GOOGLE_OAUTH_REDIRECT_BASE in AppConfig; pin the port when it is set ([c807342](https://github.com/nspady/google-calendar-mcp/commit/c8073423e6f4347aab43e2db5921bed24e51adcb))
+* **http:** use fixed OAuth callback with single-use state and PKCE ([#215](https://github.com/nspady/google-calendar-mcp/issues/215)) ([24c79a6](https://github.com/nspady/google-calendar-mcp/commit/24c79a69963bd09bee618415f82f296b2291f383))
+
 ## [2.7.0](https://github.com/nspady/google-calendar-mcp/compare/v2.6.3...v2.7.0) (2026-09-28)
 
 
