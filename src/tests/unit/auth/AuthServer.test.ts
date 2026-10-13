@@ -101,20 +101,48 @@ describe('AuthServer', () => {
       expect(result.callbackUrl).toContain('3500');
     });
 
-    it('should use GOOGLE_OAUTH_REDIRECT_BASE for the callback URL when set (and strip a trailing slash)', async () => {
-      const prev = process.env.GOOGLE_OAUTH_REDIRECT_BASE;
-      process.env.GOOGLE_OAUTH_REDIRECT_BASE = 'https://tunnel.example.com/';
-      try {
+    describe('with GOOGLE_OAUTH_REDIRECT_BASE set', () => {
+      afterEach(() => {
+        vi.unstubAllEnvs();
+      });
+
+      it('uses the redirect base for the callback URL, without a trailing slash', async () => {
+        vi.stubEnv('GOOGLE_OAUTH_REDIRECT_BASE', 'https://tunnel.example.com/');
+
         const result = await authServer.startForMcpTool('work');
 
         expect(result.success).toBe(true);
         expect(result.callbackUrl).toBe('https://tunnel.example.com/oauth2callback');
         // the generated Google auth URL must carry the same (encoded) redirect_uri
         expect(result.authUrl).toContain(encodeURIComponent('https://tunnel.example.com/oauth2callback'));
-      } finally {
-        if (prev === undefined) delete process.env.GOOGLE_OAUTH_REDIRECT_BASE;
-        else process.env.GOOGLE_OAUTH_REDIRECT_BASE = prev;
-      }
+      });
+
+      it('fails instead of falling back to another port when 3500 is busy', async () => {
+        vi.stubEnv('GOOGLE_OAUTH_REDIRECT_BASE', 'https://tunnel.example.com');
+        mockHttpServer.listen = vi.fn();
+        mockHttpServer.on = vi.fn((event: string, handler: (err: NodeJS.ErrnoException) => void) => {
+          if (event === 'error') {
+            handler(Object.assign(new Error('listen EADDRINUSE'), { code: 'EADDRINUSE' }));
+          }
+        });
+
+        const result = await authServer.startForMcpTool('work');
+
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/Port 3500 is in use/);
+        expect(mockHttpServer.listen).toHaveBeenCalledTimes(1);
+        expect(mockHttpServer.listen).toHaveBeenCalledWith(3500, expect.any(Function));
+      });
+
+      it('reports a malformed redirect base without starting a server', async () => {
+        vi.stubEnv('GOOGLE_OAUTH_REDIRECT_BASE', 'tunnel.example.com');
+
+        const result = await authServer.startForMcpTool('work');
+
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/GOOGLE_OAUTH_REDIRECT_BASE must be an absolute http\(s\) URL/);
+        expect(mockHttpServer.listen).not.toHaveBeenCalled();
+      });
     });
 
     it('should stop existing server before starting new one', async () => {

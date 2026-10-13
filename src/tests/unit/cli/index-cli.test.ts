@@ -137,7 +137,7 @@ describe('CLI Entry (index.ts)', () => {
 
     await expect(mod.runAuthServer('work')).rejects.toThrow('EXIT:1');
     expect(process.stderr.write).toHaveBeenCalledWith(
-      expect.stringContaining('Authentication failed. Could not start server')
+      expect.stringContaining('Authentication failed. Could not start the auth server')
     );
   });
 });

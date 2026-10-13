@@ -21,9 +21,19 @@ describe('loadAppConfig', () => {
     expect(config.tokenPath).toBe(path.join('/tmp/xdg', 'google-calendar-mcp', 'tokens.json'));
     expect(config.accountMode).toBe('normal');
     expect(config.apiBaseUrl).toBe('https://www.googleapis.com');
+    expect(config.oauthRedirectBase).toBeUndefined();
     expect(config.isTest).toBe(false);
     expect(config.sources.transport).toBe('default');
     expect(config.sources.port).toBe('default');
+    expect(config.sources.oauthRedirectBase).toBe('default');
+  });
+
+  it('normalizes GOOGLE_OAUTH_REDIRECT_BASE, keeping a path prefix and dropping a trailing slash', () => {
+    expect(loadAppConfig([], baseEnv({ GOOGLE_OAUTH_REDIRECT_BASE: 'https://tunnel.example.com/' })).oauthRedirectBase)
+      .toBe('https://tunnel.example.com');
+    const config = loadAppConfig([], baseEnv({ GOOGLE_OAUTH_REDIRECT_BASE: ' https://proxy.example.com/gcal/ ' }));
+    expect(config.oauthRedirectBase).toBe('https://proxy.example.com/gcal');
+    expect(config.sources.oauthRedirectBase).toBe('env');
   });
 
   it('reads environment variables', () => {
@@ -109,6 +119,10 @@ describe('loadAppConfig', () => {
       [[], { GOOGLE_ACCOUNT_MODE: 'Work' }, /GOOGLE_ACCOUNT_MODE: Invalid account ID/],
       [[], { GOOGLE_CALENDAR_API_BASE_URL: 'proxy.internal/calendar' }, /GOOGLE_CALENDAR_API_BASE_URL must be an absolute http\(s\) URL/],
       [[], { GOOGLE_CALENDAR_API_BASE_URL: 'http://proxy/calendar?k=v' }, /GOOGLE_CALENDAR_API_BASE_URL must not contain a query string/],
+      [[], { GOOGLE_OAUTH_REDIRECT_BASE: 'tunnel.example.com' }, /GOOGLE_OAUTH_REDIRECT_BASE must be an absolute http\(s\) URL/],
+      [[], { GOOGLE_OAUTH_REDIRECT_BASE: 'ftp://tunnel.example.com' }, /GOOGLE_OAUTH_REDIRECT_BASE must be an absolute http\(s\) URL/],
+      [[], { GOOGLE_OAUTH_REDIRECT_BASE: 'https://user:pw@tunnel.example.com' }, /GOOGLE_OAUTH_REDIRECT_BASE must not contain credentials/],
+      [[], { GOOGLE_OAUTH_REDIRECT_BASE: 'https://tunnel.example.com#cb' }, /GOOGLE_OAUTH_REDIRECT_BASE must not contain a fragment/],
       [['--port', 'abc'], {}, /--port must be an integer/],
       [['--port'], {}, /--port requires a port number/],
       [['--transport', 'bogus'], {}, /--transport must be "stdio" or "http"/],

@@ -150,8 +150,9 @@ When you authenticate on a remote or headless machine (e.g. a cloud desktop or s
 through an HTTPS tunnel or reverse proxy), the browser is elsewhere and can't reach that
 loopback address.
 
-Set `GOOGLE_OAUTH_REDIRECT_BASE` to the externally reachable base URL of the auth server —
-scheme + host, no trailing slash (e.g. `https://my-tunnel.example.com`). The `/oauth2callback`
+Set `GOOGLE_OAUTH_REDIRECT_BASE` to the externally reachable base URL of the auth server, for
+example `https://my-tunnel.example.com`. It must be an absolute `http(s)` URL with no credentials,
+query or fragment; a path prefix is kept and a trailing slash is dropped. The `/oauth2callback`
 path is appended automatically, so the consent redirect comes back through your tunnel:
 
 ```bash
@@ -166,10 +167,14 @@ npx @cocal/google-calendar-mcp auth
   on that client in the Google Cloud console. A Desktop/"installed" client's loopback flow only
   accepts `http://localhost`/`http://127.0.0.1` redirects and will return `redirect_uri_mismatch`
   for a public URL.
-- Your tunnel/proxy must forward the public URL to the auth server's local port (default range
-  3500–3505) so the `/oauth2callback` request reaches it.
+- Your tunnel/proxy must forward the public URL to local port **3500**. With a redirect base set,
+  the auth server binds only that port (it does not fall back to 3501–3505, since the tunnel
+  would keep forwarding to 3500); if 3500 is busy, authentication stops with an error saying so.
 
-Unset, behavior is unchanged (loopback redirect).
+This setting applies to the `auth` command and the `manage-accounts` tool. The HTTP transport's
+account page builds its own callback from `--host`/`--port` and ignores it.
+
+Unset, behavior is unchanged (loopback redirect, first free port in 3500–3505).
 
 ## Managing Multiple Accounts
 
