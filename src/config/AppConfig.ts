@@ -45,6 +45,8 @@ export interface AppConfig extends ServerConfig {
   serviceAccount: ServiceAccountConfig;
   /** Where Calendar API calls go: GOOGLE_CALENDAR_API_BASE_URL, or the public Google origin */
   apiBaseUrl: string;
+  /** Public base URL for the OAuth callback (GOOGLE_OAUTH_REDIRECT_BASE), or undefined for the loopback redirect */
+  oauthRedirectBase?: string;
   /** NODE_ENV=test: skips startup auth, uses the 'test' token namespace, quiets token logging */
   isTest: boolean;
   sources: Record<string, ConfigSource>;
@@ -72,6 +74,7 @@ export interface EnvVarDoc {
 
 export const CONFIG_ENV_VARS: readonly EnvVarDoc[] = [
   { name: 'GOOGLE_OAUTH_CREDENTIALS', defaultValue: '`gcp-oauth.keys.json` in the package root', description: 'Path to the OAuth credentials file' },
+  { name: 'GOOGLE_OAUTH_REDIRECT_BASE', defaultValue: 'unset (loopback `http://localhost:<port>`)', description: 'Public base URL for the OAuth callback when authenticating through a tunnel or reverse proxy (see docs/authentication.md)' },
   { name: 'GOOGLE_SERVICE_ACCOUNT_KEY', defaultValue: 'unset', description: 'Path to an explicit service account key file' },
   { name: 'GOOGLE_APPLICATION_CREDENTIALS', defaultValue: 'unset', description: 'Ambient Google credentials file, used when this server has no OAuth credentials file' },
   { name: 'GOOGLE_SERVICE_ACCOUNT_SUBJECT', defaultValue: 'unset', description: 'Workspace user to impersonate with domain-wide delegation' },
@@ -155,7 +158,32 @@ export const DEFAULT_API_ORIGIN = 'https://www.googleapis.com';
  */
 export function getApiBaseUrl(env: Env = process.env): string {
   const raw = envValue(env, API_BASE_URL_ENV)?.trim();
-  if (!raw) return DEFAULT_API_ORIGIN;
+  return raw ? parseBaseUrl(raw, API_BASE_URL_ENV) : DEFAULT_API_ORIGIN;
+}
+
+export const OAUTH_REDIRECT_BASE_ENV = 'GOOGLE_OAUTH_REDIRECT_BASE';
+
+/**
+ * The externally reachable base URL the OAuth consent redirect returns to
+ * (GOOGLE_OAUTH_REDIRECT_BASE), as origin and path without a trailing slash, or
+ * undefined when unset or blank (the auth server then uses its loopback address).
+ * Read by the `auth` command and the manage-accounts tool in src/auth/server.ts;
+ * the HTTP transport builds its callback from --host/--port instead.
+ * @throws ConfigError under the same rules as GOOGLE_CALENDAR_API_BASE_URL
+ */
+export function getOAuthRedirectBase(env: Env = process.env): string | undefined {
+  const raw = envValue(env, OAUTH_REDIRECT_BASE_ENV)?.trim();
+  return raw ? parseBaseUrl(raw, OAUTH_REDIRECT_BASE_ENV) : undefined;
+}
+
+/**
+ * Validates an http(s) base URL setting and returns its origin and path without
+ * a trailing slash.
+ * @throws ConfigError if the value is not an absolute http(s) URL, or carries
+ *   credentials, a query or a fragment. The message leaves the value out, so a
+ *   password in it never reaches the logs.
+ */
+function parseBaseUrl(raw: string, name: string): string {
   let parsed: URL | undefined;
   try {
     parsed = new URL(raw);
@@ -163,16 +191,16 @@ export function getApiBaseUrl(env: Env = process.env): string {
     parsed = undefined;
   }
   if (!parsed || (parsed.protocol !== 'http:' && parsed.protocol !== 'https:')) {
-    throw new ConfigError(`${API_BASE_URL_ENV} must be an absolute http(s) URL`);
+    throw new ConfigError(`${name} must be an absolute http(s) URL`);
   }
   if (parsed.username || parsed.password) {
-    throw new ConfigError(`${API_BASE_URL_ENV} must not contain credentials`);
+    throw new ConfigError(`${name} must not contain credentials`);
   }
   if (parsed.search) {
-    throw new ConfigError(`${API_BASE_URL_ENV} must not contain a query string`);
+    throw new ConfigError(`${name} must not contain a query string`);
   }
   if (parsed.hash) {
-    throw new ConfigError(`${API_BASE_URL_ENV} must not contain a fragment`);
+    throw new ConfigError(`${name} must not contain a fragment`);
   }
   return `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, '');
 }
@@ -248,6 +276,8 @@ export function loadAppConfig(args: string[], env: Env = process.env): AppConfig
   sources.tokenPath = envValue(env, 'GOOGLE_CALENDAR_MCP_TOKEN_PATH') || envValue(env, 'XDG_CONFIG_HOME') ? 'env' : 'default';
   const apiBaseUrl = getApiBaseUrl(env);
   sources.apiBaseUrl = apiBaseUrl === DEFAULT_API_ORIGIN ? 'default' : 'env';
+  const oauthRedirectBase = getOAuthRedirectBase(env);
+  sources.oauthRedirectBase = oauthRedirectBase ? 'env' : 'default';
   sources.accountMode = env.GOOGLE_ACCOUNT_MODE !== undefined ? 'env' : 'default';
 
   let accountMode: string;
@@ -266,6 +296,7 @@ export function loadAppConfig(args: string[], env: Env = process.env): AppConfig
     accountMode,
     serviceAccount: Object.freeze(serviceAccount),
     apiBaseUrl,
+    oauthRedirectBase,
     isTest: isTestEnvironment(env),
     sources: Object.freeze(sources)
   });

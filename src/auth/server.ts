@@ -6,6 +6,7 @@ import { URL } from 'url';
 import open from 'open';
 import { loadCredentials } from './client.js';
 import { renderAuthSuccess, renderAuthError, renderAuthLanding, loadWebFile } from '../web/templates.js';
+import { getOAuthRedirectBase } from '../config/AppConfig.js';
 
 export interface StartForMcpToolResult {
   success: boolean;
@@ -31,6 +32,7 @@ export class AuthServer {
   private mcpToolTimeout: ReturnType<typeof setTimeout> | null = null; // Timeout for MCP tool auth flow
   private autoShutdownOnSuccess = false; // Whether to auto-shutdown after successful auth
   private pendingAuthFlow: PendingAuthFlow | null = null; // PKCE + state for current OAuth flow
+  private redirectBase: string | undefined; // GOOGLE_OAUTH_REDIRECT_BASE, resolved at the start of each flow
 
   /**
    * @param accountId Account to authenticate (e.g. from `auth <account-id>`); defaults to GOOGLE_ACCOUNT_MODE
@@ -42,6 +44,39 @@ export class AuthServer {
   }
 
   /**
+   * The OAuth redirect URI for the callback server: `<GOOGLE_OAUTH_REDIRECT_BASE>/oauth2callback`
+   * when a redirect base is set (consent completed in a browser on another machine, reaching this
+   * server through a tunnel or reverse proxy), else the loopback `http://localhost:<port>/oauth2callback`.
+   */
+  private getRedirectUri(port: number): string {
+    return this.redirectBase
+      ? `${this.redirectBase}/oauth2callback`
+      : `http://localhost:${port}/oauth2callback`;
+  }
+
+  /**
+   * Reads GOOGLE_OAUTH_REDIRECT_BASE for the flow about to start.
+   * @returns an error message if the setting is malformed, else null
+   */
+  private resolveRedirectBase(): string | null {
+    try {
+      this.redirectBase = getOAuthRedirectBase();
+      return null;
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  private portUnavailableMessage(): string {
+    if (this.redirectBase) {
+      return `Port ${this.portRange.start} is in use. With GOOGLE_OAUTH_REDIRECT_BASE set, the auth server ` +
+        `binds only port ${this.portRange.start}, the port your tunnel or proxy must forward to. ` +
+        `Free that port and try again.`;
+    }
+    return `Could not start auth server. Ports ${this.portRange.start}-${this.portRange.end} may be in use.`;
+  }
+
+  /**
    * Creates the flow-specific OAuth2Client with the correct redirect URI.
    */
   private async createFlowOAuth2Client(port: number): Promise<OAuth2Client> {
@@ -49,7 +84,7 @@ export class AuthServer {
     return new OAuth2Client(
       client_id,
       client_secret,
-      `http://localhost:${port}/oauth2callback`
+      this.getRedirectUri(port)
     );
   }
 
@@ -216,10 +251,17 @@ export class AuthServer {
       return true;
     }
     
+    const configError = this.resolveRedirectBase();
+    if (configError) {
+      process.stderr.write(`✗ ${configError}\n`);
+      this.authCompletedSuccessfully = false;
+      return false;
+    }
+
     // Try to start the server and get the port
     const port = await this.startServerOnAvailablePort();
     if (port === null) {
-      process.stderr.write(`Could not start auth server on available port. Please check port availability (${this.portRange.start}-${this.portRange.end}) and try again.\n`);
+      process.stderr.write(`${this.portUnavailableMessage()}\n`);
 
       this.authCompletedSuccessfully = false;
       return false;
@@ -250,7 +292,7 @@ export class AuthServer {
     
     // Always show the URL in console for easy access
     process.stderr.write(`\n🔗 Authentication URL: ${authorizeUrl}\n\n`);
-    process.stderr.write(`Or visit: http://localhost:${port}\n\n`);
+    process.stderr.write(`Or visit: ${this.redirectBase ?? `http://localhost:${port}`}\n\n`);
     
     if (openBrowser) {
       try {
@@ -267,7 +309,10 @@ export class AuthServer {
   }
 
   private async startServerOnAvailablePort(): Promise<number | null> {
-    for (let port = this.portRange.start; port <= this.portRange.end; port++) {
+    // A redirect base points a tunnel at one fixed port; falling back to the next port would
+    // leave the callback with nowhere to arrive, so only the first port is tried.
+    const lastPort = this.redirectBase ? this.portRange.start : this.portRange.end;
+    for (let port = this.portRange.start; port <= lastPort; port++) {
       try {
         await new Promise<void>((resolve, reject) => {
           const testServer = this.createServer();
@@ -368,13 +413,15 @@ export class AuthServer {
     // Set the account mode
     this.tokenManager.setAccountMode(accountId);
 
+    const configError = this.resolveRedirectBase();
+    if (configError) {
+      return { success: false, error: configError };
+    }
+
     // Try to start the server and get the port
     const port = await this.startServerOnAvailablePort();
     if (port === null) {
-      return {
-        success: false,
-        error: `Could not start auth server. Ports ${this.portRange.start}-${this.portRange.end} may be in use.`
-      };
+      return { success: false, error: this.portUnavailableMessage() };
     }
 
     // Create the flow-specific OAuth client
@@ -417,7 +464,7 @@ export class AuthServer {
     return {
       success: true,
       authUrl,
-      callbackUrl: `http://localhost:${port}/oauth2callback`
+      callbackUrl: this.getRedirectUri(port)
     };
   }
 } 

@@ -63,7 +63,7 @@ async function runAuthServer(accountId?: string): Promise<void> {
     if (!success && !authServerInstance.authCompletedSuccessfully) {
       // Failed to start and tokens weren't already valid
       process.stderr.write(
-        "Authentication failed. Could not start server or validate existing tokens. Check port availability (3500-3505) and try again.\n"
+        "Authentication failed. Could not start the auth server or validate existing tokens; see the error above.\n"
       );
       process.exit(1);
     } else if (authServerInstance.authCompletedSuccessfully) {

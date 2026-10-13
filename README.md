@@ -321,6 +321,7 @@ CLI flags take precedence over environment variables. Malformed values (for exam
 | Variable | CLI flag | Default | Description |
 |----------|----------|---------|-------------|
 | `GOOGLE_OAUTH_CREDENTIALS` |  | `gcp-oauth.keys.json` in the package root | Path to the OAuth credentials file |
+| `GOOGLE_OAUTH_REDIRECT_BASE` |  | unset (loopback `http://localhost:<port>`) | Public base URL for the OAuth callback when authenticating through a tunnel or reverse proxy (see [docs/authentication.md](docs/authentication.md#remote--headless-authentication-google_oauth_redirect_base)) |
 | `GOOGLE_SERVICE_ACCOUNT_KEY` |  | unset | Path to an explicit service account key file |
 | `GOOGLE_APPLICATION_CREDENTIALS` |  | unset | Ambient Google credentials file, used when this server has no OAuth credentials file |
 | `GOOGLE_SERVICE_ACCOUNT_SUBJECT` |  | unset | Workspace user to impersonate with domain-wide delegation |
