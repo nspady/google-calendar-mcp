@@ -40,7 +40,12 @@ export class SearchEventsHandler extends BaseToolHandler {
         let accountCalendarMap: Map<string, string[]>;
         const resolutionWarnings: string[] = [];
 
-        if (selectedAccounts.size > 1 || calendarNamesOrIds.length > 1) {
+        // 'primary' is a per-account alias, not a calendar name: fan it out to every
+        // selected account instead of routing it through the registry, whose deduplication
+        // resolves the alias to a single account and would drop the others' primaries.
+        if (selectedAccounts.size > 1 && calendarNamesOrIds.length === 1 && calendarNamesOrIds[0] === 'primary') {
+            accountCalendarMap = new Map(Array.from(selectedAccounts.keys(), (accountId) => [accountId, ['primary']]));
+        } else if (selectedAccounts.size > 1 || calendarNamesOrIds.length > 1) {
             // Multi-account or multi-calendar: route calendars to their owning accounts
             const { resolved, warnings } = await this.calendarRegistry.resolveCalendarsToAccounts(
                 calendarNamesOrIds,

@@ -39,7 +39,12 @@ export class ListEventsHandler extends BaseToolHandler {
         // This prevents "calendar not found" errors when a calendar only exists on some accounts
         let accountCalendarMap: Map<string, string[]>;
 
-        if (selectedAccounts.size > 1) {
+        // 'primary' is a per-account alias, not a calendar name: fan it out to every
+        // selected account instead of routing it through the registry, whose deduplication
+        // resolves the alias to a single account and would drop the others' primaries.
+        if (selectedAccounts.size > 1 && calendarNamesOrIds.length === 1 && calendarNamesOrIds[0] === 'primary') {
+            accountCalendarMap = new Map(Array.from(selectedAccounts.keys(), (accountId) => [accountId, ['primary']]));
+        } else if (selectedAccounts.size > 1) {
             // Multi-account: route calendars to their owning accounts using CalendarRegistry
             const { resolved, warnings } = await this.calendarRegistry.resolveCalendarsToAccounts(
                 calendarNamesOrIds,

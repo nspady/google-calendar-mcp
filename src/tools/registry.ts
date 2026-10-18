@@ -513,7 +513,7 @@ export const ToolSchemas = {
       .optional()
       .describe("Default account for all events. Individual events can override this."),
     calendarId: z.string().optional().describe(
-      "Default calendar ID for all events (use 'primary' for the main calendar). Individual events can override this. Defaults to 'primary' if not specified."
+      "Default calendar ID for all events (use 'primary' for the main calendar). Individual events can override this. Optional: omit to use the configured default calendar (GOOGLE_CALENDAR_MCP_DEFAULT_CALENDAR_ID, falling back to 'primary')."
     ),
     timeZone: ianaTimeZone().optional().describe(
       "Default IANA timezone for all events (e.g., 'America/Los_Angeles'). Individual events can override this."
