@@ -5,6 +5,7 @@ import { BaseToolHandler } from "./BaseToolHandler.js";
 import type { calendar_v3 } from 'googleapis';
 import { createTimeObject, usesFallbackTimeZone } from "../../utils/datetime.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
+import { getDefaultCalendarId } from "../../config/AppConfig.js";
 import { CreateEventsResponse, convertGoogleEventToStructured, StructuredEvent } from "../../types/structured-responses.js";
 
 export class CreateEventsHandler extends BaseToolHandler {
@@ -19,7 +20,7 @@ export class CreateEventsHandler extends BaseToolHandler {
 
         // Pre-validate shared defaults: resolve account and calendar once before the loop
         const defaultAccount = sharedDefaults.account;
-        const defaultCalendarId = sharedDefaults.calendarId ?? 'primary';
+        const defaultCalendarId = sharedDefaults.calendarId ?? getDefaultCalendarId();
 
         // Fail fast: validate default account/OAuth before iterating
         const hasPerEventAccountOverrides = validArgs.events.some(e => e.account);
@@ -46,7 +47,7 @@ export class CreateEventsHandler extends BaseToolHandler {
 
             // Merge shared defaults with per-event overrides
             const account = eventInput.account ?? sharedDefaults.account;
-            const calendarId = eventInput.calendarId ?? sharedDefaults.calendarId ?? 'primary';
+            const calendarId = eventInput.calendarId ?? sharedDefaults.calendarId ?? getDefaultCalendarId();
             const timeZone = eventInput.timeZone ?? sharedDefaults.timeZone;
             const sendUpdates = eventInput.sendUpdates ?? sharedDefaults.sendUpdates;
 

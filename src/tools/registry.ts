@@ -267,7 +267,7 @@ export const ToolSchemas = {
     account: multiAccountSchema,
     calendarId: z.union([
       z.string().describe(
-        "Calendar identifier(s) to query. Accepts calendar IDs (e.g., 'primary', 'user@gmail.com') OR calendar names (e.g., 'Work', 'Personal'). Single calendar: 'primary'. Multiple calendars: array ['Work', 'Personal'] or JSON string '[\"Work\", \"Personal\"]'"
+        "Calendar identifier(s) to query. Accepts calendar IDs (e.g., 'primary', 'user@gmail.com') OR calendar names (e.g., 'Work', 'Personal'). Single calendar: 'primary'. Multiple calendars: array ['Work', 'Personal'] or JSON string '[\"Work\", \"Personal\"]' Optional: omit to use the configured default calendar (GOOGLE_CALENDAR_MCP_DEFAULT_CALENDAR_ID, falling back to 'primary')"
       ),
       z.array(z.string().min(1))
         .min(1, "At least one calendar ID is required")
@@ -277,7 +277,7 @@ export const ToolSchemas = {
           "Duplicate calendar IDs are not allowed"
         )
         .describe("Array of calendar IDs to query events from (max 50, no duplicates)")
-    ]),
+    ]).optional(),
     timeMin: timeMinSchema,
     timeMax: timeMaxSchema,
     timeZone: timeZoneSchema,
@@ -305,7 +305,7 @@ export const ToolSchemas = {
         return val;
       }
       return val;
-    }).describe("Calendar identifier(s) to search. Accepts calendar IDs or names. Single or multiple calendars supported."),
+    }).describe("Calendar identifier(s) to search. Accepts calendar IDs or names. Single or multiple calendars supported. Optional: omit to use the configured default calendar (GOOGLE_CALENDAR_MCP_DEFAULT_CALENDAR_ID, falling back to 'primary').").optional(),
     query: z.string().describe(
       "Free text search query (searches summary, description, location, attendees, etc.)"
     ),

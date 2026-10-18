@@ -20,6 +20,7 @@ import { ToolRegistry } from './tools/registry.js';
 import { ManageAccountsHandler, ServerContext } from './handlers/core/ManageAccountsHandler.js';
 import { z } from 'zod';
 import { CalendarRegistry } from './services/CalendarRegistry.js';
+import { getDefaultCalendarId } from './config/AppConfig.js';
 
 // Import transport handlers
 import { StdioTransportHandler } from './transports/stdio.js';
@@ -233,7 +234,7 @@ export class GoogleCalendarMcpServer {
         const dateHint = date ?? 'today';
         const timeZoneHint = timeZone ?? 'calendar default timezone';
         const toolArgs: Record<string, unknown> = {
-          calendarId: 'primary'
+          calendarId: getDefaultCalendarId()
         };
         if (account) {
           toolArgs.account = account;
@@ -280,15 +281,16 @@ export class GoogleCalendarMcpServer {
           windowStart: z.string().describe('Window start in ISO 8601 format.'),
           windowEnd: z.string().describe('Window end in ISO 8601 format.'),
           account: z.union([z.string(), z.array(z.string())]).optional().describe('Account nickname or list of account nicknames to include.'),
-          targetCalendarId: z.string().optional().describe("Calendar ID to book on. Defaults to 'primary'."),
+          targetCalendarId: z.string().optional().describe("Calendar ID to book on. Defaults to the configured default calendar (GOOGLE_CALENDAR_MCP_DEFAULT_CALENDAR_ID, else 'primary')."),
           timeZone: z.string().optional().describe('IANA timezone used for candidate slots and final booking.')
         }
       },
       async ({ title, attendeeEmails, durationMinutes, windowStart, windowEnd, account, targetCalendarId, timeZone }) => {
+        const defaultCalendarId = getDefaultCalendarId();
         const freebusyArgs: Record<string, unknown> = {
           timeMin: windowStart,
           timeMax: windowEnd,
-          calendars: [{ id: targetCalendarId ?? 'primary' }]
+          calendars: [{ id: targetCalendarId ?? defaultCalendarId }]
         };
         if (account) {
           freebusyArgs.account = account;
@@ -310,7 +312,7 @@ export class GoogleCalendarMcpServer {
                   `- Duration: ${durationMinutes} minutes\n` +
                   `- Window: ${windowStart} to ${windowEnd}\n` +
                   `- Account scope: ${Array.isArray(account) ? account.join(', ') : account ?? 'all connected accounts'}\n` +
-                  `- Target calendar: ${targetCalendarId ?? 'primary'}\n` +
+                  `- Target calendar: ${targetCalendarId ?? defaultCalendarId}\n` +
                   `- Timezone: ${timeZone ?? 'calendar default timezone'}\n` +
                   `- Attendees: ${(attendeeEmails && attendeeEmails.length > 0) ? attendeeEmails.join(', ') : 'none specified'}\n\n` +
                   `Workflow:\n` +

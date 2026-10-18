@@ -1,6 +1,7 @@
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { BaseToolHandler } from "./BaseToolHandler.js";
+import { getDefaultCalendarId } from "../../config/AppConfig.js";
 import { calendar_v3 } from 'googleapis';
 import { BatchRequestHandler } from "./BatchRequestHandler.js";
 import { buildListFieldMask } from "../../utils/field-mask-builder.js";
@@ -8,7 +9,7 @@ import { createStructuredResponse } from "../../utils/response-builder.js";
 import { ListEventsResponse, StructuredEvent, convertGoogleEventToStructured, ExtendedEvent } from "../../types/structured-responses.js";
 
 interface ListEventsArgs {
-  calendarId: string | string[];
+  calendarId?: string | string[];
   timeMin?: string;
   timeMax?: string;
   timeZone?: string;
@@ -25,8 +26,12 @@ export class ListEventsHandler extends BaseToolHandler {
         const partialFailures: Array<{ accountId: string; reason: string }> = [];
         const resolutionWarnings: string[] = [];
 
-        // Normalize calendarId to always be an array for consistent processing
-        const calendarNamesOrIds = Array.isArray(args.calendarId)
+        // Normalize calendarId to always be an array for consistent processing.
+        // Omitted calendarId resolves to the configured default calendar
+        // (GOOGLE_CALENDAR_MCP_DEFAULT_CALENDAR_ID, falling back to 'primary').
+        const calendarNamesOrIds = args.calendarId === undefined
+            ? [getDefaultCalendarId()]
+            : Array.isArray(args.calendarId)
             ? args.calendarId
             : [args.calendarId];
 

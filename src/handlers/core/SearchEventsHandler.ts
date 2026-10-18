@@ -5,6 +5,7 @@ import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
 import { buildListFieldMask } from "../../utils/field-mask-builder.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
+import { getDefaultCalendarId } from "../../config/AppConfig.js";
 import { SearchEventsResponse, StructuredEvent, convertGoogleEventToStructured, ExtendedEvent } from "../../types/structured-responses.js";
 
 // Internal args type for searchEvents with single calendarId (after normalization)
@@ -23,8 +24,12 @@ export class SearchEventsHandler extends BaseToolHandler {
     async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
         const validArgs = args as SearchEventsInput;
 
-        // Normalize calendarId to always be an array for consistent processing
-        const calendarNamesOrIds = Array.isArray(validArgs.calendarId)
+        // Normalize calendarId to always be an array for consistent processing.
+        // Omitted calendarId resolves to the configured default calendar
+        // (GOOGLE_CALENDAR_MCP_DEFAULT_CALENDAR_ID, falling back to 'primary').
+        const calendarNamesOrIds = validArgs.calendarId === undefined
+            ? [getDefaultCalendarId()]
+            : Array.isArray(validArgs.calendarId)
             ? validArgs.calendarId
             : [validArgs.calendarId];
 
@@ -116,7 +121,7 @@ export class SearchEventsHandler extends BaseToolHandler {
         if (validArgs.timeMin || validArgs.timeMax) {
             // Use first calendar's timezone as reference for response display
             const firstAccountId = accountCalendarMap.keys().next().value as string;
-            const firstCalendarId = accountCalendarMap.get(firstAccountId)?.[0] || 'primary';
+            const firstCalendarId = accountCalendarMap.get(firstAccountId)?.[0] || getDefaultCalendarId();
             const client = selectedAccounts.get(firstAccountId)!;
             const { timeMin, timeMax } = await this.normalizeTimeRange(
                 client, firstCalendarId, validArgs.timeMin, validArgs.timeMax, validArgs.timeZone

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as path from 'path';
 import { readdirSync, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
-import { ConfigError, formatResolvedConfig, getServiceAccountConfig, loadAppConfig } from '../../../config/AppConfig.js';
+import { ConfigError, formatResolvedConfig, getDefaultCalendarId, getServiceAccountConfig, loadAppConfig } from '../../../config/AppConfig.js';
 
 // Minimal env so tests don't depend on the developer's shell
 const baseEnv = (overrides: Record<string, string> = {}): NodeJS.ProcessEnv => ({
@@ -172,6 +172,21 @@ describe('formatResolvedConfig', () => {
   it('omits HTTP-only settings for stdio', () => {
     const output = formatResolvedConfig(loadAppConfig([], baseEnv()));
     expect(output).not.toContain('  port:');
+  });
+});
+
+describe('getDefaultCalendarId', () => {
+  it('returns the historical primary default when the variable is unset', () => {
+    expect(getDefaultCalendarId({})).toBe('primary');
+  });
+
+  it('treats an empty value as unset', () => {
+    expect(getDefaultCalendarId({ GOOGLE_CALENDAR_MCP_DEFAULT_CALENDAR_ID: '' })).toBe('primary');
+  });
+
+  it('returns the configured calendar ID', () => {
+    expect(getDefaultCalendarId({ GOOGLE_CALENDAR_MCP_DEFAULT_CALENDAR_ID: 'unit-test-calendar@group.calendar.google.com' }))
+      .toBe('unit-test-calendar@group.calendar.google.com');
   });
 });
 
