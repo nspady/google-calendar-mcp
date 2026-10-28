@@ -558,7 +558,6 @@ describe('Per-field timezone validation', () => {
 
 // Use the create-event and search-events schemas for testing array preprocessing
 const CreateEventSchema = ToolSchemas['create-event'];
-const SearchEventsSchema = ToolSchemas['search-events'];
 
 describe('Array parameter JSON string preprocessing', () => {
   describe('fields parameter', () => {

@@ -50,10 +50,6 @@ function success(message) {
   console.log(colorize('green', `✅ ${message}`));
 }
 
-function info(message) {
-  console.log(colorize('blue', `ℹ️  ${message}`));
-}
-
 function warning(message) {
   console.log(colorize('yellow', `⚠️  ${message}`));
 }

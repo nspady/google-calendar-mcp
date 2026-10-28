@@ -73,9 +73,6 @@ export function convertToRFC3339(datetime: string, fallbackTimezone: string): st
             
             const [, year, month, day, hour, minute, second] = match.map(Number);
             
-            // Create a temporary date in UTC to get the baseline
-            const utcDate = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
-            
             // Find what UTC time corresponds to the desired local time in the target timezone
             // We do this by binary search approach or by using the timezone offset
             const targetDate = convertLocalTimeToUTC(year, month - 1, day, hour, minute, second, fallbackTimezone);

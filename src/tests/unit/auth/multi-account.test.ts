@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TokenManager } from '../../../auth/tokenManager.js';
-import { OAuth2Client, Credentials } from 'google-auth-library';
+import { OAuth2Client } from 'google-auth-library';
 import fs from 'fs/promises';
 
 // Mock the entire fs/promises module

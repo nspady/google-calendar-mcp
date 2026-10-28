@@ -3,7 +3,6 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { OAuth2Client } from 'google-auth-library';
-import { calendar_v3 } from 'googleapis';
 // Import the types and schemas we're testing
 import { ToolSchemas } from '../../../tools/registry.js';
 import { ExtendedEvent } from '../../../types/structured-responses.js';
@@ -11,16 +10,6 @@ import { ExtendedEvent } from '../../../types/structured-responses.js';
 // Get the schema for validation testing
 const ListEventsArgumentsSchema = ToolSchemas['list-events'];
 import { ListEventsHandler } from '../../../handlers/core/ListEventsHandler.js';
-
-// Mock the BatchRequestHandler that we'll implement
-class MockBatchRequestHandler {
-  constructor(_auth: OAuth2Client) {}
-
-  async executeBatch(_requests: any[]): Promise<any[]> {
-    // This will be mocked in tests
-    return [];
-  }
-}
 
 // Mock dependencies
 vi.mock('google-auth-library');
