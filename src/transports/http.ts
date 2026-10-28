@@ -117,6 +117,27 @@ export class HttpTransportHandler {
   }
 
   /**
+   * Logs the underlying error server-side and sends the client only a generic
+   * message, so internal details (paths, stack traces) never reach the browser.
+   */
+  private sendServerError(res: http.ServerResponse, error: string, cause: unknown): void {
+    process.stderr.write(`✗ ${error}: ${cause instanceof Error ? cause.message : String(cause)}\n`);
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      error,
+      message: `${error}. Check the server logs for details.`
+    }));
+  }
+
+  private sendInvalidAccountId(res: http.ServerResponse): void {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      error: 'Invalid account ID',
+      message: 'Account ID must be 1-64 characters (lowercase letters, numbers, dashes, underscores) and not a reserved name.'
+    }));
+  }
+
+  /**
    * Validates an account ID format.
    * Throws an error if the format is invalid.
    */
@@ -236,11 +257,7 @@ export class HttpTransportHandler {
           });
           res.end(html);
         } catch (error) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            error: 'Failed to load UI',
-            message: error instanceof Error ? error.message : String(error)
-          }));
+          this.sendServerError(res, 'Failed to load UI', error);
         }
         return;
       }
@@ -270,11 +287,7 @@ export class HttpTransportHandler {
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ accounts }));
         } catch (error) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            error: 'Failed to list accounts',
-            message: error instanceof Error ? error.message : String(error)
-          }));
+          this.sendServerError(res, 'Failed to list accounts', error);
         }
         return;
       }
@@ -297,12 +310,8 @@ export class HttpTransportHandler {
           // Validate account ID format
           try {
             await this.validateAccountId(accountId);
-          } catch (error) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-              error: 'Invalid account ID',
-              message: error instanceof Error ? error.message : String(error)
-            }));
+          } catch {
+            this.sendInvalidAccountId(res);
             return;
           }
 
@@ -315,11 +324,7 @@ export class HttpTransportHandler {
             accountId
           }));
         } catch (error) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            error: 'Failed to initiate OAuth flow',
-            message: error instanceof Error ? error.message : String(error)
-          }));
+          this.sendServerError(res, 'Failed to initiate OAuth flow', error);
         }
         return;
       }
@@ -411,9 +416,13 @@ export class HttpTransportHandler {
         const accountId = req.url.substring('/api/accounts/'.length);
 
         try {
-          // Validate account ID format
           await this.validateAccountId(accountId);
+        } catch {
+          this.sendInvalidAccountId(res);
+          return;
+        }
 
+        try {
           // Switch to account and clear tokens
           const originalMode = this.tokenManager.getAccountMode();
           try {
@@ -433,11 +442,7 @@ export class HttpTransportHandler {
             message: 'Account removed successfully'
           }));
         } catch (error) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            error: 'Failed to remove account',
-            message: error instanceof Error ? error.message : String(error)
-          }));
+          this.sendServerError(res, 'Failed to remove account', error);
         }
         return;
       }
@@ -447,9 +452,13 @@ export class HttpTransportHandler {
         const accountId = req.url.split('/')[3];
 
         try {
-          // Validate account ID format
           await this.validateAccountId(accountId);
+        } catch {
+          this.sendInvalidAccountId(res);
+          return;
+        }
 
+        try {
           // Generate OAuth URL for re-authentication
           const authUrl = await this.startOAuthFlow(accountId, host, port);
 
@@ -459,11 +468,7 @@ export class HttpTransportHandler {
             accountId
           }));
         } catch (error) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            error: 'Failed to initiate re-authentication',
-            message: error instanceof Error ? error.message : String(error)
-          }));
+          this.sendServerError(res, 'Failed to initiate re-authentication', error);
         }
         return;
       }
