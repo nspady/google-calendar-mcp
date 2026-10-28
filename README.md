@@ -328,6 +328,7 @@ CLI flags take precedence over environment variables. Malformed values (for exam
 | `GOOGLE_CALENDAR_MCP_TOKEN_PATH` |  | `$XDG_CONFIG_HOME/google-calendar-mcp/tokens.json` | Custom token storage location |
 | `XDG_CONFIG_HOME` |  | `~/.config` | Base config directory for token storage (ignored if GOOGLE_CALENDAR_MCP_TOKEN_PATH is set) |
 | `GOOGLE_ACCOUNT_MODE` |  | `normal` | Account nickname used for single-account operations and the `auth` command |
+| `GOOGLE_CALENDAR_MCP_DEFAULT_CALENDAR_ID` |  | `primary` | Calendar ID used when a tool call omits `calendarId`. Set it to a calendar the credentials actually own (e.g. a shared calendar ID) when the Google `primary` alias is not readable; the literal `primary` value still works when passed explicitly |
 | `ENABLED_TOOLS` | `--enable-tools` | all tools | Comma-separated list of tools to expose (see Tool Filtering) |
 | `TRANSPORT` | `--transport` | `stdio` | Transport type: `stdio` or `http` |
 | `PORT` | `--port` | `3000` | HTTP transport port (1-65535) |

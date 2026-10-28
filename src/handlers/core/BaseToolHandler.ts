@@ -538,12 +538,35 @@ Original error: ${errorMessage}`
             const response = await calendar.calendarList.get({ calendarId });
             return response.data?.timeZone || 'UTC';
         } catch (error) {
+            // A calendar can be readable yet absent from the account's calendar list
+            // (e.g. shared by ID with a service account, which only sees calendars
+            // explicitly added to its list): the calendar metadata endpoint still
+            // exposes its time zone, so try that before giving up on UTC.
+            const metadataTimezone = await this.tryGetCalendarMetadataTimezone(client, calendarId);
+            if (metadataTimezone) {
+                return metadataTimezone;
+            }
             if (operation === 'write' && !isCalendarNotAccessibleError(error)) {
                 this.handleGoogleApiError(error);
             }
             const reason = error instanceof Error ? error.message : String(error);
             process.stderr.write(`Could not read time zone for calendar "${calendarId}" (${reason}); using UTC\n`);
             return 'UTC';
+        }
+    }
+
+    /**
+     * Reads a calendar's time zone from the calendar metadata endpoint, which works
+     * for calendars that are not present in the account's calendar list. Returns null
+     * when the metadata is unavailable; never throws.
+     */
+    private async tryGetCalendarMetadataTimezone(client: OAuth2Client, calendarId: string): Promise<string | null> {
+        try {
+            const calendar = this.getCalendar(client);
+            const response = await calendar.calendars.get({ calendarId });
+            return response.data?.timeZone || null;
+        } catch {
+            return null;
         }
     }
 

@@ -7,6 +7,7 @@ import { FreeBusyResponse, BusySlot } from '../../types/structured-responses.js'
 import { createStructuredResponse } from '../../utils/response-builder.js';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { convertToRFC3339 } from '../../utils/datetime.js';
+import { getDefaultCalendarId } from '../../config/AppConfig.js';
 
 interface FreeBusyCalendarResult {
   busy: BusySlot[];
@@ -145,10 +146,11 @@ export class FreeBusyEventHandler extends BaseToolHandler {
 
       // Determine timezone with correct precedence:
       // 1. Explicit timeZone parameter (highest priority)
-      // 2. Primary calendar's default timezone (fallback)
+      // 2. Default calendar's default timezone (fallback)
       // 3. UTC if calendar timezone retrieval fails
       // getCalendarTimezone falls back to UTC (with a stderr warning) on read paths
-      const timezone = args.timeZone || await this.getCalendarTimezone(client, 'primary');
+      // The default calendar is GOOGLE_CALENDAR_MCP_DEFAULT_CALENDAR_ID, else 'primary'
+      const timezone = args.timeZone || await this.getCalendarTimezone(client, getDefaultCalendarId());
 
       // Convert time boundaries to RFC3339 format for Google Calendar API
       // This handles both timezone-aware and timezone-naive datetime strings

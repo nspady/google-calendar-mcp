@@ -5,6 +5,7 @@ import { BaseToolHandler } from "./BaseToolHandler.js";
 import { calendar_v3 } from 'googleapis';
 import { buildListFieldMask } from "../../utils/field-mask-builder.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
+import { getDefaultCalendarId } from "../../config/AppConfig.js";
 import { SearchEventsResponse, StructuredEvent, convertGoogleEventToStructured, ExtendedEvent } from "../../types/structured-responses.js";
 
 // Internal args type for searchEvents with single calendarId (after normalization)
@@ -23,8 +24,12 @@ export class SearchEventsHandler extends BaseToolHandler {
     async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
         const validArgs = args as SearchEventsInput;
 
-        // Normalize calendarId to always be an array for consistent processing
-        const calendarNamesOrIds = Array.isArray(validArgs.calendarId)
+        // Normalize calendarId to always be an array for consistent processing.
+        // Omitted calendarId resolves to the configured default calendar
+        // (GOOGLE_CALENDAR_MCP_DEFAULT_CALENDAR_ID, falling back to 'primary').
+        const calendarNamesOrIds = validArgs.calendarId === undefined
+            ? [getDefaultCalendarId()]
+            : Array.isArray(validArgs.calendarId)
             ? validArgs.calendarId
             : [validArgs.calendarId];
 
@@ -35,7 +40,12 @@ export class SearchEventsHandler extends BaseToolHandler {
         let accountCalendarMap: Map<string, string[]>;
         const resolutionWarnings: string[] = [];
 
-        if (selectedAccounts.size > 1 || calendarNamesOrIds.length > 1) {
+        // 'primary' is a per-account alias, not a calendar name: fan it out to every
+        // selected account instead of routing it through the registry, whose deduplication
+        // resolves the alias to a single account and would drop the others' primaries.
+        if (selectedAccounts.size > 1 && calendarNamesOrIds.length === 1 && calendarNamesOrIds[0] === 'primary') {
+            accountCalendarMap = new Map(Array.from(selectedAccounts.keys(), (accountId) => [accountId, ['primary']]));
+        } else if (selectedAccounts.size > 1 || calendarNamesOrIds.length > 1) {
             // Multi-account or multi-calendar: route calendars to their owning accounts
             const { resolved, warnings } = await this.calendarRegistry.resolveCalendarsToAccounts(
                 calendarNamesOrIds,
@@ -116,7 +126,7 @@ export class SearchEventsHandler extends BaseToolHandler {
         if (validArgs.timeMin || validArgs.timeMax) {
             // Use first calendar's timezone as reference for response display
             const firstAccountId = accountCalendarMap.keys().next().value as string;
-            const firstCalendarId = accountCalendarMap.get(firstAccountId)?.[0] || 'primary';
+            const firstCalendarId = accountCalendarMap.get(firstAccountId)?.[0] || getDefaultCalendarId();
             const client = selectedAccounts.get(firstAccountId)!;
             const { timeMin, timeMax } = await this.normalizeTimeRange(
                 client, firstCalendarId, validArgs.timeMin, validArgs.timeMax, validArgs.timeZone

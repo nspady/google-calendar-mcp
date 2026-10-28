@@ -4,6 +4,7 @@ import { BaseToolHandler } from "./BaseToolHandler.js";
 import { GetCurrentTimeInput } from "../../tools/registry.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
 import { isValidTimeZone } from "../../utils/datetime.js";
+import { getDefaultCalendarId } from "../../config/AppConfig.js";
 import { GetCurrentTimeResponse } from "../../types/structured-responses.js";
 
 export class GetCurrentTimeHandler extends BaseToolHandler {
@@ -17,7 +18,8 @@ export class GetCurrentTimeHandler extends BaseToolHandler {
         
         const now = new Date();
         
-        // If no timezone provided, use the primary Google Calendar's default timezone
+        // If no timezone provided, use the default calendar's default timezone
+        // (GOOGLE_CALENDAR_MCP_DEFAULT_CALENDAR_ID, falling back to 'primary')
         const requestedTimeZone = validArgs.timeZone;
         
         let timezone: string;
@@ -31,7 +33,7 @@ export class GetCurrentTimeHandler extends BaseToolHandler {
             timezone = validArgs.timeZone;
         } else {
             try {
-                timezone = await this.getCalendarTimezone(oauth2Client, 'primary');
+                timezone = await this.getCalendarTimezone(oauth2Client, getDefaultCalendarId());
                 if (timezone === 'UTC') {
                     const sys = this.getSystemTimeZone();
                     if (sys !== 'UTC') timezone = sys;

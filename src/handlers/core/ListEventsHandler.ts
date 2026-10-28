@@ -1,6 +1,7 @@
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { BaseToolHandler } from "./BaseToolHandler.js";
+import { getDefaultCalendarId } from "../../config/AppConfig.js";
 import { calendar_v3 } from 'googleapis';
 import { BatchRequestHandler } from "./BatchRequestHandler.js";
 import { buildListFieldMask } from "../../utils/field-mask-builder.js";
@@ -8,7 +9,7 @@ import { createStructuredResponse } from "../../utils/response-builder.js";
 import { ListEventsResponse, StructuredEvent, convertGoogleEventToStructured, ExtendedEvent } from "../../types/structured-responses.js";
 
 interface ListEventsArgs {
-  calendarId: string | string[];
+  calendarId?: string | string[];
   timeMin?: string;
   timeMax?: string;
   timeZone?: string;
@@ -25,8 +26,12 @@ export class ListEventsHandler extends BaseToolHandler {
         const partialFailures: Array<{ accountId: string; reason: string }> = [];
         const resolutionWarnings: string[] = [];
 
-        // Normalize calendarId to always be an array for consistent processing
-        const calendarNamesOrIds = Array.isArray(args.calendarId)
+        // Normalize calendarId to always be an array for consistent processing.
+        // Omitted calendarId resolves to the configured default calendar
+        // (GOOGLE_CALENDAR_MCP_DEFAULT_CALENDAR_ID, falling back to 'primary').
+        const calendarNamesOrIds = args.calendarId === undefined
+            ? [getDefaultCalendarId()]
+            : Array.isArray(args.calendarId)
             ? args.calendarId
             : [args.calendarId];
 
@@ -34,7 +39,12 @@ export class ListEventsHandler extends BaseToolHandler {
         // This prevents "calendar not found" errors when a calendar only exists on some accounts
         let accountCalendarMap: Map<string, string[]>;
 
-        if (selectedAccounts.size > 1) {
+        // 'primary' is a per-account alias, not a calendar name: fan it out to every
+        // selected account instead of routing it through the registry, whose deduplication
+        // resolves the alias to a single account and would drop the others' primaries.
+        if (selectedAccounts.size > 1 && calendarNamesOrIds.length === 1 && calendarNamesOrIds[0] === 'primary') {
+            accountCalendarMap = new Map(Array.from(selectedAccounts.keys(), (accountId) => [accountId, ['primary']]));
+        } else if (selectedAccounts.size > 1) {
             // Multi-account: route calendars to their owning accounts using CalendarRegistry
             const { resolved, warnings } = await this.calendarRegistry.resolveCalendarsToAccounts(
                 calendarNamesOrIds,

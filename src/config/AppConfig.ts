@@ -81,6 +81,7 @@ export const CONFIG_ENV_VARS: readonly EnvVarDoc[] = [
   { name: 'GOOGLE_CALENDAR_MCP_TOKEN_PATH', defaultValue: '`$XDG_CONFIG_HOME/google-calendar-mcp/tokens.json`', description: 'Custom token storage location' },
   { name: 'XDG_CONFIG_HOME', defaultValue: '`~/.config`', description: 'Base config directory for token storage (ignored if GOOGLE_CALENDAR_MCP_TOKEN_PATH is set)' },
   { name: 'GOOGLE_ACCOUNT_MODE', defaultValue: '`normal`', description: 'Account nickname used for single-account operations and the `auth` command' },
+  { name: 'GOOGLE_CALENDAR_MCP_DEFAULT_CALENDAR_ID', defaultValue: '`primary`', description: 'Calendar ID used when a tool call omits `calendarId`; set it to a calendar the credentials actually own when `primary` is not readable' },
   { name: 'ENABLED_TOOLS', cliFlag: '--enable-tools', defaultValue: 'all tools', description: 'Comma-separated list of tools to expose (see Tool Filtering)' },
   { name: 'TRANSPORT', cliFlag: '--transport', defaultValue: '`stdio`', description: 'Transport type: `stdio` or `http`' },
   { name: 'PORT', cliFlag: '--port', defaultValue: '`3000`', description: 'HTTP transport port (1-65535)' },
@@ -203,6 +204,18 @@ function parseBaseUrl(raw: string, name: string): string {
     throw new ConfigError(`${name} must not contain a fragment`);
   }
   return `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, '');
+}
+
+/**
+ * Calendar ID used when a tool call omits `calendarId`.
+ *
+ * Reads GOOGLE_CALENDAR_MCP_DEFAULT_CALENDAR_ID and falls back to the historical
+ * `'primary'` default when the variable is unset or empty, so behavior is unchanged
+ * for every deployment that does not set it. Google's literal `'primary'` alias still
+ * works as an explicit `calendarId` value regardless of this setting.
+ */
+export function getDefaultCalendarId(env: Env = process.env): string {
+  return envValue(env, 'GOOGLE_CALENDAR_MCP_DEFAULT_CALENDAR_ID') ?? 'primary';
 }
 
 /** True when NODE_ENV=test (set automatically by vitest). */

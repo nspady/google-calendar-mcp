@@ -24,10 +24,18 @@ describe('BaseToolHandler.getCalendarTimezone', () => {
   let get: ReturnType<typeof vi.fn>;
   let stderr: ReturnType<typeof vi.spyOn>;
 
+  let metadataGet: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
     handler = new TestHandler();
     get = vi.fn();
-    vi.spyOn(handler as any, 'getCalendar').mockReturnValue({ calendarList: { get } });
+    // Default: calendar metadata lookup also fails (404), matching a calendar
+    // that is simply inaccessible. Individual tests override as needed.
+    metadataGet = vi.fn().mockRejectedValue(apiError(404));
+    vi.spyOn(handler as any, 'getCalendar').mockReturnValue({
+      calendarList: { get },
+      calendars: { get: metadataGet }
+    });
     stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   });
 
@@ -61,5 +69,27 @@ describe('BaseToolHandler.getCalendarTimezone', () => {
     get.mockRejectedValue(apiError(status));
     await expect(handler.timezone('write')).resolves.toBe('UTC');
     expect(stderr).toHaveBeenCalled();
+  });
+
+  it('reads the time zone from calendar metadata when the list lookup misses (read)', async () => {
+    get.mockRejectedValue(apiError(404));
+    metadataGet.mockResolvedValue({ data: { timeZone: 'Asia/Tokyo' } });
+    await expect(handler.timezone('read')).resolves.toBe('Asia/Tokyo');
+    expect(stderr).not.toHaveBeenCalled();
+  });
+
+  it('reads the time zone from calendar metadata when the list lookup misses (write)', async () => {
+    // Shared-by-ID calendar absent from the account's calendar list (e.g. with a
+    // service account): still readable via the calendar metadata endpoint.
+    get.mockRejectedValue(apiError(404));
+    metadataGet.mockResolvedValue({ data: { timeZone: 'Asia/Tokyo' } });
+    await expect(handler.timezone('write')).resolves.toBe('Asia/Tokyo');
+    expect(stderr).not.toHaveBeenCalled();
+  });
+
+  it('still throws on write paths for transient failures when metadata also fails', async () => {
+    get.mockRejectedValue(apiError(500));
+    metadataGet.mockRejectedValue(new Error('timeout of 3000ms exceeded'));
+    await expect(handler.timezone('write')).rejects.toBeInstanceOf(McpError);
   });
 });
