@@ -85,8 +85,6 @@ const validateTimeInput = (val: string): string | true => {
   return isValidIsoDateOrDateTime(trimmed) ? true : "Must be ISO 8601 format: '2025-01-01T10:00:00' for timed events or '2025-01-01' for all-day events";
 };
 
-const isValidTimeInput = (val: string): boolean => validateTimeInput(val) === true;
-
 // superRefine handler for time input validation with dynamic error messages
 // Zod 4's .refine() doesn't support function-based error messages, so we use .superRefine()
 const superRefineTimeInput = (val: string, ctx: z.RefinementCtx) => {
@@ -235,6 +233,14 @@ const singleAccountSchema = z.string()
 // Account ID validation regex
 const accountIdRegex = /^[a-z0-9_-]{1,64}$/;
 
+// For a string-or-array union, report the array branch's own message (e.g. a
+// max-length error) instead of zod's generic "Invalid input". Since zod 4.6.6
+// an oversized array aborts its branch, so the union no longer picks it.
+const surfaceArrayBranchError = (iss: { code?: string; errors?: Array<Array<{ code: string; message: string }>> }) =>
+  iss.code === "invalid_union"
+    ? iss.errors?.flat().find((e) => e.code !== "invalid_type")?.message
+    : undefined;
+
 // Email validation regex - RE2-safe (no lookaround). zod's .email() emits a
 // JSON Schema pattern with negative lookahead that RE2-based validators
 // (OpenAI, Gemini) reject; the Calendar API validates emails server-side anyway.
@@ -250,7 +256,7 @@ const multiAccountSchema = z.preprocess(
       .regex(accountIdRegex, "Account nickname must be 1-64 characters: lowercase letters, numbers, dashes, underscores only"))
       .min(1, "At least one account nickname is required")
       .max(10, "Maximum 10 accounts allowed per request")
-  ])
+  ], { error: surfaceArrayBranchError })
 )
   .optional()
   .describe(
@@ -277,7 +283,7 @@ export const ToolSchemas = {
           "Duplicate calendar IDs are not allowed"
         )
         .describe("Array of calendar IDs to query events from (max 50, no duplicates)")
-    ]),
+    ], { error: surfaceArrayBranchError }),
     timeMin: timeMinSchema,
     timeMax: timeMaxSchema,
     timeZone: timeZoneSchema,

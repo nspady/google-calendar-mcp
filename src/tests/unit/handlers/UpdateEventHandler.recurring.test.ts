@@ -181,25 +181,6 @@ class EnhancedUpdateEventHandler {
   }
 }
 
-// Custom error class for recurring event errors
-class RecurringEventError extends Error {
-  public code: string;
-
-  constructor(message: string, code: string) {
-    super(message);
-    this.name = 'RecurringEventError';
-    this.code = code;
-  }
-}
-
-const ERRORS = {
-  INVALID_SCOPE: 'INVALID_MODIFICATION_SCOPE',
-  MISSING_ORIGINAL_TIME: 'MISSING_ORIGINAL_START_TIME',
-  MISSING_FUTURE_DATE: 'MISSING_FUTURE_START_DATE',
-  PAST_FUTURE_DATE: 'FUTURE_DATE_IN_PAST',
-  NON_RECURRING_SCOPE: 'SCOPE_NOT_APPLICABLE_TO_SINGLE_EVENT'
-};
-
 describe('UpdateEventHandler - Recurring Events', () => {
   let handler: EnhancedUpdateEventHandler;
   let mockCalendar: any;
@@ -742,7 +723,7 @@ describe('UpdateEventHandler - Recurring Events', () => {
         summary: 'Updated Complex Meeting'
       };
 
-      const result = await handler.updateFutureInstances(args);
+      await handler.updateFutureInstances(args);
 
       // Should handle complex recurrence rules correctly
       expect(mockCalendar.events.patch).toHaveBeenCalledWith({
@@ -912,7 +893,7 @@ describe('UpdateEventHandler - Recurring Events', () => {
         summary: 'Added Summary'
       };
 
-      const result = await handler.updateFutureInstances(args);
+      await handler.updateFutureInstances(args);
 
       const insertCall = mockCalendar.events.insert.mock.calls[0][0];
       expect(insertCall.requestBody.summary).toBe('Added Summary');

@@ -284,6 +284,57 @@ describe('Transport Handlers', () => {
     expect(JSON.parse(res.body).accounts).toEqual([{ id: 'work', status: 'active' }]);
   });
 
+  it('does not expose internal error details from account API failures', async () => {
+    const server = { connect: vi.fn(async () => undefined) } as any;
+    const tokenManager = {
+      listAccounts: vi.fn(async () => { throw new Error('EACCES: /home/user/.config/tokens.json'); }),
+      getAccountMode: vi.fn(),
+      setAccountMode: vi.fn(),
+      clearTokens: vi.fn(),
+      saveTokens: vi.fn()
+    } as any;
+    const handler = new HttpTransportHandler(() => server, {}, tokenManager);
+    await handler.connect();
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    const req = createMockRequest({
+      method: 'GET',
+      url: '/api/accounts',
+      headers: { origin: 'http://localhost', accept: 'application/json' }
+    });
+    const res = createMockResponse();
+
+    await invokeHandler(req, res);
+    stderrSpy.mockRestore();
+
+    expect(res.statusCode).toBe(500);
+    expect(res.body).not.toContain('EACCES');
+    expect(JSON.parse(res.body).error).toBe('Failed to list accounts');
+  });
+
+  it('rejects an invalid account ID on DELETE with 400', async () => {
+    const server = { connect: vi.fn(async () => undefined) } as any;
+    const tokenManager = makeTokenManager() as any;
+    const handler = new HttpTransportHandler(() => server, {}, tokenManager);
+    await handler.connect();
+    state.validateAccountId.mockImplementationOnce(() => {
+      throw new Error('Invalid account ID');
+    });
+
+    const req = createMockRequest({
+      method: 'DELETE',
+      url: '/api/accounts/BAD..ID',
+      headers: { origin: 'http://localhost', accept: 'application/json' }
+    });
+    const res = createMockResponse();
+
+    await invokeHandler(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('Invalid account ID');
+    expect(tokenManager.clearTokens).not.toHaveBeenCalled();
+  });
+
   it('creates OAuth URL for POST /api/accounts', async () => {
     const server = { connect: vi.fn(async () => undefined) } as any;
     const tokenManager = { listAccounts: vi.fn(), getAccountMode: vi.fn(), setAccountMode: vi.fn(), clearTokens: vi.fn(), saveTokens: vi.fn() } as any;

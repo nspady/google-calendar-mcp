@@ -4,7 +4,6 @@ import { OAuth2Client } from 'google-auth-library';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { AuthServer } from '../../../auth/server.js';
 import { TokenManager } from '../../../auth/tokenManager.js';
-import { google } from 'googleapis';
 
 // Mock googleapis
 const mockCalendarList = vi.fn();

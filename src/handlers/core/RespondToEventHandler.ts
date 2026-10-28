@@ -1,7 +1,6 @@
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
 import { BaseToolHandler } from "./BaseToolHandler.js";
-import { calendar_v3 } from 'googleapis';
 import { createStructuredResponse } from "../../utils/response-builder.js";
 import { RespondToEventResponse, convertGoogleEventToStructured } from "../../types/structured-responses.js";
 import { RecurringEventHelpers, RecurringEventError, RECURRING_EVENT_ERRORS } from './RecurringEventHelpers.js';

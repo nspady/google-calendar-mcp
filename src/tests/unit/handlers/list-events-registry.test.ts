@@ -94,6 +94,21 @@ describe('list-events Registration Flow (Schema + HandlerFunction)', () => {
       expect(result.success).toBe(false);
     });
 
+    it('should enforce maximum number of accounts', () => {
+      const input = {
+        account: Array.from({ length: 11 }, (_, i) => `acct${i}`),
+        calendarId: 'primary',
+        timeMin: '2024-01-01T00:00:00',
+        timeMax: '2024-01-02T00:00:00'
+      };
+
+      const result = ToolSchemas['list-events'].safeParse(input);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0].message).toContain('Maximum 10 accounts');
+      }
+    });
+
     it('should allow omitting account parameter', () => {
       const input = {
         calendarId: 'primary',

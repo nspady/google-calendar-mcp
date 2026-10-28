@@ -1,7 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { BaseToolHandler } from '../../../handlers/core/BaseToolHandler.js';
 import { OAuth2Client } from 'google-auth-library';
-import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 
 // Concrete implementation for testing
 class TestHandler extends BaseToolHandler<{ account?: string; testParam: string }> {

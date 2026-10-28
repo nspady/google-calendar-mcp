@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { spawn, ChildProcess, exec } from 'child_process';
+import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs/promises';
 import { TestDataFactory } from './test-data-factory.js';
@@ -27,7 +27,6 @@ const execAsync = promisify(exec);
 
 describe('Docker Integration Tests', () => {
   let mcpClient: Client;
-  let dockerProcess: ChildProcess;
   let testFactory: TestDataFactory;
   let createdEventIds: string[] = [];
   

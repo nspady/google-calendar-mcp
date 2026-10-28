@@ -37,8 +37,8 @@ export async function loadWebFile(fileName: string): Promise<string> {
 
   for (const filePath of locations) {
     try {
-      await fs.access(filePath);
-      return fs.readFile(filePath, 'utf-8');
+      // Read directly rather than checking access first, which would race
+      return await fs.readFile(filePath, 'utf-8');
     } catch {
       // Try next location
     }

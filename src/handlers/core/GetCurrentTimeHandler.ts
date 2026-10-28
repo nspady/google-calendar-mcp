@@ -18,8 +18,6 @@ export class GetCurrentTimeHandler extends BaseToolHandler {
         const now = new Date();
         
         // If no timezone provided, use the primary Google Calendar's default timezone
-        const requestedTimeZone = validArgs.timeZone;
-        
         let timezone: string;
         if (validArgs.timeZone) {
             if (!isValidTimeZone(validArgs.timeZone)) {
