@@ -277,13 +277,17 @@ export class TokenManager {
   private async migrateLegacyTokens(): Promise<boolean> {
     const legacyPath = getLegacyTokenPath();
     try {
-      // Check if legacy tokens exist
-      if (!(await fs.access(legacyPath).then(() => true).catch(() => false))) {
-        return false; // No legacy tokens to migrate
+      // Read legacy tokens directly (no separate existence check, which would race)
+      let legacyContent: string;
+      try {
+        legacyContent = await fs.readFile(legacyPath, "utf-8");
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+          return false; // No legacy tokens to migrate
+        }
+        throw error;
       }
-
-      // Read legacy tokens
-      const legacyTokens = JSON.parse(await fs.readFile(legacyPath, "utf-8"));
+      const legacyTokens = JSON.parse(legacyContent);
       
       if (!legacyTokens || typeof legacyTokens !== "object") {
         process.stderr.write("Invalid legacy token format, skipping migration\n");
