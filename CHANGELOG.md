@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.8.1](https://github.com/nspady/google-calendar-mcp/compare/v2.8.0...v2.8.1) (2026-10-28)
+
+
+### Bug Fixes
+
+* **deps:** update vulnerable dependencies ([7731068](https://github.com/nspady/google-calendar-mcp/commit/7731068e6dc30e72c0c8ac169a780afc4f4d41df))
+* **http:** stop returning internal error details from account endpoints ([0e5a8bf](https://github.com/nspady/google-calendar-mcp/commit/0e5a8bf129a6134ed37edb2fc164881e0272e27f))
+* read files directly instead of checking access first ([7edf6b5](https://github.com/nspady/google-calendar-mcp/commit/7edf6b51d2d4960f24d503b2c785e0e457c5fbcf))
+* resolve security and code quality alerts ([d9289c8](https://github.com/nspady/google-calendar-mcp/commit/d9289c8bfbcf876bd227809b03d79c539ff2420b))
+
 ## [2.8.0](https://github.com/nspady/google-calendar-mcp/compare/v2.7.0...v2.8.0) (2026-10-13)
 
 
