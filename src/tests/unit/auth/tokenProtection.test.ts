@@ -4,11 +4,19 @@ import fs from 'fs/promises';
 import path from 'path';
 import { OAuth2Client } from 'google-auth-library';
 import { decodeTokenFile, encodeTokenFile } from '../../../auth/tokenProtection.js';
-import { TokenManager } from '../../../auth/tokenManager.js';
+import { reauthInstructions, TokenManager } from '../../../auth/tokenManager.js';
 
 afterEach(() => vi.unstubAllEnvs());
 
 describe('token file protection', () => {
+  it.skipIf(platform() !== 'win32')('gives matching auth/server protection instructions', () => {
+    vi.stubEnv('GOOGLE_CALENDAR_MCP_TOKEN_PROTECTION', 'dpapi');
+    const instructions = reauthInstructions('personal');
+    expect(instructions).toContain('supports DPAPI');
+    expect(instructions).toContain('GOOGLE_CALENDAR_MCP_TOKEN_PROTECTION=dpapi');
+    expect(instructions).toContain('both the authentication and server processes');
+  });
+
   it('retains the legacy format only in compatibility mode', async () => {
     const text = JSON.stringify({ personal: { refresh_token: 'synthetic-refresh' } });
     expect(await encodeTokenFile(text, 'plaintext')).toBe(text);

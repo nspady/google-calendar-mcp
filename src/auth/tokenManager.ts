@@ -42,8 +42,8 @@ export function isInvalidGrantError(error: unknown): boolean {
  */
 export function reauthInstructions(accountId: string): string {
   if (getTokenProtection() === 'dpapi') {
-    return `Re-authenticate "${accountId}" using this build with the same token protection setting ` +
-      `and GOOGLE_CALENDAR_MCP_TOKEN_PROTECTION=dpapi. Do not use an upstream npx build against this encrypted token file.`;
+    return `Re-authenticate "${accountId}" using a build that supports DPAPI with ` +
+      `GOOGLE_CALENDAR_MCP_TOKEN_PROTECTION=dpapi in both the authentication and server processes.`;
   }
   // manage-accounts 'add' refuses an id that is still connected and 'remove' refuses the last
   // account, so the CLI (which overwrites the stored token) is the path that always works
