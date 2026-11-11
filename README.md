@@ -50,7 +50,9 @@ A Model Context Protocol (MCP) server that provides Google Calendar integration 
    - Choose "User data" for the type of data that the app will be accessing
    - Add your app name and contact information
    - Add the following scopes (optional):
-     - `https://www.googleapis.com/auth/calendar.events` and `https://www.googleapis.com/auth/calendar`
+     - Event scope: `https://www.googleapis.com/auth/calendar.events` (standard), `calendar.events.owned` (owned), or `calendar.events.readonly` (readonly), using the same URL prefix
+     - Supporting scopes: `https://www.googleapis.com/auth/calendar.calendarlist.readonly`, `https://www.googleapis.com/auth/calendar.calendars.readonly`, and `https://www.googleapis.com/auth/calendar.events.freebusy`
+     - Match `GOOGLE_CALENDAR_MCP_SCOPE_PROFILE` in the auth and server processes; full `calendar` administration access is not required
    - Select "Desktop app" as the application type (Important!)
    - Save the auth key, you'll need to add its path to the JSON in the next step
    - Add your email address as a test user under the [Audience screen](https://console.cloud.google.com/auth/audience)
@@ -326,6 +328,7 @@ CLI flags take precedence over environment variables. Malformed values (for exam
 | `GOOGLE_APPLICATION_CREDENTIALS` |  | unset | Ambient Google credentials file, used when this server has no OAuth credentials file |
 | `GOOGLE_SERVICE_ACCOUNT_SUBJECT` |  | unset | Workspace user to impersonate with domain-wide delegation |
 | `GOOGLE_CALENDAR_MCP_TOKEN_PATH` |  | `$XDG_CONFIG_HOME/google-calendar-mcp/tokens.json` | Custom token storage location |
+| `GOOGLE_CALENDAR_MCP_SCOPE_PROFILE` | | `standard` | OAuth event access: `standard`, `owned`, or `readonly`; no calendar or sharing administration |
 | `XDG_CONFIG_HOME` |  | `~/.config` | Base config directory for token storage (ignored if GOOGLE_CALENDAR_MCP_TOKEN_PATH is set) |
 | `GOOGLE_ACCOUNT_MODE` |  | `normal` | Account nickname used for single-account operations and the `auth` command |
 | `ENABLED_TOOLS` | `--enable-tools` | all tools | Comma-separated list of tools to expose (see Tool Filtering) |
@@ -377,6 +380,9 @@ If the list is empty or contains only commas, the server will fail to start with
 If an invalid tool name is specified, the server will fail to start with an error listing all available tools.
 
 ## Security
+
+See [OAuth scope profiles](docs/oauth-scope-profiles.md) for reduced OAuth
+permissions.
 
 - OAuth tokens are stored securely in your system's config directory
 - Credentials never leave your local machine

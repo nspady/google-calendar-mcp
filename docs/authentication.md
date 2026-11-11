@@ -30,8 +30,15 @@ This guide provides detailed instructions for setting up Google OAuth 2.0 authen
      - Developer contact: Your email
    - Add scopes:
      - Click "Add or Remove Scopes"
-     - Add: `https://www.googleapis.com/auth/calendar.events`
-     - Or use the broader scope: `https://www.googleapis.com/auth/calendar`
+     - Choose the event scope matching `GOOGLE_CALENDAR_MCP_SCOPE_PROFILE`:
+       `https://www.googleapis.com/auth/calendar.events` (standard),
+       `https://www.googleapis.com/auth/calendar.events.owned` (owned), or
+       `https://www.googleapis.com/auth/calendar.events.readonly` (readonly)
+     - Also add `https://www.googleapis.com/auth/calendar.calendarlist.readonly`,
+       `https://www.googleapis.com/auth/calendar.calendars.readonly`, and
+       `https://www.googleapis.com/auth/calendar.events.freebusy`
+     - Use the same profile when authenticating and running the server.
+       Full `calendar` administration access is not required.
    - Add test users:
      - Add your email address
      - **Important**: Wait 2-3 minutes for test users to propagate
@@ -100,6 +107,9 @@ In Claude Desktop config:
 Place the credentials file in the project root as `gcp-oauth.keys.json`.
 
 ## Token Storage
+
+See [OAuth scope profiles](oauth-scope-profiles.md) for OAuth scope
+profiles. Apply the same profile to authentication and the running MCP server.
 
 OAuth tokens are automatically stored in a secure location:
 

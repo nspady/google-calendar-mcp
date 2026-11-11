@@ -216,7 +216,7 @@ MCP tools return errors as successful responses with error content, not as throw
 - **Version**: v3 (`googleapis` package)
 - **Timeout**: 3 seconds per API call (configured in `BaseToolHandler`)
 - **Rate Limiting**: Google Calendar API has quotas - integration tests may hit limits
-- **Scope Required**: `https://www.googleapis.com/auth/calendar` (full calendar access, superset of `calendar.events`)
+- **OAuth Scopes**: Select `standard`, `owned`, or `readonly` using `GOOGLE_CALENDAR_MCP_SCOPE_PROFILE`; see `docs/oauth-scope-profiles.md`. Do not restore full Calendar administration permission by default.
 
 ## Deployment
 

@@ -213,10 +213,20 @@ Built-in protection against API limits:
 
 ### Permission Scopes
 
-The server requests a single scope:
-- `https://www.googleapis.com/auth/calendar`: Full calendar and event management
+The server selects event permissions through `GOOGLE_CALENDAR_MCP_SCOPE_PROFILE`:
+- `standard` (default): `https://www.googleapis.com/auth/calendar.events`
+- `owned`: `https://www.googleapis.com/auth/calendar.events.owned`
+- `readonly`: `https://www.googleapis.com/auth/calendar.events.readonly`
+- All profiles also request `calendar.calendarlist.readonly`,
+  `calendar.calendars.readonly`, and `calendar.events.freebusy`, using the
+  `https://www.googleapis.com/auth/` prefix.
+- No profile requests full calendar administration access.
 - Never requests email or profile access
 - No access to other Google services
+
+Changing the profile does not revoke an existing grant. Revoke the old grant and
+authenticate again to narrow its permissions. Event-write scopes still permit
+deletion; tool filtering is not an OAuth permission boundary.
 
 ### Token Security
 
