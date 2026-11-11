@@ -326,6 +326,7 @@ CLI flags take precedence over environment variables. Malformed values (for exam
 | `GOOGLE_APPLICATION_CREDENTIALS` |  | unset | Ambient Google credentials file, used when this server has no OAuth credentials file |
 | `GOOGLE_SERVICE_ACCOUNT_SUBJECT` |  | unset | Workspace user to impersonate with domain-wide delegation |
 | `GOOGLE_CALENDAR_MCP_TOKEN_PATH` |  | `$XDG_CONFIG_HOME/google-calendar-mcp/tokens.json` | Custom token storage location |
+| `GOOGLE_CALENDAR_MCP_TOKEN_PROTECTION` | | `plaintext` | Compatibility format, or `dpapi` for Windows CurrentUser encryption with no plaintext fallback |
 | `XDG_CONFIG_HOME` |  | `~/.config` | Base config directory for token storage (ignored if GOOGLE_CALENDAR_MCP_TOKEN_PATH is set) |
 | `GOOGLE_ACCOUNT_MODE` |  | `normal` | Account nickname used for single-account operations and the `auth` command |
 | `ENABLED_TOOLS` | `--enable-tools` | all tools | Comma-separated list of tools to expose (see Tool Filtering) |
@@ -377,6 +378,9 @@ If the list is empty or contains only commas, the server will fail to start with
 If an invalid tool name is specified, the server will fail to start with an error listing all available tools.
 
 ## Security
+
+See [Windows token protection](docs/windows-token-protection.md) for optional
+DPAPI encryption and restrictive token-directory ACLs.
 
 - OAuth tokens are stored securely in your system's config directory
 - Credentials never leave your local machine

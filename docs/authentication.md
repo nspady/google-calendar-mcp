@@ -101,6 +101,9 @@ Place the credentials file in the project root as `gcp-oauth.keys.json`.
 
 ## Token Storage
 
+See [Windows token protection](windows-token-protection.md) for opt-in DPAPI
+encryption. Set the same protection mode in authentication and server processes.
+
 OAuth tokens are automatically stored in a secure location:
 
 - **macOS/Linux**: `~/.config/google-calendar-mcp/tokens.json`

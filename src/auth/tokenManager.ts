@@ -2,7 +2,8 @@ import { OAuth2Client, Credentials, JWT } from 'google-auth-library';
 import fs from 'fs/promises';
 import { getSecureTokenPath, getAccountMode, getLegacyTokenPath } from './utils.js';
 import { validateAccountId } from './paths.js';
-import { isTestEnvironment } from '../config/AppConfig.js';
+import { getTokenProtection, isTestEnvironment, TokenProtection } from '../config/AppConfig.js';
+import { decodeTokenFile, encodeTokenFile } from './tokenProtection.js';
 import { applyApiBaseUrl } from '../utils/api-base-url.js';
 import { GaxiosError } from 'gaxios';
 import { mkdir } from 'fs/promises';
@@ -40,6 +41,10 @@ export function isInvalidGrantError(error: unknown): boolean {
  * Re-authentication instructions for an account, in-band option first.
  */
 export function reauthInstructions(accountId: string): string {
+  if (getTokenProtection() === 'dpapi') {
+    return `Re-authenticate "${accountId}" using this build with the same token protection setting ` +
+      `and GOOGLE_CALENDAR_MCP_TOKEN_PROTECTION=dpapi. Do not use an upstream npx build against this encrypted token file.`;
+  }
   // manage-accounts 'add' refuses an id that is still connected and 'remove' refuses the last
   // account, so the CLI (which overwrites the stored token) is the path that always works
   return `Re-authenticate "${accountId}": run 'npx @cocal/google-calendar-mcp auth ${accountId}' ` +
@@ -81,6 +86,7 @@ export class TokenManager {
     redirectUri: string;
   };
   private writeQueue: Promise<void> = Promise.resolve();
+  private readonly tokenProtection: TokenProtection;
 
   /**
    * @param accountMode Account to operate on; defaults to GOOGLE_ACCOUNT_MODE (or 'normal'/'test')
@@ -88,6 +94,7 @@ export class TokenManager {
   constructor(oauth2Client: OAuth2Client, accountMode?: string) {
     this.oauth2Client = oauth2Client;
     this.tokenPath = getSecureTokenPath();
+    this.tokenProtection = getTokenProtection();
     this.accountMode = accountMode !== undefined ? validateAccountId(accountMode) : getAccountMode();
 
     // Store credentials to avoid accessing private properties later
@@ -132,8 +139,14 @@ export class TokenManager {
   private async writeTokenFile(tokens: MultiAccountTokens): Promise<void> {
     await this.ensureTokenDirectoryExists();
     const tempPath = `${this.tokenPath}.tmp-${process.pid}-${Date.now()}`;
-    await fs.writeFile(tempPath, JSON.stringify(tokens, null, 2), { mode: 0o600 });
-    await fs.rename(tempPath, this.tokenPath);
+    const content = await encodeTokenFile(JSON.stringify(tokens, null, 2), this.tokenProtection);
+    try {
+      await fs.writeFile(tempPath, content, { mode: 0o600 });
+      await fs.rename(tempPath, this.tokenPath);
+    } catch (error) {
+      await fs.unlink(tempPath).catch(() => {});
+      throw error;
+    }
   }
 
   /**
@@ -149,13 +162,13 @@ export class TokenManager {
       // ENOENT: a concurrent load already moved it aside under its own timestamp
       movedTo = this.isFileNotFoundError(renameError) ? `${this.tokenPath}.corrupt-*` : null;
     }
-    const corruptError = new TokenFileCorruptError(this.tokenPath, movedTo, error.message);
+    const corruptError = new TokenFileCorruptError(this.tokenPath, movedTo, 'invalid token structure');
     process.stderr.write(`${corruptError.message}\n`);
     return corruptError;
   }
 
   private async parseTokenFile(): Promise<any> {
-    const fileContent = await fs.readFile(this.tokenPath, "utf-8");
+    const fileContent = await decodeTokenFile(await fs.readFile(this.tokenPath, "utf-8"), this.tokenProtection);
     try {
       return JSON.parse(fileContent);
     } catch (error) {
@@ -275,6 +288,8 @@ export class TokenManager {
   }
 
   private async migrateLegacyTokens(): Promise<boolean> {
+    // Re-authentication is required when opting into encryption: never import plaintext silently.
+    if (this.tokenProtection === 'dpapi') return false;
     const legacyPath = getLegacyTokenPath();
     try {
       // Read legacy tokens directly (no separate existence check, which would race)
