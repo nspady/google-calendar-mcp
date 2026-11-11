@@ -6,7 +6,7 @@ import { URL } from 'url';
 import open from 'open';
 import { loadCredentials } from './client.js';
 import { renderAuthSuccess, renderAuthError, renderAuthLanding, loadWebFile } from '../web/templates.js';
-import { getOAuthRedirectBase } from '../config/AppConfig.js';
+import { getOAuthRedirectBase, getOAuthScopes } from '../config/AppConfig.js';
 
 export interface StartForMcpToolResult {
   success: boolean;
@@ -61,6 +61,7 @@ export class AuthServer {
   private resolveRedirectBase(): string | null {
     try {
       this.redirectBase = getOAuthRedirectBase();
+      getOAuthScopes(); // Validate before opening the callback listener.
       return null;
     } catch (error) {
       return error instanceof Error ? error.message : String(error);
@@ -99,7 +100,7 @@ export class AuthServer {
     }
     return client.generateAuthUrl({
       access_type: 'offline',
-      scope: ['https://www.googleapis.com/auth/calendar'],
+      scope: getOAuthScopes(),
       prompt: 'consent',
       code_challenge_method: CodeChallengeMethod.S256,
       code_challenge: this.pendingAuthFlow.codeChallenge,

@@ -6,6 +6,7 @@ import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { TokenManager } from "../auth/tokenManager.js";
 import { CalendarRegistry } from "../services/CalendarRegistry.js";
 import { OAuthStateStore } from "../auth/oauthStateStore.js";
+import { getOAuthScopes } from "../config/AppConfig.js";
 import { renderAuthSuccess, renderAuthError, loadWebFile } from "../web/templates.js";
 
 /**
@@ -99,7 +100,7 @@ export class HttpTransportHandler {
     const state = this.oauthStates.issue(accountId, codeVerifier);
     return client.generateAuthUrl({
       access_type: 'offline',
-      scope: ['https://www.googleapis.com/auth/calendar'],
+      scope: getOAuthScopes(),
       prompt: 'consent',
       code_challenge_method: CodeChallengeMethod.S256,
       code_challenge: codeChallenge,

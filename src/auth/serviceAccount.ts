@@ -2,7 +2,7 @@ import { JWT } from 'google-auth-library';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { getKeysFilePath } from './utils.js';
-import { getCredentialsPathSetting, getServiceAccountConfig } from '../config/AppConfig.js';
+import { DEFAULT_OAUTH_SCOPES, getOAuthScopes, getCredentialsPathSetting, getServiceAccountConfig } from '../config/AppConfig.js';
 
 /**
  * Service account authentication.
@@ -17,7 +17,7 @@ import { getCredentialsPathSetting, getServiceAccountConfig } from '../config/Ap
  * Google Workspace or domain-wide delegation. See docs for the limitations.
  */
 
-export const SERVICE_ACCOUNT_SCOPES = ['https://www.googleapis.com/auth/calendar'];
+export const SERVICE_ACCOUNT_SCOPES = [...DEFAULT_OAUTH_SCOPES];
 
 export interface ServiceAccountKey {
   /** Absolute path of the key file that was detected. */
@@ -212,7 +212,7 @@ export function initializeServiceAccountClient(key: ServiceAccountKey): JWT {
   return new JWT({
     email: key.email,
     key: key.privateKey,
-    scopes: SERVICE_ACCOUNT_SCOPES,
+    scopes: getOAuthScopes(),
     ...(subject ? { subject } : {})
   });
 }

@@ -99,6 +99,8 @@ describe('AuthServer', () => {
       expect(result.authUrl).toContain('accounts.google.com');
       expect(result.callbackUrl).toContain('oauth2callback');
       expect(result.callbackUrl).toContain('3500');
+      expect(new URL(result.authUrl).searchParams.get('scope')!.split(' '))
+        .not.toContain('https://www.googleapis.com/auth/calendar');
     });
 
     describe('with GOOGLE_OAUTH_REDIRECT_BASE set', () => {
@@ -143,6 +145,18 @@ describe('AuthServer', () => {
         expect(result.error).toMatch(/GOOGLE_OAUTH_REDIRECT_BASE must be an absolute http\(s\) URL/);
         expect(mockHttpServer.listen).not.toHaveBeenCalled();
       });
+    });
+
+    it('uses the owned profile in the actual authorization URL', async () => {
+      vi.stubEnv('GOOGLE_CALENDAR_MCP_SCOPE_PROFILE', 'owned');
+      try {
+        const result = await authServer.startForMcpTool('personal');
+        expect(result.success).toBe(true);
+        const scopes = new URL(result.authUrl).searchParams.get('scope')!.split(' ');
+        expect(scopes).toContain('https://www.googleapis.com/auth/calendar.events.owned');
+        expect(scopes).not.toContain('https://www.googleapis.com/auth/calendar');
+        expect(scopes).not.toContain('https://www.googleapis.com/auth/calendar.events');
+      } finally { vi.unstubAllEnvs(); }
     });
 
     it('should stop existing server before starting new one', async () => {

@@ -47,6 +47,7 @@ export interface AppConfig extends ServerConfig {
   apiBaseUrl: string;
   /** Public base URL for the OAuth callback (GOOGLE_OAUTH_REDIRECT_BASE), or undefined for the loopback redirect */
   oauthRedirectBase?: string;
+  oauthScopes: string[];
   /** NODE_ENV=test: skips startup auth, uses the 'test' token namespace, quiets token logging */
   isTest: boolean;
   sources: Record<string, ConfigSource>;
@@ -65,6 +66,27 @@ export class ConfigError extends Error {
   }
 }
 
+export type ScopeProfile = 'standard' | 'owned' | 'readonly';
+
+const CALENDAR_SCOPE_PREFIX = 'https://www.googleapis.com/auth/calendar.';
+export const DEFAULT_OAUTH_SCOPES = [
+  `${CALENDAR_SCOPE_PREFIX}events`,
+  `${CALENDAR_SCOPE_PREFIX}calendarlist.readonly`,
+  `${CALENDAR_SCOPE_PREFIX}calendars.readonly`,
+  `${CALENDAR_SCOPE_PREFIX}events.freebusy`
+];
+
+/** Restrict event access without granting calendar deletion or sharing administration. */
+export function getOAuthScopes(env: NodeJS.ProcessEnv = process.env): string[] {
+  const profile = env.GOOGLE_CALENDAR_MCP_SCOPE_PROFILE ?? 'standard';
+  if (!['standard', 'owned', 'readonly'].includes(profile)) {
+    throw new ConfigError('GOOGLE_CALENDAR_MCP_SCOPE_PROFILE must be "standard", "owned", or "readonly"');
+  }
+  const eventScope = profile === 'owned' ? 'events.owned'
+    : profile === 'readonly' ? 'events.readonly' : 'events';
+  return [`${CALENDAR_SCOPE_PREFIX}${eventScope}`, ...DEFAULT_OAUTH_SCOPES.slice(1)];
+}
+
 export interface EnvVarDoc {
   name: string;
   cliFlag?: string;
@@ -75,6 +97,7 @@ export interface EnvVarDoc {
 export const CONFIG_ENV_VARS: readonly EnvVarDoc[] = [
   { name: 'GOOGLE_OAUTH_CREDENTIALS', defaultValue: '`gcp-oauth.keys.json` in the package root', description: 'Path to the OAuth credentials file' },
   { name: 'GOOGLE_OAUTH_REDIRECT_BASE', defaultValue: 'unset (loopback `http://localhost:<port>`)', description: 'Public base URL for the OAuth callback when authenticating through a tunnel or reverse proxy (see docs/authentication.md)' },
+  { name: 'GOOGLE_CALENDAR_MCP_SCOPE_PROFILE', defaultValue: '`standard`', description: 'OAuth event access: standard, owned, or readonly; none grants calendar or sharing administration' },
   { name: 'GOOGLE_SERVICE_ACCOUNT_KEY', defaultValue: 'unset', description: 'Path to an explicit service account key file' },
   { name: 'GOOGLE_APPLICATION_CREDENTIALS', defaultValue: 'unset', description: 'Ambient Google credentials file, used when this server has no OAuth credentials file' },
   { name: 'GOOGLE_SERVICE_ACCOUNT_SUBJECT', defaultValue: 'unset', description: 'Workspace user to impersonate with domain-wide delegation' },
@@ -277,6 +300,7 @@ export function loadAppConfig(args: string[], env: Env = process.env): AppConfig
   const apiBaseUrl = getApiBaseUrl(env);
   sources.apiBaseUrl = apiBaseUrl === DEFAULT_API_ORIGIN ? 'default' : 'env';
   const oauthRedirectBase = getOAuthRedirectBase(env);
+  const oauthScopes = getOAuthScopes(env);
   sources.oauthRedirectBase = oauthRedirectBase ? 'env' : 'default';
   sources.accountMode = env.GOOGLE_ACCOUNT_MODE !== undefined ? 'env' : 'default';
 
@@ -297,6 +321,7 @@ export function loadAppConfig(args: string[], env: Env = process.env): AppConfig
     serviceAccount: Object.freeze(serviceAccount),
     apiBaseUrl,
     oauthRedirectBase,
+    oauthScopes: Object.freeze(oauthScopes) as string[],
     isTest: isTestEnvironment(env),
     sources: Object.freeze(sources)
   });
@@ -320,6 +345,7 @@ export function formatResolvedConfig(config: AppConfig): string {
   lines.push(line('debug', config.debug, 'debug'));
   lines.push(line('credentials', config.credentialsPath ?? 'package default (gcp-oauth.keys.json)', 'credentialsPath'));
   lines.push(line('tokenPath', config.tokenPath, 'tokenPath'));
+  lines.push(`  oauthScopes: ${config.oauthScopes.join(',')}`);
   lines.push(line('accountMode', config.accountMode, 'accountMode'));
   if (config.isTest) {
     lines.push('  NODE_ENV=test: startup authentication skipped');
