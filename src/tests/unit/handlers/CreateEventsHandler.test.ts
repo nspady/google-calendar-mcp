@@ -799,6 +799,60 @@ describe('CreateEventsHandler', () => {
       expect(response.created[0].summary).toBe('Design review');
     });
 
+    it('should report the event as created when the repeat fails but the event was saved', async () => {
+      mockCalendar.events.insert
+        .mockImplementationOnce(saveThenLoseReply)
+        .mockImplementationOnce(async () => { throw httpError(429); });
+
+      const result = await handler.runTool({ events: [args.events[0]] }, mockAccounts);
+
+      const response = JSON.parse(result.content[0].text);
+      expect(response.totalCreated).toBe(1);
+      expect(response.created[0].id).toBe(saved[0].id);
+    });
+
+    it('should say the event may exist when the repeat fails and the event cannot be looked up', async () => {
+      mockCalendar.events.insert
+        .mockImplementationOnce(saveThenLoseReply)
+        .mockImplementationOnce(async () => { throw httpError(500); });
+      mockCalendar.events.get.mockRejectedValue(noReply());
+
+      const result = await handler.runTool({ events: [args.events[0]] }, mockAccounts);
+
+      expect(result.isError).toBe(true);
+      const response = JSON.parse(result.content[0].text);
+      expect(response.failed[0].error).toContain('may still have been created');
+    });
+
+    it('should report an ordinary failure when the repeat fails and the event was never saved', async () => {
+      mockCalendar.events.insert
+        .mockImplementationOnce(async () => { throw noReply(); })
+        .mockImplementationOnce(async () => { throw httpError(429); });
+      mockCalendar.events.get.mockRejectedValue(httpError(404));
+
+      const result = await handler.runTool({ events: [args.events[0]] }, mockAccounts);
+
+      expect(saved).toHaveLength(0);
+      const response = JSON.parse(result.content[0].text);
+      expect(response.failed[0].error).toContain('Rate limit');
+      expect(response.failed[0].error).not.toContain('may still have been created');
+    });
+
+    it('should not tell skipped events they may have been created', async () => {
+      mockCalendar.events.insert.mockImplementation(async () => { throw noReply(); });
+      const events = [1, 2, 3, 4].map(n => ({ summary: `Event ${n}`, start: '2025-06-16T10:00:00', end: '2025-06-16T11:00:00' }));
+
+      const result = await handler.runTool({ events }, mockAccounts);
+
+      const response = JSON.parse(result.content[0].text);
+      expect(response.failed).toHaveLength(4);
+      expect(response.failed[2].error).toContain('may still have been created');
+      expect(response.failed[3].error).toMatch(/^Skipped: /);
+      expect(response.failed[3].error).not.toContain('may still have been created');
+      // Three events were tried twice each; the fourth was never sent
+      expect(mockCalendar.events.insert).toHaveBeenCalledTimes(6);
+    });
+
     it('should not repeat an insert that Google rejected', async () => {
       mockCalendar.events.insert.mockImplementationOnce(async () => { throw httpError(403); });
 
