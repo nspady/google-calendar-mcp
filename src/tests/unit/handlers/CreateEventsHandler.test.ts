@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CreateEventsHandler } from '../../../handlers/core/CreateEventsHandler.js';
 import { OAuth2Client } from 'google-auth-library';
+import { GaxiosError } from 'gaxios';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { CalendarRegistry } from '../../../services/CalendarRegistry.js';
+import { isValidEventId } from '../../../utils/event-id-validator.js';
 
 // Mock the googleapis module
 vi.mock('googleapis', () => ({
@@ -714,6 +716,105 @@ describe('CreateEventsHandler', () => {
       // The createTimeObject should receive the mocked timezone
       const { createTimeObject } = await import('../../../utils/datetime.js');
       expect(createTimeObject).toHaveBeenCalledWith('2025-06-15T10:00:00', 'America/Los_Angeles');
+    });
+  });
+
+  describe('Lost Replies', () => {
+    // What gaxios throws when the 3-second timeout in getCalendar() fires: no HTTP response.
+    const noReply = () => new GaxiosError('The operation was aborted.', {} as any);
+    const httpError = (status: number) => new GaxiosError(`HTTP ${status}`, {} as any, { status, data: {} } as any);
+
+    const args = {
+      sendUpdates: 'all' as const,
+      events: [
+        { summary: 'Design review', start: '2025-06-16T10:00:00', end: '2025-06-16T11:00:00' },
+        { summary: 'Customer call', start: '2025-06-17T14:00:00', end: '2025-06-17T15:00:00' },
+      ]
+    };
+
+    // A calendar that keeps what it saves and, like Google, rejects a second insert of the same ID.
+    let saved: any[];
+    const save = ({ requestBody }: any) => {
+      if (saved.some(event => event.id === requestBody.id)) throw httpError(409);
+      const event = { ...requestBody, status: 'confirmed' };
+      saved.push(event);
+      return { data: event };
+    };
+    const saveThenLoseReply = async (params: any) => { save(params); throw noReply(); };
+
+    beforeEach(() => {
+      saved = [];
+      mockCalendar.events.insert.mockImplementation(async (params: any) => save(params));
+      mockCalendar.events.get = vi.fn(async ({ eventId }: any) => ({ data: saved.find(event => event.id === eventId) }));
+    });
+
+    it('should report an event as created when it was saved but the reply was lost', async () => {
+      mockCalendar.events.insert
+        .mockImplementationOnce(async (params: any) => save(params))
+        .mockImplementationOnce(saveThenLoseReply);
+
+      const result = await handler.runTool(args, mockAccounts);
+
+      const response = JSON.parse(result.content[0].text);
+      expect(response.totalCreated).toBe(2);
+      expect(response.failed).toBeUndefined();
+      expect(response.created[1].id).toBe(saved[1].id);
+      // The repeated insert did not create a second copy
+      expect(saved.map(event => event.summary)).toEqual(['Design review', 'Customer call']);
+    });
+
+    it('should create the event on the second attempt when the first never arrived', async () => {
+      mockCalendar.events.insert.mockImplementationOnce(async () => { throw noReply(); });
+
+      const result = await handler.runTool(args, mockAccounts);
+
+      const response = JSON.parse(result.content[0].text);
+      expect(response.totalCreated).toBe(2);
+      expect(saved).toHaveLength(2);
+      const [first, second] = mockCalendar.events.insert.mock.calls;
+      expect(second[0].requestBody.id).toBe(first[0].requestBody.id);
+    });
+
+    it('should say the event may exist when both attempts get no reply', async () => {
+      mockCalendar.events.insert
+        .mockImplementationOnce(saveThenLoseReply)
+        .mockImplementationOnce(async () => { throw noReply(); });
+
+      const result = await handler.runTool({ events: [args.events[0]] }, mockAccounts);
+
+      expect(result.isError).toBe(true);
+      const response = JSON.parse(result.content[0].text);
+      expect(response.failed[0].error).toContain('may still have been created');
+    });
+
+    it('should still report the event as created when the saved copy cannot be read back', async () => {
+      mockCalendar.events.insert.mockImplementationOnce(saveThenLoseReply);
+      mockCalendar.events.get.mockRejectedValue(noReply());
+
+      const result = await handler.runTool({ events: [args.events[0]] }, mockAccounts);
+
+      const response = JSON.parse(result.content[0].text);
+      expect(response.totalCreated).toBe(1);
+      expect(response.created[0].id).toBe(saved[0].id);
+      expect(response.created[0].summary).toBe('Design review');
+    });
+
+    it('should not repeat an insert that Google rejected', async () => {
+      mockCalendar.events.insert.mockImplementationOnce(async () => { throw httpError(403); });
+
+      const result = await handler.runTool({ events: [args.events[0]] }, mockAccounts);
+
+      expect(result.isError).toBe(true);
+      expect(mockCalendar.events.insert).toHaveBeenCalledTimes(1);
+      expect(saved).toHaveLength(0);
+    });
+
+    it('should give every event its own valid event ID', async () => {
+      await handler.runTool(args, mockAccounts);
+
+      const ids = mockCalendar.events.insert.mock.calls.map((call: any) => call[0].requestBody.id);
+      expect(new Set(ids).size).toBe(2);
+      expect(ids.every(isValidEventId)).toBe(true);
     });
   });
 });

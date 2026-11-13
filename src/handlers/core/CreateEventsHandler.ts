@@ -1,5 +1,7 @@
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { randomUUID } from "node:crypto";
+import { CallToolResult, McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
+import { GaxiosError } from 'gaxios';
 import { CreateEventsInput } from "../../tools/registry.js";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import type { calendar_v3 } from 'googleapis';
@@ -85,7 +87,10 @@ export class CreateEventsHandler extends BaseToolHandler {
                     tz = cachedTz;
                 }
 
+                // A client-chosen ID lets insertEvent repeat an insert without creating a second copy
+                const eventId = randomUUID().replaceAll('-', '');
                 const requestBody: calendar_v3.Schema$Event = {
+                    id: eventId,
                     summary: eventInput.summary,
                     description: eventInput.description,
                     start: createTimeObject(eventInput.start, tz),
@@ -106,19 +111,19 @@ export class CreateEventsHandler extends BaseToolHandler {
 
                 const conferenceDataVersion = eventInput.conferenceData ? 1 : undefined;
 
-                const response = await calendar.events.insert({
+                const event = await this.insertEvent(calendar, eventId, {
                     calendarId: resolvedCalendarId,
                     requestBody,
                     sendUpdates,
                     ...(conferenceDataVersion && { conferenceDataVersion }),
                 });
 
-                if (!response.data) {
+                if (!event) {
                     throw new Error('Failed to create event, no data returned');
                 }
 
                 created.push(
-                    convertGoogleEventToStructured(response.data, resolvedCalendarId, selectedAccountId)
+                    convertGoogleEventToStructured(event, resolvedCalendarId, selectedAccountId)
                 );
 
                 // Reset circuit breaker on success
@@ -172,5 +177,49 @@ export class CreateEventsHandler extends BaseToolHandler {
         }
 
         return createStructuredResponse(response);
+    }
+
+    /**
+     * Inserts an event, repeating the insert once if the first attempt gets no reply.
+     *
+     * A timeout or dropped connection doesn't mean Google didn't save the event. Reporting it as
+     * failed invites a retry that creates a second copy. The repeat carries the same event ID, so
+     * if the first attempt was saved Google answers 409 and the saved event is returned instead.
+     */
+    private async insertEvent(
+        calendar: calendar_v3.Calendar,
+        eventId: string,
+        params: calendar_v3.Params$Resource$Events$Insert
+    ): Promise<calendar_v3.Schema$Event | null | undefined> {
+        try {
+            return (await calendar.events.insert(params)).data;
+        } catch (error) {
+            if (!this.gotNoReply(error)) throw error;
+        }
+
+        try {
+            return (await calendar.events.insert(params)).data;
+        } catch (error) {
+            if (error instanceof GaxiosError && error.response?.status === 409) {
+                // The first attempt was saved. If it can't be read back, report what was sent.
+                const saved = await calendar.events
+                    .get({ calendarId: params.calendarId, eventId })
+                    .catch(() => undefined);
+                return saved?.data ?? params.requestBody;
+            }
+            if (this.gotNoReply(error)) {
+                throw new McpError(
+                    ErrorCode.InternalError,
+                    `No reply from Google after two attempts (${error.message}). ` +
+                    `The event may still have been created. Check the calendar before retrying.`
+                );
+            }
+            throw error;
+        }
+    }
+
+    /** True when a request may have reached Google but no HTTP response came back. */
+    private gotNoReply(error: unknown): error is GaxiosError {
+        return error instanceof GaxiosError && !error.response;
     }
 }
