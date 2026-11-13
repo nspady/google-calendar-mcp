@@ -1,11 +1,22 @@
-import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { randomUUID } from "node:crypto";
+import { CallToolResult, McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import { OAuth2Client } from "google-auth-library";
+import { GaxiosError } from 'gaxios';
 import { CreateEventsInput } from "../../tools/registry.js";
 import { BaseToolHandler } from "./BaseToolHandler.js";
 import type { calendar_v3 } from 'googleapis';
 import { createTimeObject, usesFallbackTimeZone } from "../../utils/datetime.js";
 import { createStructuredResponse } from "../../utils/response-builder.js";
 import { CreateEventsResponse, convertGoogleEventToStructured, StructuredEvent } from "../../types/structured-responses.js";
+
+const MAY_EXIST = 'The event may still have been created. Check the calendar before retrying.';
+
+/** An insert whose outcome is unknown: Google may have saved the event. */
+class InsertOutcomeUnknown extends McpError {
+    constructor(reason: string) {
+        super(ErrorCode.InternalError, reason);
+    }
+}
 
 export class CreateEventsHandler extends BaseToolHandler {
     async runTool(args: any, accounts: Map<string, OAuth2Client>): Promise<CallToolResult> {
@@ -85,7 +96,10 @@ export class CreateEventsHandler extends BaseToolHandler {
                     tz = cachedTz;
                 }
 
+                // A client-chosen ID lets insertEvent repeat an insert without creating a second copy
+                const eventId = randomUUID().replaceAll('-', '');
                 const requestBody: calendar_v3.Schema$Event = {
+                    id: eventId,
                     summary: eventInput.summary,
                     description: eventInput.description,
                     start: createTimeObject(eventInput.start, tz),
@@ -106,19 +120,19 @@ export class CreateEventsHandler extends BaseToolHandler {
 
                 const conferenceDataVersion = eventInput.conferenceData ? 1 : undefined;
 
-                const response = await calendar.events.insert({
+                const event = await this.insertEvent(calendar, eventId, {
                     calendarId: resolvedCalendarId,
                     requestBody,
                     sendUpdates,
                     ...(conferenceDataVersion && { conferenceDataVersion }),
                 });
 
-                if (!response.data) {
+                if (!event) {
                     throw new Error('Failed to create event, no data returned');
                 }
 
                 created.push(
-                    convertGoogleEventToStructured(response.data, resolvedCalendarId, selectedAccountId)
+                    convertGoogleEventToStructured(event, resolvedCalendarId, selectedAccountId)
                 );
 
                 // Reset circuit breaker on success
@@ -130,7 +144,8 @@ export class CreateEventsHandler extends BaseToolHandler {
                 failed.push({
                     index: i,
                     summary: eventInput.summary,
-                    error: errorMessage,
+                    // Only this event was sent, so the warning stays out of the skip message below
+                    error: error instanceof InsertOutcomeUnknown ? `${errorMessage} ${MAY_EXIST}` : errorMessage,
                 });
 
                 // Circuit breaker: track consecutive identical failures
@@ -172,5 +187,56 @@ export class CreateEventsHandler extends BaseToolHandler {
         }
 
         return createStructuredResponse(response);
+    }
+
+    /**
+     * Inserts an event, repeating the insert once if the first attempt gets no reply.
+     *
+     * A timeout or dropped connection doesn't mean Google didn't save the event. Reporting it as
+     * failed invites a retry that creates a second copy. The repeat carries the same event ID, so
+     * if the first attempt was saved Google answers 409 and the saved event is returned instead.
+     * Throws InsertOutcomeUnknown when it can't tell whether the event was saved.
+     */
+    private async insertEvent(
+        calendar: calendar_v3.Calendar,
+        eventId: string,
+        params: calendar_v3.Params$Resource$Events$Insert
+    ): Promise<calendar_v3.Schema$Event | null | undefined> {
+        try {
+            return (await calendar.events.insert(params)).data;
+        } catch (error) {
+            if (!this.gotNoReply(error)) throw error;
+        }
+
+        try {
+            return (await calendar.events.insert(params)).data;
+        } catch (error) {
+            if (this.gotNoReply(error)) {
+                throw new InsertOutcomeUnknown(`No reply from Google after two attempts (${error.message}).`);
+            }
+
+            // Google answered the repeat. A 409 means the first attempt was saved. Any other error
+            // leaves that open, so look the event up by its ID.
+            const firstWasSaved = error instanceof GaxiosError && error.response?.status === 409;
+            try {
+                const saved = (await calendar.events.get({ calendarId: params.calendarId, eventId })).data;
+                if (saved) return saved;
+            } catch (lookupError) {
+                const notFound = lookupError instanceof GaxiosError && lookupError.response?.status === 404;
+                if (!firstWasSaved && !notFound) {
+                    const reason = error instanceof Error ? error.message : String(error);
+                    throw new InsertOutcomeUnknown(`The first attempt got no reply and the second failed (${reason}).`);
+                }
+            }
+
+            // Saved but unreadable: report what was sent. Never saved: an ordinary failure.
+            if (firstWasSaved) return params.requestBody;
+            throw error;
+        }
+    }
+
+    /** True when a request may have reached Google but no HTTP response came back. */
+    private gotNoReply(error: unknown): error is GaxiosError {
+        return error instanceof GaxiosError && !error.response;
     }
 }
