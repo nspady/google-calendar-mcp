@@ -785,6 +785,8 @@ describe('CreateEventsHandler', () => {
       expect(result.isError).toBe(true);
       const response = JSON.parse(result.content[0].text);
       expect(response.failed[0].error).toContain('may still have been created');
+      // The entry names the ID that was sent, so the caller can look the event up
+      expect(response.failed[0].error).toContain(saved[0].id);
     });
 
     it('should still report the event as created when the saved copy cannot be read back', async () => {
@@ -824,18 +826,20 @@ describe('CreateEventsHandler', () => {
       expect(response.failed[0].error).toContain('may still have been created');
     });
 
-    it('should report an ordinary failure when the repeat fails and the event was never saved', async () => {
+    it('should say the event may exist when the lookup after a lost reply does not find it', async () => {
+      // The event was saved, but a read straight after the write does not see it yet
       mockCalendar.events.insert
-        .mockImplementationOnce(async () => { throw noReply(); })
+        .mockImplementationOnce(saveThenLoseReply)
         .mockImplementationOnce(async () => { throw httpError(429); });
       mockCalendar.events.get.mockRejectedValue(httpError(404));
 
       const result = await handler.runTool({ events: [args.events[0]] }, mockAccounts);
 
-      expect(saved).toHaveLength(0);
+      expect(saved).toHaveLength(1);
+      expect(result.isError).toBe(true);
       const response = JSON.parse(result.content[0].text);
-      expect(response.failed[0].error).toContain('Rate limit');
-      expect(response.failed[0].error).not.toContain('may still have been created');
+      expect(response.failed[0].error).toContain('may still have been created');
+      expect(response.failed[0].error).toContain(saved[0].id);
     });
 
     it('should not tell skipped events they may have been created', async () => {

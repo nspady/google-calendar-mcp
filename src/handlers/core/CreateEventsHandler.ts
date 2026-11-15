@@ -9,11 +9,12 @@ import { createTimeObject, usesFallbackTimeZone } from "../../utils/datetime.js"
 import { createStructuredResponse } from "../../utils/response-builder.js";
 import { CreateEventsResponse, convertGoogleEventToStructured, StructuredEvent } from "../../types/structured-responses.js";
 
-const MAY_EXIST = 'The event may still have been created. Check the calendar before retrying.';
+const mayExist = (eventId: string) =>
+    `The event may still have been created. Look up event ID ${eventId} before retrying.`;
 
-/** An insert whose outcome is unknown: Google may have saved the event. */
+/** An insert whose outcome is unknown: Google may have saved the event under this ID. */
 class InsertOutcomeUnknown extends McpError {
-    constructor(reason: string) {
+    constructor(reason: string, readonly eventId: string) {
         super(ErrorCode.InternalError, reason);
     }
 }
@@ -145,7 +146,7 @@ export class CreateEventsHandler extends BaseToolHandler {
                     index: i,
                     summary: eventInput.summary,
                     // Only this event was sent, so the warning stays out of the skip message below
-                    error: error instanceof InsertOutcomeUnknown ? `${errorMessage} ${MAY_EXIST}` : errorMessage,
+                    error: error instanceof InsertOutcomeUnknown ? `${errorMessage} ${mayExist(error.eventId)}` : errorMessage,
                 });
 
                 // Circuit breaker: track consecutive identical failures
@@ -212,26 +213,23 @@ export class CreateEventsHandler extends BaseToolHandler {
             return (await calendar.events.insert(params)).data;
         } catch (error) {
             if (this.gotNoReply(error)) {
-                throw new InsertOutcomeUnknown(`No reply from Google after two attempts (${error.message}).`);
+                throw new InsertOutcomeUnknown(`No reply from Google after two attempts (${error.message}).`, eventId);
             }
 
             // Google answered the repeat. A 409 means the first attempt was saved. Any other error
             // leaves that open, so look the event up by its ID.
-            const firstWasSaved = error instanceof GaxiosError && error.response?.status === 409;
-            try {
-                const saved = (await calendar.events.get({ calendarId: params.calendarId, eventId })).data;
-                if (saved) return saved;
-            } catch (lookupError) {
-                const notFound = lookupError instanceof GaxiosError && lookupError.response?.status === 404;
-                if (!firstWasSaved && !notFound) {
-                    const reason = error instanceof Error ? error.message : String(error);
-                    throw new InsertOutcomeUnknown(`The first attempt got no reply and the second failed (${reason}).`);
-                }
-            }
+            const saved = await calendar.events
+                .get({ calendarId: params.calendarId, eventId })
+                .then(response => response.data, () => undefined);
+            if (saved) return saved;
 
-            // Saved but unreadable: report what was sent. Never saved: an ordinary failure.
-            if (firstWasSaved) return params.requestBody;
-            throw error;
+            // Saved but unreadable: report what was sent.
+            if (error instanceof GaxiosError && error.response?.status === 409) return params.requestBody;
+
+            // Not finding the event doesn't show it was never saved: the first request can still
+            // arrive, and a read straight after a write may not see it yet.
+            const reason = error instanceof Error ? error.message : String(error);
+            throw new InsertOutcomeUnknown(`The first attempt got no reply and the second failed (${reason}).`, eventId);
         }
     }
 
