@@ -76,6 +76,9 @@ export class CalendarRegistry {
   // Builds with failures are cached only for PARTIAL_CACHE_TTL, so they are retried soon.
   private failedAccounts: Map<string, string[]> = new Map();
 
+  // Bumped by clearCache() so a build that started before the clear cannot refill the cache.
+  private cacheGeneration = 0;
+
   /**
    * Get the singleton instance of CalendarRegistry
    */
@@ -139,8 +142,11 @@ export class CalendarRegistry {
     try {
       return await requestPromise;
     } finally {
-      // Remove from in-flight tracking once complete
-      this.inFlightRequests.delete(cacheKey);
+      // Remove from in-flight tracking once complete, unless clearCache() already
+      // replaced this request with a newer one for the same key
+      if (this.inFlightRequests.get(cacheKey) === requestPromise) {
+        this.inFlightRequests.delete(cacheKey);
+      }
     }
   }
 
@@ -151,6 +157,8 @@ export class CalendarRegistry {
     accounts: Map<string, OAuth2Client>,
     cacheKey: string
   ): Promise<UnifiedCalendar[]> {
+    const generation = this.cacheGeneration;
+
     // Fetch calendars from all accounts in parallel
     const calendarsByAccount = await Promise.all(
       Array.from(accounts.entries()).map(async ([accountId, client]) => {
@@ -223,6 +231,11 @@ export class CalendarRegistry {
         displayName
       };
     });
+
+    // The cache was cleared while this build ran, so its result may be stale
+    if (generation !== this.cacheGeneration) {
+      return unified;
+    }
 
     // A transient failure on one account must not hide its calendars for the full TTL
     this.cache.set(cacheKey, {
@@ -305,6 +318,7 @@ export class CalendarRegistry {
    * Clear cache and in-flight requests (useful for testing or when accounts change)
    */
   clearCache(): void {
+    this.cacheGeneration++;
     this.cache.clear();
     this.failedAccounts.clear();
     this.inFlightRequests.clear();

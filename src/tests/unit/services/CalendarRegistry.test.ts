@@ -799,6 +799,45 @@ describe('CalendarRegistry', () => {
       await registry.getUnifiedCalendars(accounts);
       expect(mockCalendar).toHaveBeenCalledTimes(4);
     });
+
+    it('should not let a request started before clearCache() replace the newer one', async () => {
+      const releases: Array<() => void> = [];
+      let calls = 0;
+      const mockCalendar = vi.fn().mockImplementation(() => {
+        // The first build sees the old calendar, the build after clearCache() the new one
+        const id = calls++ < 2 ? 'old@group.calendar.google.com' : 'new@group.calendar.google.com';
+        return new Promise(resolve => {
+          releases.push(() => resolve({ data: { items: [{ id, summary: id, accessRole: 'owner' }] } }));
+        });
+      });
+
+      vi.mocked(google.calendar).mockImplementation(() => ({
+        calendarList: { list: mockCalendar }
+      } as any));
+
+      // Request 1 is in flight when the accounts change
+      const first = registry.getUnifiedCalendars(accounts);
+      await vi.waitFor(() => expect(mockCalendar).toHaveBeenCalledTimes(2));
+      registry.clearCache();
+
+      // Request 2 starts fresh
+      const second = registry.getUnifiedCalendars(accounts);
+      await vi.waitFor(() => expect(mockCalendar).toHaveBeenCalledTimes(4));
+
+      // Request 1 settles while request 2 is still running
+      releases[0]();
+      releases[1]();
+      await first;
+
+      // Request 3 should join request 2: no new API calls and no stale result from request 1
+      const third = registry.getUnifiedCalendars(accounts);
+      releases.forEach(release => release());
+      const [secondResult, thirdResult] = await Promise.all([second, third]);
+
+      expect(mockCalendar).toHaveBeenCalledTimes(4);
+      expect(secondResult.map(c => c.calendarId)).toEqual(['new@group.calendar.google.com']);
+      expect(thirdResult).toEqual(secondResult);
+    });
   });
 
   describe('writerWithoutPrivateAccess', () => {
